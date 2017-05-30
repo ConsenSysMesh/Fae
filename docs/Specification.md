@@ -69,9 +69,9 @@ open-ended manner.
 
 According to the policy of the implementation, special *reward* transactions may
 be placed in the `txs` list.  These transactions are like any other except that
-their function takes one argument, an escrow ID (see [#escrow]) for a special
-type `Reward`, which is defined to have just one value, which is an opaque
-token.  During execution, this escrow ID is valid and refers to an escrow
+their `tx` function takes one argument, an escrow ID (see [#escrow]) for a
+special type `Reward`, which is defined to have just one value, which is an
+opaque token.  During execution, this escrow ID is valid and refers to an escrow
 account containing a `Reward` value.  Thus, custom currencies may provide funds
 in exchange for a `Reward`, social contracts may offer privileges, and so on.
 
@@ -98,10 +98,14 @@ data Transaction =
   }
 ```
 
-The `source` is executed as described in [#smart contracts].  The `extra`
-field is an associative list each entry of which contains filenames and
-associated files (e.g. Haskell interface files) facilitating the exposure of an
-API for the products of the transaction in that language.
+The `source` is executed as described in [#smart contracts].  It must define a
+function `tx`, which takes no arguments (except for reward transactions) and is
+allowed to return any type.  The implementation may make these return values
+available externally for informational purposes.
+
+The `extra` field is an associative list each entry of which contains filenames
+and associated files (e.g. Haskell interface files) facilitating the exposure of
+an API for the products of the transaction in that language.
 
 The `signature` includes both of the other fields.  The `Signature` type must
 support retrieval of the public key from a signature; the one corresponding to
@@ -178,6 +182,13 @@ ID* that contains the type of escrowed value but *not* the value itself.
 
   - An entry's escrow ID can be obtained from the entry ID in the entry's facet
     (see [#facets]).
+
+  - Other internal escrow accounts may exist independently of storage entries,
+    for example the `Reward` escrow from [#blockrewards].  Fae provides several
+    methods for applying harmless structural functions to escrow values, placing
+    the results in anonymous internal escrow.  Since these escrow accounts are
+    not associated with entries, they do not persist after the end of the current
+    transaction.
 
 === Execution ===
 
@@ -264,9 +275,9 @@ Each facet has an associated fee denominated in the Fee currency, such that:
 
 === API ===
 
-The following operations are available for interacting with the storage.  If any
-constraints in the descriptions are violated, or if there is a type error, an
-exception is thrown.
+The following operations are available during execution; other utility functions
+may also be provided by the implementation.  If any constraints in the
+descriptions are violated, or if there is a type error, an exception is thrown.
 
   - **create:** when called with arguments appropriate to the `userIDs`,
     `contract` and `public` fields of an `Entry`, creates a new entry in storage
@@ -297,4 +308,6 @@ exception is thrown.
   - **facet:** when called with a facet ID as an argument, changes the current
     facet state to that one, if the current state is a dependency of the new
     facet.  Returns nothing.
+
+  - **throw:** manually throws an exception.
 
