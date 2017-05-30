@@ -227,8 +227,8 @@ restricts the storage operations in the following way:
   - New entries may only be created in the same facet as the current facet
     states.
 
-  - An existing entry may be evaluated only if its facet is the current facet
-    state.
+  - An existing entry may be evaluated only if its facet transitively depends on
+    the current facet state.
 
   - An entry's escrow ID may only be obtained in the same facet that the escrow
     contents were returned.
@@ -272,6 +272,12 @@ Each facet has an associated fee denominated in the Fee currency, such that:
 
   - Otherwise, the entire fee is refunded to a new entry in the facet that was
     entered, using the authentication function.
+
+  - Given two facets, one depending on the other, and their fees, the ratio of
+    the fees must not exceed a constant value set by the implementation.  This
+    discourages the use of a single facet for complex transactions and
+    encourages eager use of faceting to enable increasingly specialized
+    contracts.
 
 === API ===
 
