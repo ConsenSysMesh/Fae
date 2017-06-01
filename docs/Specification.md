@@ -1,17 +1,17 @@
-= Formal specification of the Fae system =
+# Formal specification of the Fae system
 
 As described in [../README.md], Fae is a functional-style smart contract system
 and blockchain.  This document defines its behavior.  Haskell code samples are
 provided to clarify the discussion but are not to be taken literally.
 
-== Blockchain ==
+## Blockchain
 
 Fae follows the typical structure of a blockchain in that the actionable data is
 in the form of *transactions*, which are sequenced into *blocks* whose right to
 exist is somehow established by network consensus.  Here, we do not deal with
 the consensus aspect, as this is entirely separate from the actual system.
 
-=== Blocks ===
+### Blocks
 
 A block in this system is, essentially, just a list of transactions.  It must
 also be wrapped in some sort of token establishing its right to exist, but we do
@@ -60,7 +60,7 @@ by the implementation.  Combined with the transaction limit (see
 [#transactions]) this ensures that a variety of authors may find space for their
 transactions in any block.
 
-=== Transactions ===
+### Transactions
 
 Transactions are not included in blocks directly.  Rather, they are disseminated
 separately throughout the network, and block creators assemble the ones they
@@ -106,7 +106,7 @@ already in the chain that contain a transaction signed by that key.
 
 No two transactions in the chain may have the same transaction ID.
 
-=== Block rewards ===
+### Block rewards
 
 Depending on the consensus algorithm employed by a Fae implementation, it may
 make sense to incentivize network nodes to participate in it by providing a
@@ -122,7 +122,7 @@ opaque token.  During execution, this escrow ID is valid and refers to an escrow
 account containing a `Reward` value.  Thus, custom currencies may provide funds
 in exchange for a `Reward`, social contracts may offer privileges, and so on.
 
-=== Source modules ===
+### Source modules
 
 The `extra` field of a transaction may enclose various source code files as
 modules according to the module system of the ambient programming language.
@@ -132,7 +132,7 @@ disambiguation, and the provided module name.  To prevent abuse, the system may
 impose size limits on these modules and should also defer storing them
 permanently until the transaction itself is known to execute without error.
 
-= Smart contracts ==
+## Smart contracts
 
 Fae takes the ecumenical perspective that *everything* is a "smart contract".
 It provides very little policy on its own; rather, each type of value is
@@ -141,7 +141,7 @@ double-spending limitations and identity verification.  The Fae system simply
 provides the contract author with the necessary environmental data to write
 these policies.
 
-=== Storage ===
+### Storage
 
 Smart contracts in Fae operate on a notional *storage* with the following basic
 properties.
@@ -174,7 +174,7 @@ data Entry argType valType =
   }
 ```
 
-=== Escrow ===
+### Escrow
 
 Fae provides an "internal escrow" facility to enable private or scarce values to
 be handled in contract code.  At any time various internal escrow accounts may
@@ -209,7 +209,7 @@ data Escrow privType pubType =
   }
 ```
 
-=== Facets ===
+### Facets
 
 Each entry in Fae's storage is created with an immutable `facet` field, which is
 a `FacetID`.  Facets have a simple tree structure determined upon their creation
@@ -234,7 +234,7 @@ interesting facets and their dependencies, and still maintain a fully verifiable
 chain of transactions proving the value and expenditure status of any entry in
 its storage.
 
-=== Fees ===
+### Fees
 
 Fae allows contract execution to be limited by fees paid in a restricted
 currency we call Fee.  A Fee entry, when spent, returns an escrow ID to an
@@ -265,7 +265,7 @@ Each facet has an associated fee denominated in the Fee currency, such that:
     encourages eager use of faceting to enable increasingly specialized
     contracts.
 
-=== Virtual machine ===
+### Virtual machine
 
 Fae does not have a virtual machine like Ethereum, since its execution model
 leverages the capabilities of an existing programming language.  However, it
@@ -279,7 +279,7 @@ forbidden value.  However, any other language having a sufficiently strong type
 system, supporting compilation to LLVM IR, and having bindings to the Fae API
 can in principle be allowed in contracts.
 
-=== API ===
+### API
 
 The following operations are available during execution; other utility functions
 may also be provided by the implementation.  Many of the functions return
