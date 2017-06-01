@@ -1,6 +1,6 @@
 # Formal specification of the Fae system
 
-As described in [../README.md], Fae is a functional-style smart contract system
+As described in [the README](../README.md), Fae is a functional-style smart contract system
 and blockchain.  This document defines its behavior.  Haskell code samples are
 provided to clarify the discussion but are not to be taken literally.
 
@@ -35,8 +35,8 @@ data Block =
   }
 ```
 
-For `EntryID`, see [#storage]; for `Fee`, see [#fees].  The `Facet` data is
-another simple type (the significance of which is explained in [#facets]):
+For `EntryID`, see [Storage](#storage); for `Fee`, see [Fees](#fees).  The `Facet` data is
+another simple type (the significance of which is explained in [Facets](#facets)):
 
 ```hs
 type FacetID
@@ -57,7 +57,7 @@ the sequence's `blockTXs` entries establishes a linear order on transactions.
 The *block size*, the length of `txs`, is defined to be one more than the
 previously largest block size, with the effective size of the genesis block set
 by the implementation.  Combined with the transaction limit (see
-[#transactions]) this ensures that a variety of authors may find space for their
+[Transactions](#transactions)) this ensures that a variety of authors may find space for their
 transactions in any block.
 
 ### Transactions
@@ -83,7 +83,7 @@ data Transaction =
   }
 ```
 
-The `source` is executed as described in [#smart contracts].  It must define a
+The `source` is executed as described in [Smart Contracts](#smart-contracts).  It must define a
 function `tx`, which takes no arguments (except for reward transactions) and is
 allowed to return any type.  The implementation may make these return values
 available externally for informational purposes.
@@ -91,7 +91,7 @@ available externally for informational purposes.
 The `extra` field is an associative list each entry of which contains module
 names and associated files (e.g. Haskell interface files) facilitating the
 exposure of an API for the products of the transaction in that language; see
-[#sourcemodules].
+[Source modules](#source-modules).
 
 The `signature` includes both of the other fields.  The `Signature` type must
 support retrieval of the public key from a signature; the one corresponding to
@@ -116,7 +116,7 @@ open-ended manner.
 
 According to the policy of the implementation, special *reward* transactions may
 be placed in the `txs` list.  These transactions are like any other except that
-their `tx` function takes one argument, an escrow ID (see [#escrow]) for a
+their `tx` function takes one argument, an escrow ID (see [Escrow](#escrow)) for a
 special type `Reward`, which is defined to have just one value, which is an
 opaque token.  During execution, this escrow ID is valid and refers to an escrow
 account containing a `Reward` value.  Thus, custom currencies may provide funds
@@ -154,14 +154,14 @@ properties.
     During entry evaluation, a call to the `spend` function marks the entry for
     deletion after its contract function returns.
 
-  - Upon creation, each entry is given a *facet* (see [#facets]) restricting
+  - Upon creation, each entry is given a *facet* (see [Facets](#facets)) restricting
     when it may be evaluated.  
 
   - The storage state is only committed once each transaction terminates.
     During execution, exceptions may occur, either from ordinary programming
     errors or computational resource exhaustion.  If that happens, all storage
     changes except for Fee account creation and deletion are voided and the
-    transaction terminates immediately (see [#fees]).
+    transaction terminates immediately (see [Fees](#fees)).
 
 Entries have the following structure:
 
@@ -213,7 +213,7 @@ data Escrow privType pubType =
 
 Each entry in Fae's storage is created with an immutable `facet` field, which is
 a `FacetID`.  Facets have a simple tree structure determined upon their creation
-(see [#blocks]), where a new facet may *depend* on any existing facets.
+(see [Blocks](#blocks)), where a new facet may *depend* on any existing facets.
 Correspondingly, contract execution proceeds through *facet states*, which
 restricts the storage operations in the following way:
 
@@ -254,10 +254,10 @@ Each facet has an associated fee denominated in the Fee currency, such that:
     for subsequent facet changes.
 
   - If an exception occurs or the computational resources used (see
-    [#virtualmachine]) exceed the facet fee, then the up-front fee's escrow
+    [Virtual machine](#virtual-machine)) exceed the facet fee, then the up-front fee's escrow
     account is closed, the entire facet fee is lost from the up-front payment,
     and the remainder placed immediately in escrow before execution terminates
-    (see [#storage]).
+    (see [Storage](#storage)).
 
   - Given two facets, one depending on the other, and their fees, the ratio of
     the fees must not exceed a constant value set by the implementation.  This
