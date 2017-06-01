@@ -18,5 +18,5 @@ to Ethereum but with the following additional benefits:
 
   - Scarcity policy is left to the discretion of each smart contract.
 
-We provide a formal specification of the system in [docs/Specification.md] and
-an implementation in Haskell in the `src` subdirectory.
+We provide a [formal specification](docs/Specification.md) of the system and
+an [implementation](src/) in Haskell.
