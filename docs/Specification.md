@@ -151,8 +151,7 @@ properties.
     called its *contract*.
 
   - Entries are entirely immutable, being subject only to creation and deletion.
-    During entry evaluation, a call to the `spend` function marks the entry for
-    deletion after its contract function returns.
+    During entry evaluation, a value may be returned normally, or it may be returned as an argument to the `spend` function, which terminates evaluation immediately, returning the value and deleting the entry (see [API](#api)).
 
   - Upon creation, each entry is given a *facet* (see [Facets](#facets)) restricting
     when it may be evaluated.  
@@ -294,10 +293,8 @@ conditions of the function's specification are violated.
     current facet, and an appropriate argument, evaluates the entry on that
     argument and returns the result.
 
-  - **spend:** when called with no arguments inside entry evaluation (but *not*
-    top-level code), if the current facet is the same as the entry facet, marks
-    the entry to be deleted once its contract returns.  Returns nothing, but
-    throws an exception if the facets do not agree.
+  - **spend:** when called with one argument inside entry evaluation (but *not*
+    top-level code), if the current facet is the same as the entry facet, immediately returns the argument and deletes the entry.  Throws an exception if the facets do not agree or in top-level code.
 
   - **escrow:** when called an access specifier and the pair of a "private"
     value and a function from its type to some other "public" one, creates a new
