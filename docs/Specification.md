@@ -1,7 +1,8 @@
 = Formal specification of the Fae system =
 
 As described in [../README.md], Fae is a functional-style smart contract system
-and blockchain.  This document defines its behavior.
+and blockchain.  This document defines its behavior.  Haskell code samples are
+provided to clarify the discussion but are not to be taken literally.
 
 == Blockchain ==
 
@@ -59,22 +60,6 @@ by the implementation.  Combined with the transaction limit (see
 [#transactions]) this ensures that a variety of authors may find space for their
 transactions in any block.
 
-=== Block rewards ===
-
-Depending on the consensus algorithm employed by a Fae implementation, it may
-make sense to incentivize network nodes to participate in it by providing a
-reward for doing so.  For example, coinbase payments in Bitcoin and Ethereum.
-Since Fae does not have a native currency, it implements this practice in an
-open-ended manner.
-
-According to the policy of the implementation, special *reward* transactions may
-be placed in the `txs` list.  These transactions are like any other except that
-their `tx` function takes one argument, an escrow ID (see [#escrow]) for a
-special type `Reward`, which is defined to have just one value, which is an
-opaque token.  During execution, this escrow ID is valid and refers to an escrow
-account containing a `Reward` value.  Thus, custom currencies may provide funds
-in exchange for a `Reward`, social contracts may offer privileges, and so on.
-
 === Transactions ===
 
 Transactions are not included in blocks directly.  Rather, they are disseminated
@@ -103,9 +88,10 @@ function `tx`, which takes no arguments (except for reward transactions) and is
 allowed to return any type.  The implementation may make these return values
 available externally for informational purposes.
 
-The `extra` field is an associative list each entry of which contains filenames
-and associated files (e.g. Haskell interface files) facilitating the exposure of
-an API for the products of the transaction in that language.
+The `extra` field is an associative list each entry of which contains module
+names and associated files (e.g. Haskell interface files) facilitating the
+exposure of an API for the products of the transaction in that language; see
+[#sourcemodules].
 
 The `signature` includes both of the other fields.  The `Signature` type must
 support retrieval of the public key from a signature; the one corresponding to
@@ -120,7 +106,33 @@ already in the chain that contain a transaction signed by that key.
 
 No two transactions in the chain may have the same transaction ID.
 
-== Smart contracts ==
+=== Block rewards ===
+
+Depending on the consensus algorithm employed by a Fae implementation, it may
+make sense to incentivize network nodes to participate in it by providing a
+reward for doing so.  For example, coinbase payments in Bitcoin and Ethereum.
+Since Fae does not have a native currency, it implements this practice in an
+open-ended manner.
+
+According to the policy of the implementation, special *reward* transactions may
+be placed in the `txs` list.  These transactions are like any other except that
+their `tx` function takes one argument, an escrow ID (see [#escrow]) for a
+special type `Reward`, which is defined to have just one value, which is an
+opaque token.  During execution, this escrow ID is valid and refers to an escrow
+account containing a `Reward` value.  Thus, custom currencies may provide funds
+in exchange for a `Reward`, social contracts may offer privileges, and so on.
+
+=== Source modules ===
+
+The `extra` field of a transaction may enclose various source code files as
+modules according to the module system of the ambient programming language.
+These modules should be stored locally so that any transaction may import them;
+the module path should be some combination of the transaction ID, for
+disambiguation, and the provided module name.  To prevent abuse, the system may
+impose size limits on these modules and should also defer storing them
+permanently until the transaction itself is known to execute without error.
+
+= Smart contracts ==
 
 Fae takes the ecumenical perspective that *everything* is a "smart contract".
 It provides very little policy on its own; rather, each type of value is
@@ -132,86 +144,70 @@ these policies.
 === Storage ===
 
 Smart contracts in Fae operate on a notional *storage* with the following basic
-properties:
+properties.
 
   - The storage consists entirely of *entries* indexed by their *entry ID*.
-    Each entry contains a function of one argument by which it may be evaluated
-    (see [#execution]).
+    Each entry contains a function of one argument by which it may be evaluated,
+    called its *contract*.
 
-  - Entries contain a mutable field, `escrow`, which stores the value currently
-    in escrow, as described in [#execution], and the facet in which it was
-    originally returned.
+  - Entries are entirely immutable, being subject only to creation and deletion.
+    During entry evaluation, a call to the `spend` function marks the entry for
+    deletion after its contract function returns.
 
-  - Entries contain a mutable field, `userIDs`, which determines which other
-    entries are allowed to close their escrow account.  If there are no
-    restrictions, then the entry is considered to be *spent*; otherwise, it is
-    *unspent*.
+  - Upon creation, each entry is given a *facet* (see [#facets]) restricting
+    when it may be evaluated.  
 
-Entries have the following structure, whose additional fields are explained in
-the following sections.
+  - The storage state is only committed once each transaction terminates.
+    During execution, exceptions may occur, either from ordinary programming
+    errors or computational resource exhaustion.  If that happens, all storage
+    changes except for Fee account creation and deletion are voided and the
+    transaction terminates immediately (see [#fees]).
+
+Entries have the following structure:
 
 ```hs
-data AccessList = All | Only [EntryID]
-
-data Entry argType privType pubType =
+data Entry argType valType =
   Entry
   {
-    contract :: argType -> privType,
-    public :: privType -> pubType,
-    userIDs :: AccessList,
-    escrow :: Maybe (privType, FacetID),
+    contract :: argType -> valType,
     facet :: FacetID
   }
 ```
 
 === Escrow ===
 
-Fae provides an "internal escrow" facility for dealing with unspent quantities.
-At any time various internal escrow accounts may be open, each with an *escrow
-ID* that contains the type of escrowed value but *not* the value itself.    
+Fae provides an "internal escrow" facility to enable private or scarce values to
+be handled in contract code.  At any time various internal escrow accounts may
+be open, each with an *escrow ID* that contains the type of escrowed value but
+*not* the value itself.    
 
-  - According to the limitations of the `userIDs` field, this escrow account may
-    be *closed*, returning its contents.  
+  - An escrow account can be created in any code.  If an account remains open
+    when a transaction terminates, a new entry is automatically created to store
+    its value.  It accepts as an argument the signature of the entry ID with the
+    transaction key, and returns a new escrow ID for the old account.  The new
+    entry's label is the original escrow ID.
 
-  - Regardless of limitations, the escrow may be *peeked at*, which does not
-    close the account but also applies the `public` function of the entry to the
-    value in it.
+  - Escrow IDs are only valid during the transaction in which they are created.
 
-  - If, somehow, the same entry is twice evaluated unspent without closing its
-    first escrow, the old value is replaced with the new.  
+  - An escrow account is created with an *access control list* of entry IDs;
+    only contracts in those entries are allowed to *close* the escrow account
+    and obtain its value.  
 
-  - An entry's escrow ID can be obtained from the entry ID in the entry's facet
-    (see [#facets]).
+  - Each escrow account has a *private value*, its actual contents, and a
+    *public value*.  Regardless of access control, the account may be *peeked
+    at* to obtain the public value.
 
-  - Other internal escrow accounts may exist independently of storage entries,
-    for example the `Reward` escrow from [#blockrewards].  Fae provides several
-    methods for applying harmless structural functions to escrow values, placing
-    the results in anonymous internal escrow.  Since these escrow accounts are
-    not associated with entries, they do not persist after the end of the current
-    transaction.
+```hs
+data Access = All | Just [EntryID]
 
-=== Execution ===
-
-The execution policy concerns both transaction execution and contract
-fulfillment.  When an entry is looked up by its ID, it must be fully evaluated,
-and this evaluation is equivalent to executing its `contract` function on the
-given argument.  Execution has the following specification:
-
-  - During entry evaluation, a function `access` is available, taking one
-    argument and setting `userIDs` to that argument for the currently-evaluated
-    contract.  Thus, contracts may establish their own spending policy.
-
-  - When an entry is evaluated, the actual data type returned depends on whether
-    the entry has been spent.  If not, then the `contract` field's return value
-    is placed in escrow, and the escrow ID is returned; if it has, then this
-    return value has the function in the entry's `public` field applied and the
-    result returned as-is.  Contracts requiring unspent values as arguments may
-    therefore take escrow IDs of the correct types, ensuring that those values
-    may not be spent twice.
-
-  - Execution may throw exceptions and thus exit early.  These exceptions cannot
-    be caught within contract code but, rather, percolate up through the entire
-    call stack and terminate the transaction execution.
+data Escrow privType pubType =
+  Escrow
+  {
+    private :: privType,
+    public :: pubType,
+    access :: Access
+  }
+```
 
 === Facets ===
 
@@ -225,16 +221,13 @@ restricts the storage operations in the following way:
     which is the initial facet for all executions.
 
   - New entries may only be created in the same facet as the current facet
-    states.
+    state.
 
   - An existing entry may be evaluated only if its facet transitively depends on
     the current facet state.
 
-  - An entry's escrow ID may only be obtained in the same facet that the escrow
-    contents were returned.
-
-  - The facet state may change during contract execution only to a facet that
-    depends on the current one.
+  - The facet state may change during *top-level transaction execution* to any
+    facet that depends on the current one.
 
 These rules ensure that a network participant may choose to ignore all but a few
 interesting facets and their dependencies, and still maintain a fully verifiable
@@ -244,34 +237,27 @@ its storage.
 === Fees ===
 
 Fae allows contract execution to be limited by fees paid in a restricted
-currency we call Fee.  Unspent Fee entries have an empty `userIDs` access list,
-and therefore can *only* be spent on fees, as described below.
+currency we call Fee.  A Fee entry, when spent, returns an escrow ID to an
+account with no access allowed at all; thus, Fee can only be used for fees, as
+follows.
 
 Each facet has an associated fee denominated in the Fee currency, such that:
 
-  - When entering a new facet, an escrow ID must be supplied for a Fee escrow
-    account with at least the facet fee as its balance, as well as a boolean
-    function taking two arguments, the first of which is an entry ID; this is
-    the *authentication function*.  
-
-  - The authentication function is used to create *unspent* entries containing
-    Fee values.  Such an entry's contract function takes one argument and, when
-    evaluated, applies the authentication function to that argument and the
-    entry ID, throwing an exception if the result is `False`.
-
   - Facet 0, which cannot be explicitly entered during execution, has a fee and
-    implicit up-front payment equal to the block's transaction credit.  Its
-    authentication function is "signature validation of the entry ID against
-    the transaction key". (See [#transactions].)
+    implicit up-front payment equal to the block's transaction credit.  It is
+    only through the refund of this implicit payment that new Fee values are
+    obtained.
 
-  - If the computational resources used exceed the facet fee, then the entire
-    facet fee is lost, and computation terminates with an exception.  Before
-    termination, if the up-front fee was greater than the facet fee, the
-    remainder is placed in a new entry in the facet that was entered, using
-    the authentication function.
+  - When entering a new facet, an escrow ID must be supplied for a Fee escrow
+    account with at least the facet fee as its balance.  This escrow account is
+    not closed unless an exception occurs (see below) and can therefore be used
+    for subsequent facet changes.
 
-  - Otherwise, the entire fee is refunded to a new entry in the facet that was
-    entered, using the authentication function.
+  - If an exception occurs or the computational resources used (see
+    [#virtualmachine]) exceed the facet fee, then the up-front fee's escrow
+    account is closed, the entire facet fee is lost from the up-front payment,
+    and the remainder placed immediately in escrow before execution terminates
+    (see [#storage]).
 
   - Given two facets, one depending on the other, and their fees, the ratio of
     the fees must not exceed a constant value set by the implementation.  This
@@ -279,41 +265,63 @@ Each facet has an associated fee denominated in the Fee currency, such that:
     encourages eager use of faceting to enable increasingly specialized
     contracts.
 
+=== Virtual machine ===
+
+Fae does not have a virtual machine like Ethereum, since its execution model
+leverages the capabilities of an existing programming language.  However, it
+does have a concept of computational resources.  For the moment (this can easily
+change) they are measured by compiling the source to the LLVM IR and creating a
+custom compiler pass that counts opcodes.  Note that LLVM IR itself is not valid
+code for a transaction or contract, because its type system is too weak to
+ensure safety of escrowed values; i.e. one can bitcast or type pun a specially
+constructed byte array to a private type and place it in escrow to obtain a
+forbidden value.  However, any other language having a sufficiently strong type
+system, supporting compilation to LLVM IR, and having bindings to the Fae API
+can in principle be allowed in contracts.
+
 === API ===
 
 The following operations are available during execution; other utility functions
-may also be provided by the implementation.  If any constraints in the
-descriptions are violated, or if there is a type error, an exception is thrown.
+may also be provided by the implementation.  Many of the functions return
+optional values, which are taken to mean that the value is void if the
+conditions of the function's specification are violated.
 
-  - **create:** when called with arguments appropriate to the `userIDs`,
-    `contract` and `public` fields of an `Entry`, creates a new entry in storage
-    in the current facet, having these arguments for those fields.  It returns
-    the ID of this new entry.
+  - **create:** takes a function as argument and returns an the ID of a new
+    entry with this function as its contract.  By default this entry has an
+    empty label; see `label` for how to change this.
 
   - **evaluate:** when called with an entry ID for an existing entry in the
     current facet, and an appropriate argument, evaluates the entry on that
-    argument as described in [#execution] and returns the result.
+    argument and returns the result.
 
-  - **escrow:** when called with an entry ID for an existing entry whose
-    associated facet is the current facet, returns the escrow ID for that entry.
+  - **spend:** when called with no arguments inside entry evaluation (but *not*
+    top-level code), if the current facet is the same as the entry facet, marks
+    the entry to be deleted once its contract returns.  Returns nothing, but
+    throws an exception if the facets do not agree.
 
-  - **access:** when called with arguments appropriate to a `userIDs` field, sets
-    that field in the entry currently being evaluated if the current facet is
-    the same as the entry facet.  Throws an exception in top-level transaction
-    code.
+  - **escrow:** when called an access specifier and the pair of a "private"
+    value and a function from its type to some other "public" one, creates a new
+    escrow account with the indicated access policy and private and public values.
+
+  - **peek:** when called with a valid escrow ID, returns the public value in
+    escrow.
+
+  - **close:** when called with a valid escrow ID, if the currently evaluated
+    entry is in its `access` field, returns its private value and closes the
+    account.
+
+  - **facet:** when called with the pair of a facet ID and escrow ID for a Fee
+    value as an argument, changes the current facet state to that one, if the
+    current state is a dependency of the new facet and the Fee balance exceeds
+    the facet fee.
 
   - **signer:** the transaction key of the current transaction.
 
-  - **peek:** when called with a valid escrow ID, returns the `public`
-    version of the value in escrow.
+  - **follow:** takes a transaction ID as argument, returning an optional
+    associative array mapping the labels given to each `create` call in the
+    transaction to the resulting entry IDs.
 
-  - **close:** when called with a valid escrow ID, if the currently evaluated
-    entry is in the `userIDs` field of the entry that was evaluated into escrow,
-    returns the `private` version of the value in escrow and closes the account.
-
-  - **facet:** when called with a facet ID as an argument, changes the current
-    facet state to that one, if the current state is a dependency of the new
-    facet.  Returns nothing.
-
-  - **throw:** manually throws an exception.
+  - **label:** this combinator function takes a string, the *label prefix*, and
+    any Fae action, returning a new Fae action in which every `create` call made
+    in the inner action has the label prefix prepended to its label.
 
