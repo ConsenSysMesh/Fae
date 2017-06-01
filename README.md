@@ -1,4 +1,4 @@
-= Fae: a functional alternative to Ethereum =
+# Fae: a functional alternative to Ethereum
 
 Fae is a smart contract system and blockchain definition with equivalent power
 to Ethereum but with the following additional benefits:
