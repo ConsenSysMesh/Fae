@@ -46,7 +46,7 @@ tokenContract ::
   Signatures -> Fae ()
 tokenContract key1 key2 keyR self Signatures{sig1 = Just s1, sig2 = Just s2} =
   | verifySig key1 self s1 && verifySig key2 self s2 = do
-      cSelf <- createPure $ sigContract [] Token keyR cSelf
+      cSelf <- createPure $ sigContract Token (escrow ()) keyR cSelf
       return ()
 tokenContract _ _ _ _ _ _ = return Nothing
 

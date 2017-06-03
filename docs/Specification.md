@@ -200,18 +200,20 @@ be open, each with an *escrow ID* that contains the type of escrowed value but
 
   - Escrow IDs are only valid during the transaction in which they are created.
 
-  - An escrow account is created with an *access control list* of entry IDs;
-    only contracts in those entries are allowed to *close* the escrow account
-    and obtain its value.  
+  - An escrow account is created with an *access control token*, which functions
+    similarly to a contract's argument except that the token's value is not used
+    and not accumulated; only its presence is required.  An escrow account may
+    be *closed* with a token of this type, returning its *private value* and
+    invalidating its escrow ID.
 
   - Each escrow account has a *private value*, its actual contents, and a
     *public value*.  Regardless of access control, the account may be *peeked
     at* to obtain the public value.
 
 ```hs
-data Access = All | Just [EntryID]
+type EscrowID tokType privType pubType
 
-data Escrow privType pubType =
+data Escrow tokType privType pubType =
   Escrow
   {
     private :: privType,
@@ -231,11 +233,10 @@ restricts the storage operations in the following way:
   - There always exists a facet, which we call facet 0, with no dependencies and
     which is the initial facet for all executions.
 
-  - New entries may only be created in the same facet as the current facet
-    state.
+  - New entries are created with the same facet as the current facet state.
 
-  - An existing entry may be evaluated only if its facet transitively depends on
-    the current facet state.
+  - An existing entry may only be evaluated if their facet is the same as the
+    current facet state.
 
   - The facet state may change during *top-level transaction execution* to any
     facet that depends on the current one.
@@ -311,16 +312,15 @@ conditions of the function's specification are violated.
     immediately returns the argument and deletes the entry.  Throws an exception if
     the facets do not agree or in top-level code.
 
-  - **escrow:** when called an access specifier and the pair of a "private"
+  - **escrow:** when called with a token value and the pair of a "private"
     value and a function from its type to some other "public" one, creates a new
-    escrow account with the indicated access policy and private and public values.
+    escrow account with the indicated access token and private and public values.
 
   - **peek:** when called with a valid escrow ID, returns the public value in
     escrow.
 
-  - **close:** when called with a valid escrow ID, if the currently evaluated
-    entry is in its `access` field, returns its private value and closes the
-    account.
+  - **close:** when called with a valid escrow ID and token of the correct type,
+    returns its private value and closes the account.
 
   - **facet:** when called with the pair of a facet ID and escrow ID for a Fee
     value as an argument, changes the current facet state to that one, if the
