@@ -33,6 +33,8 @@ instance Monoid Signatures where
       takeLatest Nothing Nothing = Nothing
       takeLatest (Just xNew) Nothing = Just xNew
       takeLatest Nothing (Just xOld) = Just xOld
+      -- This has a bit of a security hole in that someone can overwrite
+      -- a valid signature.
       takeLatest (Just xNew) (Just xOld) = Just xNew 
 
 -- When used as a contract, the `PublicKey`s need to be supplied at
