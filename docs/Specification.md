@@ -1,8 +1,9 @@
 # Formal specification of the Fae system
 
-As described in [the README](../README.md), Fae is a functional-style smart contract system
-and blockchain.  This document defines its behavior.  Haskell code samples are
-provided to clarify the discussion but are not to be taken literally.
+As described in [the README](../README.md), Fae is a functional-style smart
+contract system and blockchain.  This document defines its behavior.  Haskell
+code samples are provided to clarify the discussion but are not to be taken
+literally.
 
 ## Blockchain
 
@@ -35,8 +36,9 @@ data Block =
   }
 ```
 
-For `EntryID`, see [Storage](#storage); for `Fee`, see [Fees](#fees).  The `Facet` data is
-another simple type (the significance of which is explained in [Facets](#facets)):
+For `EntryID`, see [Storage](#storage); for `Fee`, see [Fees](#fees).  The
+`Facet` data is another simple type (the significance of which is explained in
+[Facets](#facets)):
 
 ```hs
 type FacetID
@@ -57,8 +59,8 @@ the sequence's `blockTXs` entries establishes a linear order on transactions.
 The *block size*, the length of `txs`, is defined to be one more than the
 previously largest block size, with the effective size of the genesis block set
 by the implementation.  Combined with the transaction limit (see
-[Transactions](#transactions)) this ensures that a variety of authors may find space for their
-transactions in any block.
+[Transactions](#transactions)) this ensures that a variety of authors may find
+space for their transactions in any block.
 
 ### Transactions
 
@@ -83,10 +85,10 @@ data Transaction =
   }
 ```
 
-The `source` is executed as described in [Smart Contracts](#smart-contracts).  It must define a
-function `tx`, which takes no arguments (except for reward transactions) and is
-allowed to return any type.  The implementation may make these return values
-available externally for informational purposes.
+The `source` is executed as described in [Smart Contracts](#smart-contracts).
+It must define a function `tx`, which takes no arguments (except for reward
+transactions) and is allowed to return any type.  The implementation may make
+these return values available externally for informational purposes.
 
 The `extra` field is an associative list each entry of which contains module
 names and associated files (e.g. Haskell interface files) facilitating the
@@ -116,8 +118,8 @@ open-ended manner.
 
 According to the policy of the implementation, special *reward* transactions may
 be placed in the `txs` list.  These transactions are like any other except that
-their `tx` function takes one argument, an escrow ID (see [Escrow](#escrow)) for a
-special type `Reward`, which is defined to have just one value, which is an
+their `tx` function takes one argument, an escrow ID (see [Escrow](#escrow)) for
+a special type `Reward`, which is defined to have just one value, which is an
 opaque token.  During execution, this escrow ID is valid and refers to an escrow
 account containing a `Reward` value.  Thus, custom currencies may provide funds
 in exchange for a `Reward`, social contracts may offer privileges, and so on.
@@ -150,11 +152,19 @@ properties.
     Each entry contains a function of one argument by which it may be evaluated,
     called its *contract*.
 
-  - Entries are entirely immutable, being subject only to creation and deletion.
-    During entry evaluation, a value may be returned normally, or it may be returned as an argument to the `spend` function, which terminates evaluation immediately, returning the value and deleting the entry (see [API](#api)).
+  - Entries are almost entirely immutable, being subject only to creation,
+    deletion, and argument accumulation.  The latter means that each time the
+    entry is called, the argument is combined (using a function provided at
+    entry creation) with all previous ones and the result passed to the contract
+    function.  This allows a limited form of persistent state, but only for pure
+    values, as the Fae API may not be used during accumulation.
 
-  - Upon creation, each entry is given a *facet* (see [Facets](#facets)) restricting
-    when it may be evaluated.  
+  - During entry evaluation, a value may be returned normally, or it may be
+    returned as an argument to the `spend` function, which terminates evaluation
+    immediately, returning the value and deleting the entry (see [API](#api)).
+
+  - Upon creation, each entry is given a *facet* (see [Facets](#facets))
+    restricting when it may be evaluated.  
 
   - The storage state is only committed once each transaction terminates.
     During execution, exceptions may occur, either from ordinary programming
@@ -165,10 +175,12 @@ properties.
 Entries have the following structure:
 
 ```hs
-data Entry argType valType =
+data Entry argType accumType valType =
   Entry
   {
-    contract :: argType -> valType,
+    contract :: accumType -> valType,
+    combine :: argType -> accumType -> accumType,
+    accum :: accumType,
     facet :: FacetID
   }
 ```
@@ -253,10 +265,10 @@ Each facet has an associated fee denominated in the Fee currency, such that:
     for subsequent facet changes.
 
   - If an exception occurs or the computational resources used (see
-    [Virtual machine](#virtual-machine)) exceed the facet fee, then the up-front fee's escrow
-    account is closed, the entire facet fee is lost from the up-front payment,
-    and the remainder placed immediately in escrow before execution terminates
-    (see [Storage](#storage)).
+    [Virtual machine](#virtual-machine)) exceed the facet fee, then the up-front 
+    fee's escrow account is closed, the entire facet fee is lost from the
+    up-front payment, and the remainder placed immediately in escrow before
+    execution terminates (see [Storage](#storage)).
 
   - Given two facets, one depending on the other, and their fees, the ratio of
     the fees must not exceed a constant value set by the implementation.  This
@@ -285,16 +297,19 @@ may also be provided by the implementation.  Many of the functions return
 optional values, which are taken to mean that the value is void if the
 conditions of the function's specification are violated.
 
-  - **create:** takes a function as argument and returns an the ID of a new
-    entry with this function as its contract.  By default this entry has an
-    empty label; see `label` for how to change this.
+  - **create:** takes a contract function, an accumulating function, and an
+    initial accumulated value as argument and returns an the ID of a new
+    entry as per [Storage](#storage).  By default this entry has an empty label;
+    see `label` for how to change this.
 
   - **evaluate:** when called with an entry ID for an existing entry in the
     current facet, and an appropriate argument, evaluates the entry on that
     argument and returns the result.
 
   - **spend:** when called with one argument inside entry evaluation (but *not*
-    top-level code), if the current facet is the same as the entry facet, immediately returns the argument and deletes the entry.  Throws an exception if the facets do not agree or in top-level code.
+    top-level code), if the current facet is the same as the entry facet,
+    immediately returns the argument and deletes the entry.  Throws an exception if
+    the facets do not agree or in top-level code.
 
   - **escrow:** when called an access specifier and the pair of a "private"
     value and a function from its type to some other "public" one, creates a new
