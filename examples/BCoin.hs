@@ -2,6 +2,7 @@
 module TX (tx, BCoin) where
 
 import Blockchain.Fae
+import Blockchain.Fae.Contracts (sigContract)
 import Blockchain.Fae.Crypto (verifySig)
 
 import Numeric.Natural
@@ -12,11 +13,11 @@ import Numeric.Natural
 tx :: Fae ()
 tx = mdo
   let idList = [spendID, addID, splitID, rewardID]
-  spendID <- label "spendBCoin" $ create (spendBCoin idList)
-  addID <- label "addBCoins" $ create (addBCoins idList)
-  debitID <- label "debitBCoin" $ create (debitBCoin idList)
+  spendID <- label "spendBCoin" $ createPure (spendBCoin idList)
+  addID <- label "addBCoins" $ createPure (addBCoins idList)
+  debitID <- label "debitBCoin" $ createPure (debitBCoin idList)
   creator <- signer
-  rewardID <- label "rewardBCoin" $ create (rewardBCoin idList creator) 
+  rewardID <- label "rewardBCoin" $ createPure (rewardBCoin idList creator) 
   return ()
 
 -- | An opaque wrapper for a positive integral value.  Users will not be
@@ -30,7 +31,7 @@ spendBCoin ::
   (EscrowID BCoin, PublicKey) -> Fae EntryID
 spendBCoin idList (coinID, key) = mdo
   coin <- close coinID
-  newID <- label "BCoin" $ create (sigContract idList coin key newID)
+  newID <- label "BCoin" $ createPure (sigContract idList coin key newID)
   return newID
 
 -- | The first argument is evaluated during creation.
@@ -71,7 +72,7 @@ rewardBCoin idList _ (Right rewardID) = mdo
   _ <- close rewardID
   let coin = BCoin $ 50 * 10^8 -- As in Bitcoin, initially
   key <- signer
-  newID <- label "BCoin" $ create (sigContract idList coin key newID)
+  newID <- label "BCoin" $ createPure (sigContract idList coin key newID)
   return $ Just newID
 
 -- When the right signature is passed, terminate rewards.
@@ -79,15 +80,5 @@ rewardBCoin [_,_,_,self] creator (Left sig)
   | verifySig creator self sig = do
       spend
       return Nothing
-  | otherwise = return Nothing
-
--- | Utility for creating a contract that authenticates a signature.
-sigContract :: 
-  [EntryID] -> BCoin -> PublicKey -> EntryID -> 
-  Signature -> Fae (Maybe (EscrowID BCoin))
-sigContract idList coin key entryID sig 
-  | verifySig key entryID sig = do
-      eID <- escrow (Only idList) coin
-      return $ Just eID
   | otherwise = return Nothing
 
