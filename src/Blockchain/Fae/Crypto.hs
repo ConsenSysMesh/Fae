@@ -1,5 +1,6 @@
 module Blockchain.Fae.Crypto 
   (
+    PublicKey, Signature,
     verifySig 
   ) where
 

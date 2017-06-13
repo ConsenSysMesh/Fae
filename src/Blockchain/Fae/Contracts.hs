@@ -4,11 +4,12 @@ module Blockchain.Fae.Contracts
   ) where
 
 import Blockchain.Fae
+import Blockchain.Fae.Crypto
 
 -- | Utility for creating a contract that authenticates a signature.
 sigContract :: 
-  a -> (a -> EscrowID tok a b) -> PublicKey -> EntryID -> 
-  Signature -> Fae (Maybe (EscrowID tok a b))
+  a -> (a -> Fae EscrowID) -> PublicKey -> EntryID -> 
+  Signature -> Fae (Maybe EscrowID)
 sigContract x makeEscrow key entryID sig 
   | verifySig key entryID sig = do
       eID <- makeEscrow x

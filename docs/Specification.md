@@ -217,8 +217,7 @@ data Escrow tokType privType pubType =
   Escrow
   {
     private :: privType,
-    public :: pubType,
-    access :: Access
+    public :: pubType
   }
 ```
 

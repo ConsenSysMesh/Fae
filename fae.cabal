@@ -16,10 +16,25 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     
+    Blockchain.Fae,
+    Blockchain.Fae.Contracts,
+    Blockchain.Fae.Crypto
   other-modules:
+    Blockchain.Fae.Internal,
+    Blockchain.Fae.Internal.Crypto,
+    Blockchain.Fae.Internal.Lens
   build-depends:       
     base >= 4.7 && < 5,
+    containers,
+    lens,
+    mtl,
+    template-haskell
   default-language:    Haskell2010
+  default-extensions:
+    FlexibleContexts,
+    FlexibleInstances,
+    GeneralizedNewtypeDeriving,
+    TemplateHaskell
 
 -- executable fae-exe
 --   hs-source-dirs:      app
