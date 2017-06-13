@@ -4,9 +4,9 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens
 
 import Control.Applicative
+import Control.Exception
 
 import Control.Monad
-import Control.Monad.Except
 import Control.Monad.State
 
 import Data.Dynamic
@@ -20,18 +20,8 @@ import Numeric.Natural
 -- Types
 
 newtype Fae a = 
-  Fae (StateT FaeState (ExceptT FaeException IO) a) 
+  Fae (StateT FaeState IO a) 
   deriving (Functor, Applicative, Monad)
-
-data FaeException =
-  HaskellException String |
-  BadContractType |
-  BadEscrowType |
-  InvalidNewFacet |
-  InvalidFeeType |
-  InsufficientFee |
-  ResourcesExhausted
-  deriving (Show)
 
 data FaeState =
   FaeState
