@@ -34,6 +34,7 @@ library
     FlexibleContexts,
     FlexibleInstances,
     GeneralizedNewtypeDeriving,
+    StandaloneDeriving,
     TemplateHaskell
 
 -- executable fae-exe

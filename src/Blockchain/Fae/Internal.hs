@@ -44,13 +44,16 @@ data FaeState =
 data FaePersist =
   FaePersist 
   {
-    contracts :: Entries,
-    facets :: Facets
+    entries :: Entries,
+    facets :: Facets,
+    lastHash :: Digest
   }
 
 data FaeTransient =
   FaeTransient
   {
+    entryUpdates :: Entries,
+    lastHashUpdate :: Digest,
     escrows :: Escrows,    
     sender :: PublicKey,
     currentEntry :: Entry,
@@ -87,7 +90,7 @@ data Entry =
     contract :: Dynamic, -- a Contract argT accumT valT
     facet :: FacetID
   }
-data EntryID = EntryID -- some type of hash, TBD
+data EntryID = EntryID Digest deriving (Eq, Ord)
 
 data Facet =
   Facet
@@ -138,9 +141,25 @@ makeLenses ''EscrowAccount
 
 -- Instances
 
+instance Digestible (Contract argT accumT valT) where
 instance Digestible EntryID where
+
+deriving instance Typeable (Contract argT accumT valT) 
 
 -- Values
 
-create :: (accumT -> valT) -> (argT -> accumT -> accumT) -> accumT -> Fae EntryID
-create = undefined
+create :: 
+  (Typeable argT, Typeable accumT, Typeable valT) =>
+  (accumT -> valT) -> (argT -> accumT -> accumT) -> accumT -> Fae EntryID
+create f c a = Fae $ do
+  seed <- use $ _transientState . _lastHashUpdate
+  facet <- use $ _transientState . _currentFacet . _facetID
+  let 
+    x = Contract f c a
+    xHash = digestWith seed x
+    newEntryID = EntryID xHash
+    newEntry = Entry newEntryID (toDyn x) facet
+  _transientState . _lastHashUpdate .= xHash
+  _transientState . _entryUpdates . _useEntries . at newEntryID ?= newEntry
+  return newEntryID
+
