@@ -59,8 +59,9 @@ evaluate entryID arg = Fae $ do
   -- possibility of nested evaluations.
   _transientState . _entryUpdates . _useEntries . at entryID ?= 
     entry{accum = newAccum}
-  fromDyn faeValD $
+  faeVal <- fromDyn faeValD $
     throwIO $
       BadEntryValType entryID (typeRep $ Proxy @valT) $
         head $ typeRepArgs $ last $ typeRepArgs $ dynTypeRep $ contract entry
-          
+  getFae faeVal 
+
