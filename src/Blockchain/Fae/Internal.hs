@@ -37,12 +37,12 @@ evaluate ::
 evaluate entryID arg = Fae $ do
   entryM <- use $ _transientState . _entryUpdates . _useEntries . at entryID
   entry <- maybe
-    (throwIO $ EvaluatedBadEntryID entryID)
+    (throwIO $ BadEntryID entryID)
     return
     entryM
   curFacet <- use $ _transientState . _currentFacet
   when (facet entry /= curFacet) $
-    throwIO $ EvaluatedInWrongFacet entryID curFacet (facet entry)
+    throwIO $ WrongFacet entryID curFacet (facet entry)
   accumTransD <- maybe
     (throwIO $ 
       BadEntryArgType entryID (typeRep $ Proxy @argT) $
@@ -66,7 +66,6 @@ evaluate entryID arg = Fae $ do
   getFae faeVal 
 
 escrow ::
-  forall tokT privT pubT.
   (Typeable tokT, Typeable privT, Typeable pubT) =>
   tokT -> (privT -> pubT) -> privT -> 
   Fae (PublicEscrowID privT, PrivateEscrowID privT)
@@ -79,3 +78,42 @@ escrow tok pubF priv = Fae $ do
   _transientState . _lastHashUpdate .= newHash
   _transientState . _escrows . _useEscrows . at escrowID ?= escrow
   return (PublicEscrowID escrowID, PrivateEscrowID escrowID)
+
+peek ::
+  forall privT pubT.
+  (Typeable privT, Typeable pubT) =>
+  PublicEscrowID privT -> Fae pubT
+peek pubID = Fae $ do
+  let PublicEscrowID escrowID = pubID
+  escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
+  escrow <- maybe
+    (throwIO $ BadEscrowID escrowID)
+    return
+    escrowM
+  maybe
+    (throwIO $ 
+      BadPublicType escrowID (typeRep $ Proxy @pubT) (dynTypeRep $ public escrow))
+    return $ 
+    fromDynamic (public escrow)
+
+close ::
+  forall tokT privT.
+  (Typeable tokT, Typeable privT) =>
+  PrivateEscrowID privT -> tokT -> Fae privT
+-- Need strictness here to force the user to actually have a token, and not
+-- just a typed 'undefined'.
+close privID !tok = Fae $ do
+  let PrivateEscrowID escrowID = privID
+  escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
+  escrow <- maybe
+    (throwIO $ BadEscrowID escrowID)
+    return
+    escrowM
+  priv <- maybe
+    (throwIO $ 
+      BadPrivateType escrowID (typeRep $ Proxy @privT) (dynTypeRep $ private escrow))
+    return $ 
+    fromDynamic (private escrow)
+  _transientState . _escrows . _useEscrows . at escrowID .= Nothing
+  return priv
+

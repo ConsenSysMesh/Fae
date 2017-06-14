@@ -17,11 +17,17 @@ throwIO :: (Exception e, MonadIO m) => e -> m a
 throwIO = liftIO . throwIO
 
 data EntryException =
-  EvaluatedBadEntryID EntryID |
-  EvaluatedInWrongFacet EntryID FacetID FacetID |
+  BadEntryID EntryID |
+  WrongFacet EntryID FacetID FacetID |
   BadEntryArgType EntryID TypeRep TypeRep |
   BadEntryValType EntryID TypeRep TypeRep
   deriving (Typeable, Show)
 
-instance Exception EntryException 
+data EscrowException =
+  BadEscrowID EscrowID |
+  BadPublicType EscrowID TypeRep TypeRep |
+  BadPrivateType EscrowID TypeRep TypeRep 
+  deriving (Typeable, Show)
 
+instance Exception EntryException 
+instance Exception EscrowException
