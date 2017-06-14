@@ -78,7 +78,7 @@ data Entry =
     accum :: Dynamic, -- :: accumT
     facet :: FacetID
   }
-data EntryID = EntryID Digest deriving (Eq, Ord, Show)
+newtype EntryID = EntryID Digest deriving (Eq, Ord, Show)
 
 data Facet =
   Facet
@@ -89,20 +89,16 @@ data Facet =
 data FacetID = FacetID -- TBD
   deriving (Eq, Ord, Show)
 
-newtype Escrow =
+data Escrow =
   Escrow
   {
-    account :: Dynamic -- an EscrowAccount tokT privT pubT
+    private :: Dynamic, -- privT
+    public :: Dynamic, -- pubT
+    token :: Dynamic -- tokT
   }
-data EscrowID = EscrowID -- TBD
-  deriving (Eq, Ord, Show)
-
-data EscrowAccount tokT privT pubT =
-  EscrowAccount
-  {
-    private :: privT,
-    public :: pubT    
-  }
+newtype EscrowID = EscrowID Digest deriving (Eq, Ord, Show)
+newtype PublicEscrowID privT = PublicEscrowID EscrowID
+newtype PrivateEscrowID privT = PrivateEscrowID EscrowID
 
 newtype Fee = Fee Natural
 
@@ -117,10 +113,11 @@ makeLenses ''Escrows
 makeLenses ''Entry
 makeLenses ''Facet
 makeLenses ''Escrow
-makeLenses ''EscrowAccount
 
 -- Instances
 
 instance Digestible EntryID where
 instance Digestible Entry where
 
+instance Digestible EscrowID where
+instance Digestible Escrow where

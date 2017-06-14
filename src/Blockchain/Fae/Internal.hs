@@ -65,3 +65,17 @@ evaluate entryID arg = Fae $ do
         head $ typeRepArgs $ last $ typeRepArgs $ dynTypeRep $ contract entry
   getFae faeVal 
 
+escrow ::
+  forall tokT privT pubT.
+  (Typeable tokT, Typeable privT, Typeable pubT) =>
+  tokT -> (privT -> pubT) -> privT -> 
+  Fae (PublicEscrowID privT, PrivateEscrowID privT)
+escrow tok pubF priv = Fae $ do
+  oldHash <- use $ _transientState . _lastHashUpdate
+  let
+    escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok)
+    newHash = digestWith oldHash escrow
+    escrowID = EscrowID newHash
+  _transientState . _lastHashUpdate .= newHash
+  _transientState . _escrows . _useEscrows . at escrowID ?= escrow
+  return (PublicEscrowID escrowID, PrivateEscrowID escrowID)

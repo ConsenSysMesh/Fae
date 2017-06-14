@@ -306,11 +306,6 @@ conditions of the function's specification are violated.
     current facet, and an appropriate argument, evaluates the entry on that
     argument and returns the result.
 
-  - **spend:** when called with one argument inside entry evaluation (but *not*
-    top-level code), if the current facet is the same as the entry facet,
-    immediately returns the argument and deletes the entry.  Throws an exception if
-    the facets do not agree or in top-level code.
-
   - **escrow:** when called with a token value and the pair of a "private"
     value and a function from its type to some other "public" one, creates a new
     escrow account with the indicated access token and private and public values.
