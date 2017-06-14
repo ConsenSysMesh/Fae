@@ -22,20 +22,25 @@ library
   other-modules:
     Blockchain.Fae.Internal,
     Blockchain.Fae.Internal.Crypto,
-    Blockchain.Fae.Internal.Lens
+    Blockchain.Fae.Internal.Exceptions,
+    Blockchain.Fae.Internal.Lens,
+    Blockchain.Fae.Internal.Types
   build-depends:       
     base >= 4.7 && < 5,
     containers,
     lens,
     mtl,
-    template-haskell
+    template-haskell,
+    transformers
   default-language:    Haskell2010
   default-extensions:
     FlexibleContexts,
     FlexibleInstances,
     GeneralizedNewtypeDeriving,
+    ScopedTypeVariables,
     StandaloneDeriving,
-    TemplateHaskell
+    TemplateHaskell,
+    TypeApplications
 
 -- executable fae-exe
 --   hs-source-dirs:      app

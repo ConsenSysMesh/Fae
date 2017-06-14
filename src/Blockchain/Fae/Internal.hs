@@ -1,155 +1,66 @@
-module Blockchain.Fae.Internal where
+module Blockchain.Fae.Internal 
+  (
+    module Blockchain.Fae.Internal,
+    module Blockchain.Fae.Internal.Types
+  ) where
 
 import Blockchain.Fae.Internal.Crypto
+import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.Types
 
-import Control.Applicative
-import Control.Exception
-
-import Control.Monad
 import Control.Monad.State
 
 import Data.Dynamic
-import Data.Functor
-
-import Data.Map (Map)
-import qualified Data.Map as Map
-
-import Numeric.Natural
-
--- Types
-
-newtype Fae a = 
-  Fae (StateT FaeState IO a) 
-  deriving (Functor, Applicative, Monad)
-
-data FaeState =
-  FaeState
-  {
-    persistentState :: FaePersist,
-    transientState :: FaeTransient,
-    parameters :: FaeParameters
-  }
-
-data FaePersist =
-  FaePersist 
-  {
-    entries :: Entries,
-    facets :: Facets,
-    lastHash :: Digest
-  }
-
-data FaeTransient =
-  FaeTransient
-  {
-    entryUpdates :: Entries,
-    lastHashUpdate :: Digest,
-    escrows :: Escrows,    
-    sender :: PublicKey,
-    currentEntry :: Entry,
-    currentFacet :: Facet,
-    currentFee :: Fee,
-    currentFeeLeft :: Fee
-  }
-
-data FaeParameters =
-  FaeParameters
-
-newtype Entries = 
-  Entries
-  {
-    useEntries :: Map EntryID Entry  
-  }
-
-newtype Facets =
-  Facets
-  {
-    useFacets :: Map FacetID Facet
-  }
-
-newtype Escrows =
-  Escrows
-  {
-    useEscrows :: Map EscrowID Escrow
-  }
-
-data Entry =
-  Entry
-  {
-    entryID :: EntryID,
-    contract :: Dynamic, -- a Contract argT accumT valT
-    facet :: FacetID
-  }
-data EntryID = EntryID Digest deriving (Eq, Ord)
-
-data Facet =
-  Facet
-  {
-    facetID :: FacetID,
-    fee :: Fee,
-    depends :: [FacetID]
-  }
-data FacetID = FacetID -- TBD
-
-newtype Escrow =
-  Escrow
-  {
-    account :: Dynamic -- an EscrowAccount tokT privT pubT
-  }
-data EscrowID = EscrowID -- TBD
-
-data Contract argT accumT valT =
-  Contract
-  {
-    contractF :: accumT -> valT,
-    combine :: argT -> accumT -> accumT,
-    accum :: accumT
-  }
-
-data EscrowAccount tokT privT pubT =
-  EscrowAccount
-  {
-    private :: privT,
-    public :: pubT    
-  }
-
-newtype Fee = Fee Natural
-
--- TH 
-makeLenses ''Entries
-makeLenses ''FaeParameters
-makeLenses ''FaeTransient
-makeLenses ''FaePersist
-makeLenses ''FaeState
-makeLenses ''Facets
-makeLenses ''Escrows
-makeLenses ''Entry
-makeLenses ''Facet
-makeLenses ''Escrow
-makeLenses ''Contract
-makeLenses ''EscrowAccount
-
--- Instances
-
-instance Digestible (Contract argT accumT valT) where
-instance Digestible EntryID where
-
-deriving instance Typeable (Contract argT accumT valT) 
-
--- Values
+import Data.Maybe
+import Data.Proxy
+import Data.Void
 
 create :: 
   (Typeable argT, Typeable accumT, Typeable valT) =>
-  (accumT -> valT) -> (argT -> accumT -> accumT) -> accumT -> Fae EntryID
+  (accumT -> Fae valT) -> (argT -> accumT -> accumT) -> accumT -> Fae EntryID
 create f c a = Fae $ do
-  seed <- use $ _transientState . _lastHashUpdate
-  facet <- use $ _transientState . _currentFacet . _facetID
+  oldHash <- use $ _transientState . _lastHashUpdate
+  facet <- use $ _transientState . _currentFacet
   let 
-    x = Contract f c a
-    xHash = digestWith seed x
-    newEntryID = EntryID xHash
-    newEntry = Entry newEntryID (toDyn x) facet
-  _transientState . _lastHashUpdate .= xHash
+    newEntry = Entry (toDyn f) (toDyn c) (toDyn a) facet
+    newHash = digestWith oldHash newEntry
+    newEntryID = EntryID newHash
+  _transientState . _lastHashUpdate .= newHash
   _transientState . _entryUpdates . _useEntries . at newEntryID ?= newEntry
   return newEntryID
 
+evaluate ::
+  forall argT valT.
+  (Typeable argT, Typeable valT) =>
+  EntryID -> argT -> Fae valT
+evaluate entryID arg = Fae $ do
+  entryM <- use $ _transientState . _entryUpdates . _useEntries . at entryID
+  entry <- maybe
+    (throwIO $ EvaluatedBadEntryID entryID)
+    return
+    entryM
+  curFacet <- use $ _transientState . _currentFacet
+  when (facet entry /= curFacet) $
+    throwIO $ EvaluatedInWrongFacet entryID curFacet (facet entry)
+  accumTransD <- maybe
+    (throwIO $ 
+      BadEntryArgType entryID (typeRep $ Proxy @argT) $
+        head $ typeRepArgs $ dynTypeRep (combine entry)
+    )
+    return $
+    dynApply (combine entry) (toDyn arg)
+  let 
+    -- The 'create' constructor guarantees that these two dynamic
+    -- evaluations always type-check.
+    newAccum = dynApp accumTransD (accum entry)
+    faeValD = dynApp (contract entry) newAccum
+  -- The accum update must go before the evaluation, because of the
+  -- possibility of nested evaluations.
+  _transientState . _entryUpdates . _useEntries . at entryID ?= 
+    entry{accum = newAccum}
+  fromDyn faeValD $
+    throwIO $
+      BadEntryValType entryID (typeRep $ Proxy @valT) $
+        head $ typeRepArgs $ last $ typeRepArgs $ dynTypeRep $ contract entry
+          
