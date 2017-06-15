@@ -141,3 +141,5 @@ facet facetID feeID = Fae $ do
     throwIO $ InsufficientFee facetID feeGiven (fee newFacet)
   _transientState . _currentFacet .= facetID
 
+signer :: Fae PublicKey
+signer = Fae $ use $ _transientState . _sender
