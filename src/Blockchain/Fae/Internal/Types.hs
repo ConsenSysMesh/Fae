@@ -11,9 +11,8 @@ import Control.Monad.State
 
 import Data.Dynamic
 import Data.Functor
-
+import Data.Set (Set)
 import Data.Map (Map)
-import qualified Data.Map as Map
 
 import Numeric.Natural
 
@@ -77,7 +76,7 @@ data Entry =
     contract :: Dynamic, -- :: accumT -> Fae valT
     combine :: Dynamic, -- :: argT -> accumT -> accumT
     accum :: Dynamic, -- :: accumT
-    facet :: FacetID
+    inFacet :: FacetID
   }
 newtype EntryID = EntryID Digest deriving (Eq, Ord, Show)
 
@@ -85,7 +84,7 @@ data Facet =
   Facet
   {
     fee :: Fee,
-    depends :: [FacetID]
+    depends :: Set FacetID -- all transitive dependencies
   }
 data FacetID = FacetID -- TBD
   deriving (Eq, Ord, Show)
@@ -101,7 +100,8 @@ newtype EscrowID = EscrowID Digest deriving (Eq, Ord, Show)
 newtype PublicEscrowID privT = PublicEscrowID EscrowID
 newtype PrivateEscrowID privT = PrivateEscrowID EscrowID
 
-newtype Fee = Fee Natural
+newtype Fee = Fee Natural deriving (Eq, Ord, Show)
+data FeeToken = FeeToken
 
 -- TH 
 makeLenses ''Entries

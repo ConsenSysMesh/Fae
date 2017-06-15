@@ -29,5 +29,12 @@ data EscrowException =
   BadPrivateType EscrowID TypeRep TypeRep 
   deriving (Typeable, Show)
 
+data FacetException =
+  NotAFacet FacetID |
+  InsufficientFee FacetID Fee Fee |
+  NotADependentFacet FacetID FacetID
+  deriving (Typeable, Show)
+
 instance Exception EntryException 
 instance Exception EscrowException
+instance Exception FacetException

@@ -14,6 +14,7 @@ import Control.Monad.State
 import Data.Dynamic
 import Data.Maybe
 import Data.Proxy
+import qualified Data.Set as Set
 import Data.Void
 
 create :: 
@@ -47,8 +48,8 @@ evaluate entryID arg = Fae $ do
     return
     entryM
   curFacet <- use $ _transientState . _currentFacet
-  when (facet entry /= curFacet) $
-    throwIO $ WrongFacet entryID curFacet (facet entry)
+  when (inFacet entry /= curFacet) $
+    throwIO $ WrongFacet entryID curFacet (inFacet entry)
   accumTransD <- maybe
     (throwIO $ 
       BadEntryArgType entryID (typeRep $ Proxy @argT) $
@@ -68,7 +69,7 @@ evaluate entryID arg = Fae $ do
   _transientState . _currentEntry .= entryID
   faeVal <- fromDyn faeValD $
     throwIO $
-      BadEntryValType entryID (typeRep $ Proxy @valT) $
+      BadEntryValType entryID (typeRep $ Proxy @(Fae valT)) $
         head $ typeRepArgs $ last $ typeRepArgs $ dynTypeRep $ contract entry
   getFae faeVal 
 
@@ -124,4 +125,19 @@ close privID !_ = Fae $ do
     fromDynamic (private escrow)
   _transientState . _escrows . _useEscrows . at escrowID .= Nothing
   return priv
+
+facet :: FacetID -> PrivateEscrowID Fee -> Fae ()
+facet facetID feeID = Fae $ do
+  curFacetID <- use $ _transientState . _currentFacet
+  newFacetM <- use $ _persistentState . _facets . _useFacets . at facetID
+  newFacet <- maybe
+    (throwIO $ NotAFacet facetID)
+    return
+    newFacetM
+  when (Set.notMember curFacetID $ depends newFacet) $
+    throwIO $ NotADependentFacet curFacetID facetID
+  feeGiven <- getFae $ close feeID FeeToken
+  when (feeGiven < fee newFacet) $
+    throwIO $ InsufficientFee facetID feeGiven (fee newFacet)
+  _transientState . _currentFacet .= facetID
 
