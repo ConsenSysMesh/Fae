@@ -44,6 +44,7 @@ data FaeTransient =
     lastHashUpdate :: Digest,
     escrows :: Escrows,    
     sender :: PublicKey,
+    currentEntry :: EntryID,
     currentFacet :: FacetID,
     currentFee :: Fee,
     currentFeeLeft :: Fee

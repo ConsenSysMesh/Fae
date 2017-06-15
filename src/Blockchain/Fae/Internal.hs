@@ -30,6 +30,12 @@ create f c a = Fae $ do
   _transientState . _entryUpdates . _useEntries . at newEntryID ?= newEntry
   return newEntryID
 
+spend :: a -> Fae a
+spend x = Fae $ do
+  entryID <- use $ _transientState . _currentEntry
+  _transientState . _entryUpdates . _useEntries . at entryID .= Nothing
+  return x
+
 evaluate ::
   forall argT valT.
   (Typeable argT, Typeable valT) =>
@@ -59,6 +65,7 @@ evaluate entryID arg = Fae $ do
   -- possibility of nested evaluations.
   _transientState . _entryUpdates . _useEntries . at entryID ?= 
     entry{accum = newAccum}
+  _transientState . _currentEntry .= entryID
   faeVal <- fromDyn faeValD $
     throwIO $
       BadEntryValType entryID (typeRep $ Proxy @valT) $
@@ -100,9 +107,10 @@ close ::
   forall tokT privT.
   (Typeable tokT, Typeable privT) =>
   PrivateEscrowID privT -> tokT -> Fae privT
--- Need strictness here to force the user to actually have a token, and not
--- just a typed 'undefined'.
-close privID !tok = Fae $ do
+-- Need strictness here to force the caller to actually have a token, and not
+-- just a typed 'undefined'.  The token itself is unused; we just need to
+-- know that the caller was able to access the correct type.
+close privID !_ = Fae $ do
   let PrivateEscrowID escrowID = privID
   escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
   escrow <- maybe

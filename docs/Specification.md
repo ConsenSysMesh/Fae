@@ -302,6 +302,11 @@ conditions of the function's specification are violated.
     entry as per [Storage](#storage).  By default this entry has an empty label;
     see `label` for how to change this.
 
+  - **spend:** when called with one argument inside entry evaluation (but *not*
+    top-level code), if the current facet is the same as the entry facet,
+    immediately returns the argument and deletes the entry.  Throws an exception if
+    the facets do not agree or in top-level code.
+
   - **evaluate:** when called with an entry ID for an existing entry in the
     current facet, and an appropriate argument, evaluates the entry on that
     argument and returns the result.
