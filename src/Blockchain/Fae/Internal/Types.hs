@@ -13,6 +13,10 @@ import Data.Dynamic
 import Data.Functor
 import Data.Set (Set)
 import Data.Map (Map)
+import Data.Sequence (Seq)
+import Data.Text (Text)
+
+import qualified Data.Map as Map
 
 import Numeric.Natural
 
@@ -33,6 +37,7 @@ data FaePersist =
   {
     entries :: Entries,
     facets :: Facets,
+    outputs :: Outputs,
     lastHash :: Digest
   }
 
@@ -40,13 +45,15 @@ data FaeTransient =
   FaeTransient
   {
     entryUpdates :: Entries,
-    lastHashUpdate :: Digest,
+    newOutput :: Output,
     escrows :: Escrows,    
     sender :: PublicKey,
+    lastHashUpdate :: Digest,
     currentEntry :: EntryID,
     currentFacet :: FacetID,
     currentFee :: Fee,
-    currentFeeLeft :: Fee
+    currentFeeLeft :: Fee,
+    localLabel :: Seq Text
   }
 
 data FaeParameters =
@@ -64,6 +71,14 @@ newtype Facets =
     useFacets :: Map FacetID Facet
   }
 
+newtype Outputs =
+  Outputs
+  {
+    useOutputs :: Map TransactionID Output
+  }
+data TransactionID = TransactionID -- TBD
+  deriving (Eq, Ord, Show)
+
 newtype Escrows =
   Escrows
   {
@@ -79,6 +94,13 @@ data Entry =
     inFacet :: FacetID
   }
 newtype EntryID = EntryID Digest deriving (Eq, Ord, Show)
+
+data Output =
+  Output
+  {
+    outputEntryID :: Maybe EntryID,
+    subOutputs :: Map Text Output
+  }
 
 data Facet =
   Facet
@@ -110,9 +132,11 @@ makeLenses ''FaeTransient
 makeLenses ''FaePersist
 makeLenses ''FaeState
 makeLenses ''Facets
+makeLenses ''Outputs
 makeLenses ''Escrows
 makeLenses ''Entry
 makeLenses ''Facet
+makeLenses ''Output
 makeLenses ''Escrow
 
 -- Instances
@@ -122,3 +146,18 @@ instance Digestible Entry where
 
 instance Digestible EscrowID where
 instance Digestible Escrow where
+
+-- Simple functions
+
+addOutput :: Seq Text -> EntryID -> Output -> Output
+addOutput lSeq entryID output =
+  maybe
+    (output & _outputEntryID ?~ entryID)
+    (\(label, rest) -> 
+      output & 
+        _subOutputs . 
+        at label . 
+        defaultLens (Output Nothing Map.empty) %~ 
+        addOutput rest entryID
+    )
+    (uncons lSeq)

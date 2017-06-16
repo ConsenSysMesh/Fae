@@ -1,8 +1,10 @@
 module Blockchain.Fae 
   (
     Fae,
-    EntryID, FacetID, EscrowID, Fee,
-    create
+    EntryID, FacetID, EscrowID, Fee, Output, TransactionID,
+    create, spend, evaluate,
+    escrow, peek, close,
+    facet, signer, label, follow
   ) where
 
 import Blockchain.Fae.Internal

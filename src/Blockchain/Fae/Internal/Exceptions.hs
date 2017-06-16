@@ -35,6 +35,11 @@ data FacetException =
   NotADependentFacet FacetID FacetID
   deriving (Typeable, Show)
 
+data TransactionException =
+  BadTransactionID TransactionID
+  deriving (Typeable, Show)
+
 instance Exception EntryException 
 instance Exception EscrowException
 instance Exception FacetException
+instance Exception TransactionException

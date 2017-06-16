@@ -6,6 +6,8 @@ module Blockchain.Fae.Internal.Lens
 
 import Control.Lens hiding (makeLenses)
 
+import Data.Maybe
+
 import Language.Haskell.TH
 
 makeLenses :: Name -> Q [Dec]
@@ -19,3 +21,5 @@ makeLenses = makeLensesWith myLensRules
         ('_' : _) -> []
         x -> [TopName $ mkName $ '_' : x]
 
+defaultLens :: a -> Lens' (Maybe a) a
+defaultLens x = lens (fromMaybe x) (flip $ const . Just)

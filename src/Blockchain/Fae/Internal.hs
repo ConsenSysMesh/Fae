@@ -15,6 +15,7 @@ import Data.Dynamic
 import Data.Maybe
 import Data.Proxy
 import qualified Data.Set as Set
+import Data.Text (Text)
 import Data.Void
 
 create :: 
@@ -29,6 +30,8 @@ create f c a = Fae $ do
     newEntryID = EntryID newHash
   _transientState . _lastHashUpdate .= newHash
   _transientState . _entryUpdates . _useEntries . at newEntryID ?= newEntry
+  lSeq <- use $ _transientState . _localLabel
+  _transientState . _newOutput %= addOutput lSeq newEntryID
   return newEntryID
 
 spend :: a -> Fae a
@@ -143,3 +146,19 @@ facet facetID feeID = Fae $ do
 
 signer :: Fae PublicKey
 signer = Fae $ use $ _transientState . _sender
+
+label :: Text -> Fae a -> Fae a
+label l s = Fae $ do
+  _transientState . _localLabel %= flip snoc l
+  sVal <- getFae s
+  _transientState . _localLabel %= view _init
+  return sVal
+
+follow :: TransactionID -> Fae Output
+follow txID = Fae $ do
+  outputM <- use $ _persistentState . _outputs . _useOutputs . at txID
+  maybe
+    (throwIO $ BadTransactionID txID)
+    return
+    outputM
+
