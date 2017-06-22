@@ -58,6 +58,9 @@ data FaeTransient =
 
 data FaeParameters =
   FaeParameters
+  {
+    transactionCredit :: Fee
+  }
 
 newtype Entries = 
   Entries
@@ -122,7 +125,7 @@ newtype EscrowID = EscrowID Digest deriving (Eq, Ord, Show)
 newtype PublicEscrowID privT = PublicEscrowID EscrowID
 newtype PrivateEscrowID privT = PrivateEscrowID EscrowID
 
-newtype Fee = Fee Natural deriving (Eq, Ord, Show)
+newtype Fee = Fee { getFee :: Natural } deriving (Eq, Ord, Show)
 data FeeToken = FeeToken
 
 -- TH 
@@ -161,3 +164,9 @@ addOutput lSeq entryID output =
         addOutput rest entryID
     )
     (uncons lSeq)
+
+zeroFacet :: FacetID
+zeroFacet = FacetID -- TBD
+
+nullEntry :: EntryID
+nullEntry = EntryID undefined -- TBD

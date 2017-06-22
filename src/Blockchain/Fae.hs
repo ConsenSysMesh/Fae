@@ -148,6 +148,8 @@ facet facetID feeID = Fae $ do
   when (Set.notMember curFacetID $ depends newFacet) $
     throwIO $ NotADependentFacet curFacetID facetID
   feeGiven <- getFae $ close feeID FeeToken
+  _transientState . _currentFee .= feeGiven
+  _transientState . _currentFeeLeft .= feeGiven
   when (feeGiven < fee newFacet) $
     throwIO $ InsufficientFee facetID feeGiven (fee newFacet)
   _transientState . _currentFacet .= facetID

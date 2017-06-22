@@ -20,10 +20,10 @@ library
     Blockchain.Fae.Contracts,
     Blockchain.Fae.Crypto
   other-modules:
-    Blockchain.Fae.Internal,
     Blockchain.Fae.Internal.Crypto,
     Blockchain.Fae.Internal.Exceptions,
     Blockchain.Fae.Internal.Lens,
+    Blockchain.Fae.Internal.Transaction,
     Blockchain.Fae.Internal.Types
   build-depends:       
     base >= 4.7 && < 5,
