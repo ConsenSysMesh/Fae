@@ -2,12 +2,15 @@ module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae
 import Blockchain.Fae.Contracts
+import Blockchain.Fae.Crypto
 import Blockchain.Fae.Internal
-import Blockchain.Fae.Internal.Crypto
+import Blockchain.Fae.Internal.Crypto hiding (signer)
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
 import Control.Monad
+
+import Data.Dynamic
 
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
@@ -60,7 +63,20 @@ saveEscrows = Fae $ do
   _persistentState . _entries . _useEntries %= Map.union entries
 
 convertEscrow :: FacetID -> EntryID -> Escrow -> Fae Entry
-convertEscrow = undefined
+convertEscrow facetID entryID escrow = Fae $ do
+  key <- getFae signer
+  let
+    f :: 
+      (Typeable tokT, Typeable pubT, Typeable privT) =>
+      Signature -> Fae (Maybe (EscrowID tokT pubT privT))
+    f sig
+      | verifySig key entryID sig = Fae $ do
+          -- FIXME Don't reuse the same entry ID, or otherwise ensure that
+          -- escrow IDs between transactions are invalid.
+          _transientState . _escrows . _useEscrows . at entryID ?= escrow
+          return $ Just (PublicEscrowID entryID, PrivateEscrowID entryID)
+      | otherwise = return Nothing
+  return $ Entry (toDyn f) (toDyn const) (toDyn undefined) facetID
 
 saveTransient :: TransactionID -> Fae ()
 saveTransient txID = Fae $ do
