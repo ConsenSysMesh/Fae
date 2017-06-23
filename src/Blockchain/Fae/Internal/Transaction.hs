@@ -2,12 +2,16 @@ module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae
 import Blockchain.Fae.Contracts
+import Blockchain.Fae.Internal
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
+import Control.Monad
+
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
+import qualified Data.Text as Text
 
 runTransaction :: TransactionID -> PublicKey -> Fae () -> Fae ()
 runTransaction txID sender x = do
@@ -45,11 +49,18 @@ saveFee = do
   _ <- escrow FeeToken getFee currentFee
   return ()
 
--- FIXME
 saveEscrows :: Fae ()
 saveEscrows = Fae $ do
-  escrows <- use $ _transientState . _escrows
-  return ()
+  escrows <- use $ _transientState . _escrows . _useEscrows
+  getFae $ label "escrows" $
+    forM_ (Map.keys escrows) $ \k ->
+      label (Text.pack $ show k) $ output k
+  facet <- use $ _transientState . _currentFacet
+  entries <- getFae $ sequence $ Map.mapWithKey (convertEscrow facet) escrows
+  _persistentState . _entries . _useEntries %= Map.union entries
+
+convertEscrow :: FacetID -> EntryID -> Escrow -> Fae Entry
+convertEscrow = undefined
 
 saveTransient :: TransactionID -> Fae ()
 saveTransient txID = Fae $ do

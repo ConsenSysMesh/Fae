@@ -85,7 +85,7 @@ data TransactionID = TransactionID -- TBD
 newtype Escrows =
   Escrows
   {
-    useEscrows :: Map EscrowID Escrow
+    useEscrows :: Map EntryID Escrow
   }
 
 data Entry =
@@ -121,12 +121,14 @@ data Escrow =
     public :: Dynamic, -- pubT
     token :: Dynamic -- tokT
   }
-newtype EscrowID = EscrowID Digest deriving (Eq, Ord, Show)
-newtype PublicEscrowID privT = PublicEscrowID EscrowID
-newtype PrivateEscrowID privT = PrivateEscrowID EscrowID
+newtype PublicEscrowID tokT pubT privT = PublicEscrowID EntryID
+newtype PrivateEscrowID tokT pubT privT = PrivateEscrowID EntryID
+type EscrowID tokT pubT privT =
+  (PublicEscrowID tokT pubT privT, PrivateEscrowID tokT pubT privT)
 
 newtype Fee = Fee { getFee :: Natural } deriving (Eq, Ord, Show)
 data FeeToken = FeeToken
+type FeeEscrowID = PrivateEscrowID FeeToken Natural Fee
 
 -- TH 
 makeLenses ''Entries
@@ -147,26 +149,5 @@ makeLenses ''Escrow
 instance Digestible EntryID where
 instance Digestible Entry where
 
-instance Digestible EscrowID where
 instance Digestible Escrow where
 
--- Simple functions
-
-addOutput :: Seq Text -> EntryID -> Output -> Output
-addOutput lSeq entryID output =
-  maybe
-    (output & _outputEntryID ?~ entryID)
-    (\(label, rest) -> 
-      output & 
-        _subOutputs . 
-        at label . 
-        defaultLens (Output Nothing Map.empty) %~ 
-        addOutput rest entryID
-    )
-    (uncons lSeq)
-
-zeroFacet :: FacetID
-zeroFacet = FacetID -- TBD
-
-nullEntry :: EntryID
-nullEntry = EntryID undefined -- TBD

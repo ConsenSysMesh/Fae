@@ -4,6 +4,7 @@ module Blockchain.Fae
     module Blockchain.Fae
   ) where
 
+import Blockchain.Fae.Internal
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Lens
@@ -38,8 +39,7 @@ create f c a = Fae $ do
     newEntryID = EntryID newHash
   _transientState . _lastHashUpdate .= newHash
   _transientState . _entryUpdates . _useEntries . at newEntryID ?= newEntry
-  lSeq <- use $ _transientState . _localLabel
-  _transientState . _newOutput %= addOutput lSeq newEntryID
+  getFae $ output newEntryID
   return newEntryID
 
 spend :: a -> Fae a
@@ -87,21 +87,21 @@ evaluate entryID arg = Fae $ do
 escrow ::
   (Typeable tokT, Typeable privT, Typeable pubT) =>
   tokT -> (privT -> pubT) -> privT -> 
-  Fae (PublicEscrowID privT, PrivateEscrowID privT)
+  Fae (EscrowID tokT pubT privT)
 escrow tok pubF priv = Fae $ do
   oldHash <- use $ _transientState . _lastHashUpdate
   let
     escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok)
     newHash = digestWith oldHash escrow
-    escrowID = EscrowID newHash
+    entryID = EntryID newHash
   _transientState . _lastHashUpdate .= newHash
-  _transientState . _escrows . _useEscrows . at escrowID ?= escrow
-  return (PublicEscrowID escrowID, PrivateEscrowID escrowID)
+  _transientState . _escrows . _useEscrows . at entryID ?= escrow
+  return (PublicEscrowID entryID, PrivateEscrowID entryID)
 
 peek ::
-  forall privT pubT.
-  (Typeable privT, Typeable pubT) =>
-  PublicEscrowID privT -> Fae pubT
+  forall tokT privT pubT.
+  (Typeable tokT, Typeable privT, Typeable pubT) =>
+  PublicEscrowID tokT pubT privT -> Fae pubT
 peek pubID = Fae $ do
   let PublicEscrowID escrowID = pubID
   escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
@@ -116,9 +116,9 @@ peek pubID = Fae $ do
     fromDynamic (public escrow)
 
 close ::
-  forall tokT privT.
-  (Typeable tokT, Typeable privT) =>
-  PrivateEscrowID privT -> tokT -> Fae privT
+  forall tokT pubT privT.
+  (Typeable tokT, Typeable pubT, Typeable privT) =>
+  PrivateEscrowID tokT pubT privT -> tokT -> Fae privT
 -- Need strictness here to force the caller to actually have a token, and not
 -- just a typed 'undefined'.  The token itself is unused; we just need to
 -- know that the caller was able to access the correct type.
@@ -137,7 +137,7 @@ close privID !_ = Fae $ do
   _transientState . _escrows . _useEscrows . at escrowID .= Nothing
   return priv
 
-facet :: FacetID -> PrivateEscrowID Fee -> Fae ()
+facet :: FacetID -> FeeEscrowID -> Fae ()
 facet facetID feeID = Fae $ do
   curFacetID <- use $ _transientState . _currentFacet
   newFacetM <- use $ _persistentState . _facets . _useFacets . at facetID

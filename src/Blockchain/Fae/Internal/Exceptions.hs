@@ -20,9 +20,9 @@ data EntryException =
   deriving (Typeable, Show)
 
 data EscrowException =
-  BadEscrowID EscrowID |
-  BadPublicType EscrowID TypeRep TypeRep |
-  BadPrivateType EscrowID TypeRep TypeRep 
+  BadEscrowID EntryID |
+  BadPublicType EntryID TypeRep TypeRep |
+  BadPrivateType EntryID TypeRep TypeRep 
   deriving (Typeable, Show)
 
 data FacetException =

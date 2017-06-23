@@ -20,6 +20,7 @@ library
     Blockchain.Fae.Contracts,
     Blockchain.Fae.Crypto
   other-modules:
+    Blockchain.Fae.Internal,
     Blockchain.Fae.Internal.Crypto,
     Blockchain.Fae.Internal.Exceptions,
     Blockchain.Fae.Internal.Lens,
@@ -40,6 +41,7 @@ library
     FlexibleContexts,
     FlexibleInstances,
     GeneralizedNewtypeDeriving,
+    OverloadedStrings,
     RankNTypes,
     ScopedTypeVariables,
     StandaloneDeriving,
