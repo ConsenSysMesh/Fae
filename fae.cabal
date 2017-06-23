@@ -30,6 +30,7 @@ library
     containers,
     lens,
     mtl,
+    safe-exceptions,
     template-haskell,
     text,
     transformers

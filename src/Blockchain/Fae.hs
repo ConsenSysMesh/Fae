@@ -159,10 +159,11 @@ signer = Fae $ use $ _transientState . _sender
 
 label :: Text -> Fae a -> Fae a
 label l s = Fae $ do
-  _transientState . _localLabel %= flip snoc l
-  sVal <- getFae s
-  _transientState . _localLabel %= view _init
-  return sVal
+  oldLabel <- use $ _transientState . _localLabel
+  let
+    addLabel = _transientState . _localLabel %= flip snoc l
+    popLabel = _transientState . _localLabel .= oldLabel
+  bracket_ addLabel popLabel $ getFae s
 
 follow :: TransactionID -> Fae Output
 follow txID = Fae $ do
