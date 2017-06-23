@@ -109,11 +109,24 @@ peek pubID = Fae $ do
     (throwIO $ BadEscrowID escrowID)
     return
     escrowM
+  let
+    tokTRep = typeRep (Proxy @tokT)
+    pubTRep = typeRep (Proxy @pubT)
+    privTRep = typeRep (Proxy @privT)
+    realTokTRep = dynTypeRep (token escrow)
+    realPubTRep = dynTypeRep (public escrow)
+    realPrivTRep = dynTypeRep (private escrow)
+  -- We check this to force the supplier to provide a type-correct escrow
+  -- ID even though the private value is not returned.
+  when (privTRep /= realPrivTRep) $ throwIO $
+    BadPrivateType escrowID privTRep realPrivTRep
+  -- Likewise here
+  when (tokTRep /= realTokTRep) $ throwIO $
+    BadTokenType escrowID tokTRep realTokTRep
   maybe
-    (throwIO $ 
-      BadPublicType escrowID (typeRep $ Proxy @pubT) (dynTypeRep $ public escrow))
-    return $ 
-    fromDynamic (public escrow)
+    (throwIO $ BadPublicType escrowID pubTRep realPubTRep)
+    return 
+    (fromDynamic $ public escrow)
 
 close ::
   forall tokT pubT privT.
@@ -129,11 +142,26 @@ close privID !_ = Fae $ do
     (throwIO $ BadEscrowID escrowID)
     return
     escrowM
+  let
+    tokTRep = typeRep (Proxy @tokT)
+    pubTRep = typeRep (Proxy @pubT)
+    privTRep = typeRep (Proxy @privT)
+    realTokTRep = dynTypeRep (token escrow)
+    realPubTRep = dynTypeRep (public escrow)
+    realPrivTRep = dynTypeRep (private escrow)
+  -- We check this to force the supplier to provide a type-correct escrow
+  -- ID even though the public value is not returned.
+  when (pubTRep /= realPubTRep) $ throwIO $
+    BadPublicType escrowID pubTRep realPubTRep
+  -- This is a necessary check.  The strictness annotation ensures that we
+  -- have a defined token argument, but it doesn't prove that the inferred
+  -- type is actually the one in the escrow.
+  when (tokTRep /= realTokTRep) $ throwIO $
+    BadTokenType escrowID tokTRep realTokTRep
   priv <- maybe
-    (throwIO $ 
-      BadPrivateType escrowID (typeRep $ Proxy @privT) (dynTypeRep $ private escrow))
-    return $ 
-    fromDynamic (private escrow)
+    (throwIO $ BadPrivateType escrowID privTRep realPrivTRep)
+    return 
+    (fromDynamic $ private escrow)
   _transientState . _escrows . _useEscrows . at escrowID .= Nothing
   return priv
 

@@ -21,6 +21,7 @@ data EntryException =
 
 data EscrowException =
   BadEscrowID EntryID |
+  BadTokenType EntryID TypeRep TypeRep |
   BadPublicType EntryID TypeRep TypeRep |
   BadPrivateType EntryID TypeRep TypeRep 
   deriving (Typeable, Show)
