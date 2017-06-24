@@ -36,7 +36,7 @@ create f c a = addEntry $ Entry (toDyn f) (toDyn c) (toDyn a)
 spend :: a -> Fae a
 spend x = Fae $ do
   entryID <- use $ _transientState . _currentEntry
-  _transientState . _entryUpdates . _useEntries . at entryID .= Nothing
+  _transientState . _entryUpdates . _useEntries %= sans entryID
   return x
 
 evaluate ::
@@ -80,9 +80,12 @@ escrow ::
   (Typeable tokT, Typeable privT, Typeable pubT) =>
   tokT -> (privT -> pubT) -> privT -> 
   Fae (EscrowID tokT pubT privT)
-escrow tok pubF priv = Fae $ do
-  oldHash <- use $ _transientState . _lastHashUpdate
-  let
+escrow tok pubF priv = do
+  entryID <- insertEntry (_transientState . _escrows . _useEscrows) escrow
+  return (PublicEscrowID entryID, PrivateEscrowID entryID)
+
+  where
+    escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok) contractMaker
     contractMaker entryID key = toDyn f where
       f :: Signature -> Fae (Maybe (EscrowID tokT pubT privT))
       f sig
@@ -90,41 +93,17 @@ escrow tok pubF priv = Fae $ do
             _transientState . _escrows . _useEscrows . at entryID ?= escrow
             return $ Just (PublicEscrowID entryID, PrivateEscrowID entryID)
         | otherwise = return Nothing
-    escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok) contractMaker
-    newHash = digestWith oldHash escrow
-    entryID = EntryID newHash
-  _transientState . _lastHashUpdate .= newHash
-  _transientState . _escrows . _useEscrows . at entryID ?= escrow
-  return (PublicEscrowID entryID, PrivateEscrowID entryID)
 
 peek ::
   forall tokT privT pubT.
   (Typeable tokT, Typeable privT, Typeable pubT) =>
   PublicEscrowID tokT pubT privT -> Fae pubT
-peek (PublicEscrowID escrowID) = Fae $ do
-  escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
-  escrow <- maybe
-    (throwIO $ BadEscrowID escrowID)
-    return
-    escrowM
-  let
-    tokTRep = typeRep (Proxy @tokT)
-    pubTRep = typeRep (Proxy @pubT)
-    privTRep = typeRep (Proxy @privT)
-    realTokTRep = dynTypeRep (token escrow)
-    realPubTRep = dynTypeRep (public escrow)
-    realPrivTRep = dynTypeRep (private escrow)
-  -- We check this to force the supplier to provide a type-correct escrow
-  -- ID even though the private value is not returned.
-  when (privTRep /= realPrivTRep) $ throwIO $
-    BadPrivateType escrowID privTRep realPrivTRep
-  -- Likewise here
-  when (tokTRep /= realTokTRep) $ throwIO $
-    BadTokenType escrowID tokTRep realTokTRep
-  maybe
-    (throwIO $ BadPublicType escrowID pubTRep realPubTRep)
-    return 
-    (fromDynamic $ public escrow)
+peek (PublicEscrowID escrowID) = 
+  useEscrow
+    (Proxy @tokT)
+    (Proxy @pubT) _public BadPublicType
+    (Proxy @privT) _private BadPrivateType
+    escrowID
 
 close ::
   forall tokT pubT privT.
@@ -133,33 +112,13 @@ close ::
 -- Need strictness here to force the caller to actually have a token, and not
 -- just a typed 'undefined'.  The token itself is unused; we just need to
 -- know that the caller was able to access the correct type.
-close (PrivateEscrowID escrowID) !_ = Fae $ do
-  escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
-  escrow <- maybe
-    (throwIO $ BadEscrowID escrowID)
-    return
-    escrowM
-  let
-    tokTRep = typeRep (Proxy @tokT)
-    pubTRep = typeRep (Proxy @pubT)
-    privTRep = typeRep (Proxy @privT)
-    realTokTRep = dynTypeRep (token escrow)
-    realPubTRep = dynTypeRep (public escrow)
-    realPrivTRep = dynTypeRep (private escrow)
-  -- We check this to force the supplier to provide a type-correct escrow
-  -- ID even though the public value is not returned.
-  when (pubTRep /= realPubTRep) $ throwIO $
-    BadPublicType escrowID pubTRep realPubTRep
-  -- This is a necessary check.  The strictness annotation ensures that we
-  -- have a defined token argument, but it doesn't prove that the inferred
-  -- type is actually the one in the escrow.
-  when (tokTRep /= realTokTRep) $ throwIO $
-    BadTokenType escrowID tokTRep realTokTRep
-  priv <- maybe
-    (throwIO $ BadPrivateType escrowID privTRep realPrivTRep)
-    return 
-    (fromDynamic $ private escrow)
-  _transientState . _escrows . _useEscrows . at escrowID .= Nothing
+close (PrivateEscrowID escrowID) !_ = do
+  priv <- useEscrow
+    (Proxy @tokT)
+    (Proxy @privT) _private BadPrivateType
+    (Proxy @pubT) _public BadPublicType
+    escrowID
+  Fae $ _transientState . _escrows . _useEscrows . at escrowID .= Nothing
   return priv
 
 facet :: FacetID -> FeeEscrowID -> Fae ()

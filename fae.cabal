@@ -46,7 +46,8 @@ library
     ScopedTypeVariables,
     StandaloneDeriving,
     TemplateHaskell,
-    TypeApplications
+    TypeApplications,
+    TypeFamilies
 
 -- executable fae-exe
 --   hs-source-dirs:      app
