@@ -1,5 +1,6 @@
 module Blockchain.Fae.Internal where
 
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
@@ -31,3 +32,15 @@ zeroFacet = FacetID -- TBD
 
 nullEntry :: EntryID
 nullEntry = EntryID undefined -- TBD
+
+addEntry :: Entry -> Fae EntryID
+addEntry entry = Fae $ do
+  oldHash <- use $ _transientState . _lastHashUpdate
+  let 
+    newHash = digestWith oldHash entry
+    newEntryID = EntryID newHash
+  getFae $ output newEntryID
+  _transientState . _lastHashUpdate .= newHash
+  _transientState . _entryUpdates . _useEntries . at newEntryID ?= entry
+  return newEntryID
+

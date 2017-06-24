@@ -8,6 +8,7 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
 import Control.Monad
+import Control.Monad.Fix
 
 import Data.Dynamic
 
@@ -55,24 +56,20 @@ saveEscrows :: Fae ()
 saveEscrows = Fae $ do
   escrows <- use $ _transientState . _escrows . _useEscrows
   facet <- use $ _transientState . _currentFacet
-  entries <- getFae $ label "escrows" $
-    mapM (convertEscrow facet) $ Map.toList escrows
-  _persistentState . _entries . _useEntries %= Map.union (Map.fromList entries)
+  getFae $ label "escrows" $ sequence_ $
+    Map.mapWithKey (convertEscrow facet) escrows
 
-convertEscrow :: FacetID -> (EntryID, Escrow) -> Fae (EntryID, Entry)
-convertEscrow facetID (entryID, escrow) = Fae $ do
-  key <- getFae signer
-  oldHash <- use $ _transientState . _lastHashUpdate
-  let 
-    newHash = digestWith oldHash escrow
-    newEntryID = EntryID newHash
-  getFae $ label (Text.pack $ show newEntryID) $ output entryID
-  _transientState . _lastHashUpdate .= newHash
-  let 
-    fDyn = contractMaker escrow newEntryID key
-    c = const @Signature @Signature
-    a = undefined :: Signature
-  return $ (newEntryID, Entry fDyn (toDyn c) (toDyn a) facetID)
+convertEscrow :: FacetID -> EntryID -> Escrow -> Fae ()
+convertEscrow facetID entryID escrow = do
+  key <- signer
+  _ <- label (Text.pack $ show entryID) $ mfix $ addEntry . makeEntry key
+  return ()
+
+  where
+    makeEntry key newEntryID = Entry fDyn (toDyn c) (toDyn a) facetID where
+      fDyn = contractMaker escrow newEntryID key
+      c = const @Signature @Signature
+      a = undefined :: Signature
 
 saveTransient :: TransactionID -> Fae ()
 saveTransient txID = Fae $ do

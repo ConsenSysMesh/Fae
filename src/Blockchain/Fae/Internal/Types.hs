@@ -7,6 +7,7 @@ import Control.Applicative
 import Control.Exception
 
 import Control.Monad
+import Control.Monad.Fix
 import Control.Monad.State
 
 import Data.Dynamic
@@ -22,7 +23,7 @@ import Numeric.Natural
 
 newtype Fae a = 
   Fae { getFae :: StateT FaeState IO a }
-  deriving (Functor, Applicative, Monad)
+  deriving (Functor, Applicative, Monad, MonadFix)
 
 data FaeState =
   FaeState
