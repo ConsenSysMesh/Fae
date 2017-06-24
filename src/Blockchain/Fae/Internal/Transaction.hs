@@ -55,18 +55,16 @@ saveFee = do
 saveEscrows :: Fae ()
 saveEscrows = Fae $ do
   escrows <- use $ _transientState . _escrows . _useEscrows
-  facet <- use $ _transientState . _currentFacet
-  getFae $ label "escrows" $ sequence_ $
-    Map.mapWithKey (convertEscrow facet) escrows
+  getFae $ label "escrows" $ sequence_ $ Map.mapWithKey convertEscrow escrows
 
-convertEscrow :: FacetID -> EntryID -> Escrow -> Fae ()
-convertEscrow facetID entryID escrow = do
+convertEscrow :: EntryID -> Escrow -> Fae ()
+convertEscrow entryID escrow = do
   key <- signer
   _ <- label (Text.pack $ show entryID) $ mfix $ addEntry . makeEntry key
   return ()
 
   where
-    makeEntry key newEntryID = Entry fDyn (toDyn c) (toDyn a) facetID where
+    makeEntry key newEntryID = Entry fDyn (toDyn c) (toDyn a) where
       fDyn = contractMaker escrow newEntryID key
       c = const @Signature @Signature
       a = undefined :: Signature

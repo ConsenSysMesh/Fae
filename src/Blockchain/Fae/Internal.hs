@@ -33,14 +33,16 @@ zeroFacet = FacetID -- TBD
 nullEntry :: EntryID
 nullEntry = EntryID undefined -- TBD
 
-addEntry :: Entry -> Fae EntryID
-addEntry entry = Fae $ do
+addEntry :: (FacetID -> Entry) -> Fae EntryID
+addEntry mkEntry = Fae $ do
+  facet <- use $ _transientState . _currentFacet
   oldHash <- use $ _transientState . _lastHashUpdate
   let 
+    entry = mkEntry facet
     newHash = digestWith oldHash entry
     newEntryID = EntryID newHash
   getFae $ output newEntryID
   _transientState . _lastHashUpdate .= newHash
-  _transientState . _entryUpdates . _useEntries . at newEntryID ?= entry
+  _transientState . _entryUpdates . _useEntries . at newEntryID ?= entry 
   return newEntryID
 

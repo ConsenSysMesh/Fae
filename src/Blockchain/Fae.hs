@@ -31,17 +31,7 @@ createMonoid f = create f mappend mempty
 create :: 
   (Typeable argT, Typeable accumT, Typeable valT) =>
   (accumT -> Fae valT) -> (argT -> accumT -> accumT) -> accumT -> Fae EntryID
-create f c a = Fae $ do
-  oldHash <- use $ _transientState . _lastHashUpdate
-  facet <- use $ _transientState . _currentFacet
-  let 
-    newEntry = Entry (toDyn f) (toDyn c) (toDyn a) facet
-    newHash = digestWith oldHash newEntry
-    newEntryID = EntryID newHash
-  _transientState . _lastHashUpdate .= newHash
-  _transientState . _entryUpdates . _useEntries . at newEntryID ?= newEntry
-  getFae $ output newEntryID
-  return newEntryID
+create f c a = addEntry $ Entry (toDyn f) (toDyn c) (toDyn a) 
 
 spend :: a -> Fae a
 spend x = Fae $ do
