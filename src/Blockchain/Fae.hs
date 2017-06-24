@@ -93,14 +93,14 @@ escrow ::
 escrow tok pubF priv = Fae $ do
   oldHash <- use $ _transientState . _lastHashUpdate
   let
-    contractMaker :: EntryID -> PublicKey -> Signature -> Fae (Maybe (EscrowID tokT pubT privT))
-    contractMaker entryID key sig
-      | verifySig key entryID sig = Fae $ do
-          _transientState . _escrows . _useEscrows . at entryID ?= escrow
-          return $ Just (PublicEscrowID entryID, PrivateEscrowID entryID)
-      | otherwise = return Nothing
-
-    escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok) (toDyn contractMaker)
+    contractMaker entryID key = toDyn f where
+      f :: Signature -> Fae (Maybe (EscrowID tokT pubT privT))
+      f sig
+        | verifySig key entryID sig = Fae $ do
+            _transientState . _escrows . _useEscrows . at entryID ?= escrow
+            return $ Just (PublicEscrowID entryID, PrivateEscrowID entryID)
+        | otherwise = return Nothing
+    escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok) contractMaker
     newHash = digestWith oldHash escrow
     entryID = EntryID newHash
   _transientState . _lastHashUpdate .= newHash

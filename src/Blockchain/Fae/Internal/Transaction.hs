@@ -56,21 +56,23 @@ saveEscrows = Fae $ do
   escrows <- use $ _transientState . _escrows . _useEscrows
   facet <- use $ _transientState . _currentFacet
   entries <- getFae $ label "escrows" $
-    sequence $ Map.mapWithKey (convertEscrow facet) escrows
-  _persistentState . _entries . _useEntries %= Map.union entries
+    mapM (convertEscrow facet) $ Map.toList escrows
+  _persistentState . _entries . _useEntries %= Map.union (Map.fromList entries)
 
-convertEscrow :: FacetID -> EntryID -> Escrow -> Fae Entry
-convertEscrow facetID entryID escrow = Fae $ do
+convertEscrow :: FacetID -> (EntryID, Escrow) -> Fae (EntryID, Entry)
+convertEscrow facetID (entryID, escrow) = Fae $ do
   key <- getFae signer
   oldHash <- use $ _transientState . _lastHashUpdate
-  let newHash = digestWith oldHash escrow
-  getFae $ label (Text.pack $ show $ EntryID newHash) $ output entryID
+  let 
+    newHash = digestWith oldHash escrow
+    newEntryID = EntryID newHash
+  getFae $ label (Text.pack $ show newEntryID) $ output entryID
   _transientState . _lastHashUpdate .= newHash
   let 
-    fDyn = contractMaker escrow `dynApp` toDyn entryID `dynApp` toDyn key
+    fDyn = contractMaker escrow newEntryID key
     c = const @Signature @Signature
     a = undefined :: Signature
-  return $ Entry fDyn (toDyn c) (toDyn a) facetID
+  return $ (newEntryID, Entry fDyn (toDyn c) (toDyn a) facetID)
 
 saveTransient :: TransactionID -> Fae ()
 saveTransient txID = Fae $ do
