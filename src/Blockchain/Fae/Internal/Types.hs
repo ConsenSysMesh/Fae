@@ -119,7 +119,8 @@ data Escrow =
   {
     private :: Dynamic, -- privT
     public :: Dynamic, -- pubT
-    token :: Dynamic -- tokT
+    token :: Dynamic, -- tokT
+    contractMaker :: Dynamic -- EntryID -> PublicKey -> Signature -> EscrowID tokT pubT privT
   }
 newtype PublicEscrowID tokT pubT privT = PublicEscrowID EntryID
 newtype PrivateEscrowID tokT pubT privT = PrivateEscrowID EntryID

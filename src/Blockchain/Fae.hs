@@ -4,6 +4,7 @@ module Blockchain.Fae
     module Blockchain.Fae
   ) where
 
+import Blockchain.Fae.Crypto
 import Blockchain.Fae.Internal
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
@@ -85,13 +86,21 @@ evaluate entryID arg = Fae $ do
   getFae faeVal 
 
 escrow ::
+  forall tokT pubT privT.
   (Typeable tokT, Typeable privT, Typeable pubT) =>
   tokT -> (privT -> pubT) -> privT -> 
   Fae (EscrowID tokT pubT privT)
 escrow tok pubF priv = Fae $ do
   oldHash <- use $ _transientState . _lastHashUpdate
   let
-    escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok)
+    contractMaker :: EntryID -> PublicKey -> Signature -> Fae (Maybe (EscrowID tokT pubT privT))
+    contractMaker entryID key sig
+      | verifySig key entryID sig = Fae $ do
+          _transientState . _escrows . _useEscrows . at entryID ?= escrow
+          return $ Just (PublicEscrowID entryID, PrivateEscrowID entryID)
+      | otherwise = return Nothing
+
+    escrow = Escrow (toDyn priv) (toDyn $ pubF priv) (toDyn tok) (toDyn contractMaker)
     newHash = digestWith oldHash escrow
     entryID = EntryID newHash
   _transientState . _lastHashUpdate .= newHash
@@ -102,8 +111,7 @@ peek ::
   forall tokT privT pubT.
   (Typeable tokT, Typeable privT, Typeable pubT) =>
   PublicEscrowID tokT pubT privT -> Fae pubT
-peek pubID = Fae $ do
-  let PublicEscrowID escrowID = pubID
+peek (PublicEscrowID escrowID) = Fae $ do
   escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
   escrow <- maybe
     (throwIO $ BadEscrowID escrowID)
@@ -135,8 +143,7 @@ close ::
 -- Need strictness here to force the caller to actually have a token, and not
 -- just a typed 'undefined'.  The token itself is unused; we just need to
 -- know that the caller was able to access the correct type.
-close privID !_ = Fae $ do
-  let PrivateEscrowID escrowID = privID
+close (PrivateEscrowID escrowID) !_ = Fae $ do
   escrowM <- use $ _transientState . _escrows . _useEscrows . at escrowID
   escrow <- maybe
     (throwIO $ BadEscrowID escrowID)

@@ -2,7 +2,6 @@ module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae
 import Blockchain.Fae.Contracts
-import Blockchain.Fae.Crypto
 import Blockchain.Fae.Internal
 import Blockchain.Fae.Internal.Crypto hiding (signer)
 import Blockchain.Fae.Internal.Lens
@@ -55,28 +54,23 @@ saveFee = do
 saveEscrows :: Fae ()
 saveEscrows = Fae $ do
   escrows <- use $ _transientState . _escrows . _useEscrows
-  getFae $ label "escrows" $
-    forM_ (Map.keys escrows) $ \k ->
-      label (Text.pack $ show k) $ output k
   facet <- use $ _transientState . _currentFacet
-  entries <- getFae $ sequence $ Map.mapWithKey (convertEscrow facet) escrows
+  entries <- getFae $ label "escrows" $
+    sequence $ Map.mapWithKey (convertEscrow facet) escrows
   _persistentState . _entries . _useEntries %= Map.union entries
 
 convertEscrow :: FacetID -> EntryID -> Escrow -> Fae Entry
 convertEscrow facetID entryID escrow = Fae $ do
   key <- getFae signer
-  let
-    f :: 
-      (Typeable tokT, Typeable pubT, Typeable privT) =>
-      Signature -> Fae (Maybe (EscrowID tokT pubT privT))
-    f sig
-      | verifySig key entryID sig = Fae $ do
-          -- FIXME Don't reuse the same entry ID, or otherwise ensure that
-          -- escrow IDs between transactions are invalid.
-          _transientState . _escrows . _useEscrows . at entryID ?= escrow
-          return $ Just (PublicEscrowID entryID, PrivateEscrowID entryID)
-      | otherwise = return Nothing
-  return $ Entry (toDyn f) (toDyn const) (toDyn undefined) facetID
+  oldHash <- use $ _transientState . _lastHashUpdate
+  let newHash = digestWith oldHash escrow
+  getFae $ label (Text.pack $ show $ EntryID newHash) $ output entryID
+  _transientState . _lastHashUpdate .= newHash
+  let 
+    fDyn = contractMaker escrow `dynApp` toDyn entryID `dynApp` toDyn key
+    c = const @Signature @Signature
+    a = undefined :: Signature
+  return $ Entry fDyn (toDyn c) (toDyn a) facetID
 
 saveTransient :: TransactionID -> Fae ()
 saveTransient txID = Fae $ do
