@@ -4,7 +4,7 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens
 
 import Control.Applicative
-import Control.Exception
+import Control.Exception.Safe
 
 import Control.Monad
 import Control.Monad.Fix
@@ -23,7 +23,7 @@ import Numeric.Natural
 
 newtype Fae a = 
   Fae { getFae :: StateT FaeState IO a }
-  deriving (Functor, Applicative, Monad, MonadFix)
+  deriving (Functor, Applicative, Monad, MonadFix, MonadThrow, MonadCatch)
 
 data FaeState =
   FaeState
@@ -78,7 +78,7 @@ newtype Facets =
 newtype Outputs =
   Outputs
   {
-    useOutputs :: Map TransactionID Output
+    useOutputs :: Map TransactionID (Either SomeException Output)
   }
 data TransactionID = TransactionID -- TBD
   deriving (Eq, Ord, Show)

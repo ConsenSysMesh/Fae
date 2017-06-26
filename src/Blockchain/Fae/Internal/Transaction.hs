@@ -3,6 +3,7 @@ module Blockchain.Fae.Internal.Transaction where
 import Blockchain.Fae
 import Blockchain.Fae.Contracts
 import Blockchain.Fae.Internal
+import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Crypto hiding (signer)
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
@@ -17,14 +18,18 @@ import qualified Data.Sequence as Seq
 import qualified Data.Text as Text
 
 runTransaction :: TransactionID -> PublicKey -> Fae () -> Fae ()
-runTransaction txID sender x = do
+runTransaction txID sender x = handleAsync setOutputException $ do
   transient <- newTransient sender
   Fae $ _transientState .= transient
-  x
+  () <- x -- Force evaluation to flush out exceptions
   -- If x throws an exception, we don't save anything
   saveFee
   saveEscrows
   saveTransient txID
+
+  where
+    setOutputException e = Fae $ do
+      _persistentState . _outputs . _useOutputs . at txID ?= Left e
 
 newTransient :: PublicKey -> Fae FaeTransient
 newTransient senderKey = Fae $ do
@@ -74,7 +79,7 @@ saveTransient txID = Fae $ do
   entryUpdates <- use $ _transientState . _entryUpdates
   _persistentState . _entries .= entryUpdates
   newOutput <- use $ _transientState . _newOutput
-  _persistentState . _outputs . _useOutputs . at txID ?= newOutput
+  _persistentState . _outputs . _useOutputs . at txID ?= Right newOutput
   lastHashUpdate <- use $ _transientState . _lastHashUpdate
   _persistentState . _lastHash .= lastHashUpdate
 

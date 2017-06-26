@@ -149,11 +149,11 @@ label l s = Fae $ do
     popLabel = _transientState . _localLabel .= oldLabel
   bracket_ addLabel popLabel $ getFae s
 
-follow :: TransactionID -> Fae Output
+follow :: TransactionID -> Fae (Either SomeException Output)
 follow txID = Fae $ do
-  outputM <- use $ _persistentState . _outputs . _useOutputs . at txID
+  outputEM <- use $ _persistentState . _outputs . _useOutputs . at txID
   maybe
     (throwIO $ BadTransactionID txID)
     return
-    outputM
+    outputEM
 

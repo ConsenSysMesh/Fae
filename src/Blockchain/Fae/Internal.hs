@@ -6,6 +6,7 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
 import Control.Monad
+import Control.Monad.State
 
 import Data.Dynamic
 import Data.Proxy
@@ -13,6 +14,9 @@ import Data.Sequence (Seq)
 import Data.Text (Text)
 
 import qualified Data.Map as Map
+
+execFae :: Fae () -> FaeState -> IO FaeState
+execFae = execStateT . getFae
 
 output :: EntryID -> Fae ()
 output entryID = Fae $ do
