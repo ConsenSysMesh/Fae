@@ -13,6 +13,7 @@ import Control.Monad.IO.Class
 import Data.Typeable
 
 data EntryException =
+  NoCurrentEntry |
   BadEntryID EntryID |
   WrongFacet EntryID FacetID FacetID |
   BadEntryArgType EntryID TypeRep TypeRep |

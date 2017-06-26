@@ -39,9 +39,6 @@ addOutput lSeq entryID output =
 zeroFacet :: FacetID
 zeroFacet = FacetID -- TBD
 
-nullEntry :: EntryID
-nullEntry = EntryID undefined -- TBD
-
 addEntry :: (FacetID -> Entry) -> Fae EntryID
 addEntry mkEntry = do
   facet <- Fae $ use $ _transientState . _currentFacet

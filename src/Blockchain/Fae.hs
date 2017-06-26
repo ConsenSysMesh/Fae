@@ -35,8 +35,11 @@ create f c a = addEntry $ Entry (toDyn f) (toDyn c) (toDyn a)
 
 spend :: a -> Fae a
 spend x = Fae $ do
-  entryID <- use $ _transientState . _currentEntry
-  _transientState . _entryUpdates . _useEntries %= sans entryID
+  entryIDM <- use $ _transientState . _currentEntry
+  maybe
+    (throwIO NoCurrentEntry)
+    (\entryID -> _transientState . _entryUpdates . _useEntries %= sans entryID)
+    entryIDM
   return x
 
 evaluate ::
@@ -68,7 +71,7 @@ evaluate entryID arg = Fae $ do
   -- possibility of nested evaluations.
   _transientState . _entryUpdates . _useEntries . at entryID ?= 
     entry{accum = newAccum}
-  _transientState . _currentEntry .= entryID
+  _transientState . _currentEntry ?= entryID
   faeVal <- fromDyn faeValD $
     throwIO $
       BadEntryValType entryID (typeRep $ Proxy @(Fae valT)) $
