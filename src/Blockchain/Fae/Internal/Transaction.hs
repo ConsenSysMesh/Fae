@@ -34,7 +34,6 @@ newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
 newTransient txID senderKey = Fae $ do
   entries <- use $ _persistentState . _entries
   lastHash <- use $ _persistentState . _lastHash
-  credit <- use $ _parameters . _transactionCredit
   return $
     FaeTransient
     {
@@ -45,7 +44,6 @@ newTransient txID senderKey = Fae $ do
       lastHashUpdate = digestWith lastHash txID,
       currentEntry = Nothing,
       currentFacet = zeroFacet,
-      currentFeeLeft = credit,
       localLabel = Seq.empty
     }
 

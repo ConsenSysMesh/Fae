@@ -29,7 +29,6 @@ data EscrowException =
 
 data FacetException =
   NotAFacet FacetID |
-  InsufficientFee FacetID Fee Fee |
   NotADependentFacet FacetID FacetID
   deriving (Typeable, Show)
 

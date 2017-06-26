@@ -1,6 +1,6 @@
 module Blockchain.Fae 
   (
-    Fae, EntryID, FacetID, EscrowID, Fee, Output, TransactionID,
+    Fae, EntryID, FacetID, EscrowID, Output, TransactionID,
     module Blockchain.Fae
   ) where
 
@@ -124,8 +124,8 @@ close (PrivateEscrowID escrowID) !_ = do
   Fae $ _transientState . _escrows . _useEscrows . at escrowID .= Nothing
   return priv
 
-facet :: FacetID -> FeeEscrowID -> Fae ()
-facet facetID feeID = Fae $ do
+facet :: FacetID -> Fae ()
+facet facetID = Fae $ do
   curFacetID <- use $ _transientState . _currentFacet
   newFacetM <- use $ _persistentState . _facets . _useFacets . at facetID
   newFacet <- maybe
@@ -134,10 +134,6 @@ facet facetID feeID = Fae $ do
     newFacetM
   when (Set.notMember curFacetID $ depends newFacet) $
     throwIO $ NotADependentFacet curFacetID facetID
-  feeGiven <- getFae $ close feeID FeeToken
-  _transientState . _currentFeeLeft .= feeGiven
-  when (feeGiven < fee newFacet) $
-    throwIO $ InsufficientFee facetID feeGiven (fee newFacet)
   _transientState . _currentFacet .= facetID
 
 signer :: Fae PublicKey

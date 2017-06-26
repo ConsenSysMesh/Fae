@@ -54,14 +54,12 @@ data FaeTransient =
     lastHashUpdate :: Digest,
     currentEntry :: Maybe EntryID,
     currentFacet :: FacetID,
-    currentFeeLeft :: Fee,
     localLabel :: Seq Text
   }
 
 data FaeParameters =
   FaeParameters
   {
-    transactionCredit :: Fee
   }
 
 newtype Entries = 
@@ -114,7 +112,6 @@ data Output =
 data Facet =
   Facet
   {
-    fee :: Fee,
     depends :: Set FacetID -- all transitive dependencies
   }
 newtype FacetID = FacetID Natural deriving (Eq, Ord, Show)
@@ -131,10 +128,6 @@ newtype PublicEscrowID tokT pubT privT = PublicEscrowID EntryID
 newtype PrivateEscrowID tokT pubT privT = PrivateEscrowID EntryID
 type EscrowID tokT pubT privT =
   (PublicEscrowID tokT pubT privT, PrivateEscrowID tokT pubT privT)
-
-newtype Fee = Fee { getFee :: Natural } deriving (Eq, Ord, Show)
-data FeeToken = FeeToken
-type FeeEscrowID = PrivateEscrowID FeeToken Natural Fee
 
 -- TH 
 makeLenses ''Entries
