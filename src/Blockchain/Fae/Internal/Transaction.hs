@@ -23,7 +23,6 @@ runTransaction txID sender x = handleAsync setOutputException $ do
   Fae $ _transientState .= transient
   () <- x -- Force evaluation to flush out exceptions
   -- If x throws an exception, we don't save anything
-  saveFee
   saveEscrows
   saveTransient txID
 
@@ -46,16 +45,9 @@ newTransient txID senderKey = Fae $ do
       lastHashUpdate = digestWith lastHash txID,
       currentEntry = Nothing,
       currentFacet = zeroFacet,
-      currentFee = credit,
       currentFeeLeft = credit,
       localLabel = Seq.empty
     }
-
-saveFee :: Fae ()
-saveFee = do
-  currentFee <- Fae $ use $ _transientState . _currentFee
-  _ <- escrow FeeToken getFee currentFee
-  return ()
 
 saveEscrows :: Fae ()
 saveEscrows = Fae $ do

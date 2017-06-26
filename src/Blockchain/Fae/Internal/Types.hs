@@ -54,7 +54,6 @@ data FaeTransient =
     lastHashUpdate :: Digest,
     currentEntry :: Maybe EntryID,
     currentFacet :: FacetID,
-    currentFee :: Fee,
     currentFeeLeft :: Fee,
     localLabel :: Seq Text
   }
