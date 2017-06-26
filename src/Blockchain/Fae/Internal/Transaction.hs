@@ -19,7 +19,7 @@ import qualified Data.Text as Text
 
 runTransaction :: TransactionID -> PublicKey -> Fae () -> Fae ()
 runTransaction txID sender x = handleAsync setOutputException $ do
-  transient <- newTransient sender
+  transient <- newTransient txID sender
   Fae $ _transientState .= transient
   () <- x -- Force evaluation to flush out exceptions
   -- If x throws an exception, we don't save anything
@@ -31,8 +31,8 @@ runTransaction txID sender x = handleAsync setOutputException $ do
     setOutputException e = Fae $ do
       _persistentState . _outputs . _useOutputs . at txID ?= Left e
 
-newTransient :: PublicKey -> Fae FaeTransient
-newTransient senderKey = Fae $ do
+newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
+newTransient txID senderKey = Fae $ do
   entries <- use $ _persistentState . _entries
   lastHash <- use $ _persistentState . _lastHash
   credit <- use $ _parameters . _transactionCredit
@@ -43,7 +43,7 @@ newTransient senderKey = Fae $ do
       newOutput = Output Nothing Map.empty,
       escrows = Escrows Map.empty,
       sender = senderKey,
-      lastHashUpdate = lastHash,
+      lastHashUpdate = digestWith lastHash txID,
       currentEntry = Nothing,
       currentFacet = zeroFacet,
       currentFee = credit,

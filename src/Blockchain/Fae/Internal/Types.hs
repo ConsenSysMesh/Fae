@@ -19,6 +19,8 @@ import Data.Text (Text)
 
 import qualified Data.Map as Map
 
+import GHC.Generics
+
 import Numeric.Natural
 
 newtype Fae a = 
@@ -81,7 +83,9 @@ newtype Outputs =
     useOutputs :: Map TransactionID (Either SomeException Output)
   }
 data TransactionID = TransactionID -- TBD
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
+instance Serialize TransactionID
+instance Digestible TransactionID
 
 newtype Escrows =
   Escrows
@@ -97,7 +101,9 @@ data Entry =
     accum :: Dynamic, -- :: accumT
     inFacet :: FacetID
   }
-newtype EntryID = EntryID Digest deriving (Eq, Ord, Show)
+newtype EntryID = EntryID Digest deriving (Eq, Ord, Show, Generic)
+instance Serialize EntryID
+instance Digestible EntryID
 
 data Output =
   Output
@@ -112,8 +118,7 @@ data Facet =
     fee :: Fee,
     depends :: Set FacetID -- all transitive dependencies
   }
-data FacetID = FacetID -- TBD
-  deriving (Eq, Ord, Show)
+newtype FacetID = FacetID Natural deriving (Eq, Ord, Show)
 
 data Escrow =
   Escrow
@@ -145,11 +150,4 @@ makeLenses ''Entry
 makeLenses ''Facet
 makeLenses ''Output
 makeLenses ''Escrow
-
--- Instances
-
-instance Digestible EntryID where
-instance Digestible Entry where
-
-instance Digestible Escrow where
 

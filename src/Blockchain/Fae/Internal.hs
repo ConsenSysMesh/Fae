@@ -37,7 +37,7 @@ addOutput lSeq entryID output =
     (uncons lSeq)
 
 zeroFacet :: FacetID
-zeroFacet = FacetID -- TBD
+zeroFacet = FacetID 0
 
 addEntry :: (FacetID -> Entry) -> Fae EntryID
 addEntry mkEntry = do
@@ -48,21 +48,17 @@ addEntry mkEntry = do
   return entryID
 
 insertEntry :: 
-  (At m, Digestible (IxValue m), Index m ~ EntryID) => 
+  (At m, Index m ~ EntryID) => 
   Lens' FaeState m -> IxValue m -> Fae EntryID
 insertEntry l x = do
   entryID <- newEntryID x
   Fae $ l . at entryID ?= x
   return entryID
 
-newEntryID :: (Digestible a) => a -> Fae EntryID
+newEntryID :: a -> Fae EntryID
 newEntryID x = Fae $ do
-  oldHash <- use $ _transientState . _lastHashUpdate
-  let 
-    newHash = digestWith oldHash x
-    newEntryID = EntryID newHash
-  _transientState . _lastHashUpdate .= newHash
-  return newEntryID
+  _transientState . _lastHashUpdate %= digest
+  EntryID <$> use (_transientState . _lastHashUpdate)
 
 useEscrow :: 
   forall tokT a b.
