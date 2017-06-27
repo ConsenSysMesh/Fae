@@ -8,9 +8,11 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Fix
 
 import Data.Dynamic
+import Data.IORef
 
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
@@ -27,8 +29,13 @@ runTransaction txID sender x = handleAsync setOutputException $ do
 
 newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
 newTransient txID@(TransactionID txID0) senderKey = Fae $ do
-  entries <- use $ _persistentState . _entries
-  lastHash <- use $ _persistentState . _lastHash
+  pStateRef <- use _persistentState
+  pState <- liftIO $ readIORef pStateRef
+  let
+    entries = pState ^. _entries
+    lastHash = pState ^. _lastHash
+  cFacet <- use _currentFacet
+  liftIO $ writeIORef cFacet zeroFacet
   return $
     FaeTransient
     {
@@ -39,7 +46,6 @@ newTransient txID@(TransactionID txID0) senderKey = Fae $ do
       lastHashUpdate = lastHash <> txID0,
       currentTransaction = txID,
       currentEntry = Nothing,
-      currentFacet = zeroFacet,
       localLabel = Seq.empty
     }
 
@@ -59,4 +65,14 @@ convertEscrow entryID escrow = do
       fDyn = contractMaker escrow newEntryID key
       c = const @Signature @Signature
       a = undefined :: Signature
+
+setOutputException :: SomeException -> Fae ()
+setOutputException e = Fae $ do
+  txID <- use $ _transientState . _currentTransaction
+  facetIDRef <- use _currentFacet
+  facetID <- liftIO $ readIORef facetIDRef
+  pState <- use _persistentState
+  liftIO $ modifyIORef' pState $
+    _outputs . _useOutputs . at txID . each . _facetException ?~
+      ExceptionPlus facetID e
 

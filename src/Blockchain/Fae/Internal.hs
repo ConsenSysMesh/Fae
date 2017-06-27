@@ -6,9 +6,11 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.State
 
 import Data.Dynamic
+import Data.IORef
 import Data.Proxy
 import Data.Sequence (Seq)
 import Data.Text (Text)
@@ -41,7 +43,8 @@ zeroFacet = FacetID 0
 
 addEntry :: (FacetID -> Entry) -> Fae EntryID
 addEntry mkEntry = do
-  facet <- Fae $ use $ _transientState . _currentFacet
+  facetRef <- Fae $ use _currentFacet
+  facet <- Fae $ liftIO $ readIORef facetRef
   entryID <- 
     insertEntry (_transientState . _entryUpdates . _useEntries) $ mkEntry facet
   output entryID
@@ -108,18 +111,11 @@ useEscrow
 saveTransient :: Fae ()
 saveTransient = Fae $ do
   entryUpdates <- use $ _transientState . _entryUpdates
-  _persistentState . _entries .= entryUpdates
   newOutput <- use $ _transientState . _newOutput
   txID <- use $ _transientState . _currentTransaction
-  _persistentState . _outputs . _useOutputs . at txID ?= 
-    OutputPlus newOutput Nothing
   lastHashUpdate <- use $ _transientState . _lastHashUpdate
-  _persistentState . _lastHash .= lastHashUpdate
-
-setOutputException :: SomeException -> Fae ()
-setOutputException e = Fae $ do
-  txID <- use $ _transientState . _currentTransaction
-  facetID <- use $ _transientState . _currentFacet
-  _persistentState . _outputs . _useOutputs . at txID . each . _facetException ?=
-    ExceptionPlus facetID e
-
+  pState <- use _persistentState
+  liftIO $ modifyIORef' pState $ \pState -> pState 
+    & _entries .~ entryUpdates
+    & _outputs . _useOutputs . at txID ?~ OutputPlus newOutput Nothing
+    & _lastHash .~ lastHashUpdate

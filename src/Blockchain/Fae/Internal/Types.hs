@@ -12,6 +12,7 @@ import Control.Monad.State
 
 import Data.Dynamic
 import Data.Functor
+import Data.IORef
 import Data.Set (Set)
 import Data.Map (Map)
 import Data.Sequence (Seq)
@@ -30,7 +31,9 @@ newtype Fae a =
 data FaeState =
   FaeState
   {
-    persistentState :: FaePersist,
+    -- We use the IORef to implement state commits when handling exceptions
+    persistentState :: IORef FaePersist,
+    currentFacet :: IORef FacetID,
     transientState :: FaeTransient,
     parameters :: FaeParameters
   }
@@ -54,7 +57,6 @@ data FaeTransient =
     lastHashUpdate :: Digest,
     currentTransaction :: TransactionID,
     currentEntry :: Maybe EntryID,
-    currentFacet :: FacetID,
     localLabel :: Seq Text
   }
 

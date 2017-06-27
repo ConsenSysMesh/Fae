@@ -11,9 +11,11 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
+import Control.Monad.IO.Class
 import Control.Monad.State
 
 import Data.Dynamic
+import Data.IORef
 import Data.Maybe
 import Data.Monoid
 import Data.Proxy
@@ -52,7 +54,8 @@ evaluate entryID arg = Fae $ do
     (throwIO $ BadEntryID entryID)
     return
     entryM
-  curFacet <- use $ _transientState . _currentFacet
+  curFacetRef <- use _currentFacet
+  curFacet <- liftIO $ readIORef curFacetRef
   when (inFacet entry /= curFacet) $
     throwIO $ WrongFacet entryID curFacet (inFacet entry)
   accumTransD <- maybe
@@ -124,21 +127,21 @@ close (PrivateEscrowID escrowID) !_ = do
   Fae $ _transientState . _escrows . _useEscrows . at escrowID .= Nothing
   return priv
 
-facet :: FacetID -> Fae () -> Fae ()
-facet facetID x = Fae $ do
+facet :: FacetID -> Fae ()
+facet facetID = Fae $ do
   getFae saveTransient
-  curFacetID <- use $ _transientState . _currentFacet
-  _transientState . _currentFacet .= facetID
-  handleAsync (getFae . setOutputException) $ do
-    newFacetM <- use $ _persistentState . _facets . _useFacets . at facetID
-    newFacet <- maybe
-      (throwIO $ NotAFacet facetID)
-      return
-      newFacetM
-    when (Set.notMember curFacetID $ depends newFacet) $
-      throwIO $ NotADependentFacet curFacetID facetID
-    () <- getFae x -- Evaluate to flush out exceptions
-    return ()
+  cFacetRef <- use _currentFacet
+  curFacetID <- liftIO $ readIORef cFacetRef
+  liftIO $ writeIORef cFacetRef facetID
+  pStateRef <- use _persistentState
+  pState <- liftIO $ readIORef pStateRef
+  let newFacetM = pState ^. _facets . _useFacets . at facetID
+  newFacet <- maybe
+    (throwIO $ NotAFacet facetID)
+    return
+    newFacetM
+  when (Set.notMember curFacetID $ depends newFacet) $
+    throwIO $ NotADependentFacet curFacetID facetID
 
 signer :: Fae PublicKey
 signer = Fae $ use $ _transientState . _sender
@@ -153,7 +156,9 @@ label l s = Fae $ do
 
 follow :: TransactionID -> Fae Output
 follow txID = Fae $ do
-  outputEM <- use $ _persistentState . _outputs . _useOutputs . at txID
+  pStateRef <- use _persistentState
+  pState <- liftIO $ readIORef pStateRef
+  let outputEM = pState ^. _outputs . _useOutputs . at txID
   maybe
     (throwIO $ BadTransactionID txID)
     (return . txOutput)
