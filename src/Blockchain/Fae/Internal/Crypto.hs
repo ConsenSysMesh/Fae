@@ -20,16 +20,9 @@ type Digest = Hash.Digest Hash.SHA3_256
 
 class Digestible a where
   digest :: a -> Digest
-  digestWith :: Digest -> a -> Digest
 
   default digest :: (Serialize a) => a -> Digest
   digest = Hash.hash . Ser.encode
-
-  default digestWith :: (Serialize a) => Digest -> a -> Digest
-  digestWith d x = 
-    Hash.hashFinalize $ 
-    Hash.hashUpdates Hash.hashInit $
-    [BA.convert d, Ser.encode x] 
 
 instance Serialize Digest where
   put = Ser.putByteString . BA.convert
@@ -40,6 +33,12 @@ instance Serialize Digest where
     where hashSize = Hash.hashDigestSize Hash.SHA3_256
 
 instance Digestible Digest
+
+(<>) :: Digest -> Digest -> Digest
+d1 <> d2 = 
+  Hash.hashFinalize $ 
+  Hash.hashUpdates Hash.hashInit $
+  [Ser.encode d1, Ser.encode d2] 
 
 signer :: Signature -> a -> PublicKey
 signer = undefined

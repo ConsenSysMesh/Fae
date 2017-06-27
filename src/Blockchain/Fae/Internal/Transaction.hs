@@ -31,7 +31,7 @@ runTransaction txID sender x = handleAsync setOutputException $ do
       _persistentState . _outputs . _useOutputs . at txID ?= Left e
 
 newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
-newTransient txID senderKey = Fae $ do
+newTransient (TransactionID txID) senderKey = Fae $ do
   entries <- use $ _persistentState . _entries
   lastHash <- use $ _persistentState . _lastHash
   return $
@@ -41,7 +41,7 @@ newTransient txID senderKey = Fae $ do
       newOutput = Output Nothing Map.empty,
       escrows = Escrows Map.empty,
       sender = senderKey,
-      lastHashUpdate = digestWith lastHash txID,
+      lastHashUpdate = lastHash <> txID,
       currentEntry = Nothing,
       currentFacet = zeroFacet,
       localLabel = Seq.empty

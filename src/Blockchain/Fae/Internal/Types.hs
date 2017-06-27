@@ -79,10 +79,8 @@ newtype Outputs =
   {
     useOutputs :: Map TransactionID (Either SomeException Output)
   }
-data TransactionID = TransactionID -- TBD
-  deriving (Eq, Ord, Show, Generic)
-instance Serialize TransactionID
-instance Digestible TransactionID
+newtype TransactionID = TransactionID Digest
+  deriving (Eq, Ord, Show)
 
 newtype Escrows =
   Escrows
