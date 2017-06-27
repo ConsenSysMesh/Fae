@@ -8,11 +8,10 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
 import Control.Monad
-import Control.Monad.IO.Class
 import Control.Monad.Fix
 
 import Data.Dynamic
-import Data.IORef
+import Data.IORef.Lifted
 
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
@@ -30,12 +29,12 @@ runTransaction txID sender x = handleAsync setOutputException $ do
 newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
 newTransient txID@(TransactionID txID0) senderKey = Fae $ do
   pStateRef <- use _persistentState
-  pState <- liftIO $ readIORef pStateRef
+  pState <- readIORef pStateRef
   let
     entries = pState ^. _entries
     lastHash = pState ^. _lastHash
   cFacet <- use _currentFacet
-  liftIO $ writeIORef cFacet zeroFacet
+  writeIORef cFacet zeroFacet
   return $
     FaeTransient
     {
@@ -70,9 +69,9 @@ setOutputException :: SomeException -> Fae ()
 setOutputException e = Fae $ do
   txID <- use $ _transientState . _currentTransaction
   facetIDRef <- use _currentFacet
-  facetID <- liftIO $ readIORef facetIDRef
+  facetID <- readIORef facetIDRef
   pState <- use _persistentState
-  liftIO $ modifyIORef' pState $
+  modifyIORef' pState $
     _outputs . _useOutputs . at txID . each . _facetException ?~
       ExceptionPlus facetID e
 

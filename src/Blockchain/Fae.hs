@@ -11,11 +11,10 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
-import Control.Monad.IO.Class
 import Control.Monad.State
 
 import Data.Dynamic
-import Data.IORef
+import Data.IORef.Lifted
 import Data.Maybe
 import Data.Monoid
 import Data.Proxy
@@ -55,7 +54,7 @@ evaluate entryID arg = Fae $ do
     return
     entryM
   curFacetRef <- use _currentFacet
-  curFacet <- liftIO $ readIORef curFacetRef
+  curFacet <- readIORef curFacetRef
   when (inFacet entry /= curFacet) $
     throwIO $ WrongFacet entryID curFacet (inFacet entry)
   accumTransD <- maybe
@@ -131,10 +130,10 @@ facet :: FacetID -> Fae ()
 facet facetID = Fae $ do
   getFae saveTransient
   cFacetRef <- use _currentFacet
-  curFacetID <- liftIO $ readIORef cFacetRef
-  liftIO $ writeIORef cFacetRef facetID
+  curFacetID <- readIORef cFacetRef
+  writeIORef cFacetRef facetID
   pStateRef <- use _persistentState
-  pState <- liftIO $ readIORef pStateRef
+  pState <- readIORef pStateRef
   let newFacetM = pState ^. _facets . _useFacets . at facetID
   newFacet <- maybe
     (throwIO $ NotAFacet facetID)
@@ -157,7 +156,7 @@ label l s = Fae $ do
 follow :: TransactionID -> Fae Output
 follow txID = Fae $ do
   pStateRef <- use _persistentState
-  pState <- liftIO $ readIORef pStateRef
+  pState <- readIORef pStateRef
   let outputEM = pState ^. _outputs . _useOutputs . at txID
   maybe
     (throwIO $ BadTransactionID txID)

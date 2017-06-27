@@ -12,7 +12,7 @@ import Control.Monad.State
 
 import Data.Dynamic
 import Data.Functor
-import Data.IORef
+import Data.IORef.Lifted
 import Data.Set (Set)
 import Data.Map (Map)
 import Data.Sequence (Seq)
