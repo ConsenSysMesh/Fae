@@ -1,7 +1,6 @@
 module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae
-import Blockchain.Fae.Contracts
 import Blockchain.Fae.Internal
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Crypto hiding (signer)
@@ -24,14 +23,10 @@ runTransaction txID sender x = handleAsync setOutputException $ do
   () <- x -- Force evaluation to flush out exceptions
   -- If x throws an exception, we don't save anything
   saveEscrows
-  saveTransient txID
-
-  where
-    setOutputException e = Fae $ do
-      _persistentState . _outputs . _useOutputs . at txID ?= Left e
+  saveTransient
 
 newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
-newTransient (TransactionID txID) senderKey = Fae $ do
+newTransient txID@(TransactionID txID0) senderKey = Fae $ do
   entries <- use $ _persistentState . _entries
   lastHash <- use $ _persistentState . _lastHash
   return $
@@ -41,7 +36,8 @@ newTransient (TransactionID txID) senderKey = Fae $ do
       newOutput = Output Nothing Map.empty,
       escrows = Escrows Map.empty,
       sender = senderKey,
-      lastHashUpdate = lastHash <> txID,
+      lastHashUpdate = lastHash <> txID0,
+      currentTransaction = txID,
       currentEntry = Nothing,
       currentFacet = zeroFacet,
       localLabel = Seq.empty
@@ -63,13 +59,4 @@ convertEscrow entryID escrow = do
       fDyn = contractMaker escrow newEntryID key
       c = const @Signature @Signature
       a = undefined :: Signature
-
-saveTransient :: TransactionID -> Fae ()
-saveTransient txID = Fae $ do
-  entryUpdates <- use $ _transientState . _entryUpdates
-  _persistentState . _entries .= entryUpdates
-  newOutput <- use $ _transientState . _newOutput
-  _persistentState . _outputs . _useOutputs . at txID ?= Right newOutput
-  lastHashUpdate <- use $ _transientState . _lastHashUpdate
-  _persistentState . _lastHash .= lastHashUpdate
 

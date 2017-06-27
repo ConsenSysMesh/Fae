@@ -124,17 +124,21 @@ close (PrivateEscrowID escrowID) !_ = do
   Fae $ _transientState . _escrows . _useEscrows . at escrowID .= Nothing
   return priv
 
-facet :: FacetID -> Fae ()
-facet facetID = Fae $ do
+facet :: FacetID -> Fae () -> Fae ()
+facet facetID x = Fae $ do
+  getFae saveTransient
   curFacetID <- use $ _transientState . _currentFacet
-  newFacetM <- use $ _persistentState . _facets . _useFacets . at facetID
-  newFacet <- maybe
-    (throwIO $ NotAFacet facetID)
-    return
-    newFacetM
-  when (Set.notMember curFacetID $ depends newFacet) $
-    throwIO $ NotADependentFacet curFacetID facetID
   _transientState . _currentFacet .= facetID
+  handleAsync (getFae . setOutputException) $ do
+    newFacetM <- use $ _persistentState . _facets . _useFacets . at facetID
+    newFacet <- maybe
+      (throwIO $ NotAFacet facetID)
+      return
+      newFacetM
+    when (Set.notMember curFacetID $ depends newFacet) $
+      throwIO $ NotADependentFacet curFacetID facetID
+    () <- getFae x -- Evaluate to flush out exceptions
+    return ()
 
 signer :: Fae PublicKey
 signer = Fae $ use $ _transientState . _sender
@@ -147,11 +151,11 @@ label l s = Fae $ do
     popLabel = _transientState . _localLabel .= oldLabel
   bracket_ addLabel popLabel $ getFae s
 
-follow :: TransactionID -> Fae (Either SomeException Output)
+follow :: TransactionID -> Fae Output
 follow txID = Fae $ do
   outputEM <- use $ _persistentState . _outputs . _useOutputs . at txID
   maybe
     (throwIO $ BadTransactionID txID)
-    return
+    (return . txOutput)
     outputEM
 

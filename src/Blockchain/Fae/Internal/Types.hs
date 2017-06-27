@@ -52,6 +52,7 @@ data FaeTransient =
     escrows :: Escrows,    
     sender :: PublicKey,
     lastHashUpdate :: Digest,
+    currentTransaction :: TransactionID,
     currentEntry :: Maybe EntryID,
     currentFacet :: FacetID,
     localLabel :: Seq Text
@@ -77,7 +78,7 @@ newtype Facets =
 newtype Outputs =
   Outputs
   {
-    useOutputs :: Map TransactionID (Either SomeException Output)
+    useOutputs :: Map TransactionID OutputPlus
   }
 newtype TransactionID = TransactionID Digest
   deriving (Eq, Ord, Show)
@@ -100,11 +101,23 @@ newtype EntryID = EntryID Digest deriving (Eq, Ord, Show, Generic)
 instance Serialize EntryID
 instance Digestible EntryID
 
+data OutputPlus =
+  OutputPlus
+  {
+    txOutput :: Output,
+    facetException :: Maybe ExceptionPlus
+  }
 data Output =
   Output
   {
     outputEntryID :: Maybe EntryID,
     subOutputs :: Map Text Output
+  }
+data ExceptionPlus =
+  ExceptionPlus
+  {
+    facetThrew :: FacetID,
+    thrown :: SomeException
   }
 
 data Facet =
@@ -138,6 +151,8 @@ makeLenses ''Outputs
 makeLenses ''Escrows
 makeLenses ''Entry
 makeLenses ''Facet
+makeLenses ''OutputPlus
 makeLenses ''Output
+makeLenses ''ExceptionPlus
 makeLenses ''Escrow
 

@@ -105,3 +105,21 @@ useEscrow
     otherTRep = typeRep (Proxy @b)
     retValTRep = typeRep (Proxy @a)
 
+saveTransient :: Fae ()
+saveTransient = Fae $ do
+  entryUpdates <- use $ _transientState . _entryUpdates
+  _persistentState . _entries .= entryUpdates
+  newOutput <- use $ _transientState . _newOutput
+  txID <- use $ _transientState . _currentTransaction
+  _persistentState . _outputs . _useOutputs . at txID ?= 
+    OutputPlus newOutput Nothing
+  lastHashUpdate <- use $ _transientState . _lastHashUpdate
+  _persistentState . _lastHash .= lastHashUpdate
+
+setOutputException :: SomeException -> Fae ()
+setOutputException e = Fae $ do
+  txID <- use $ _transientState . _currentTransaction
+  facetID <- use $ _transientState . _currentFacet
+  _persistentState . _outputs . _useOutputs . at txID . each . _facetException ?=
+    ExceptionPlus facetID e
+
