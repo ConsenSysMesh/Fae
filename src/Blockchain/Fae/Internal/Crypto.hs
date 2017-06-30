@@ -42,3 +42,6 @@ d1 <> d2 =
 
 signer :: Signature -> a -> PublicKey
 signer = undefined
+
+nullDigest :: Digest
+nullDigest = Hash.hash (BA.empty :: BA.Bytes)
