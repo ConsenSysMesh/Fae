@@ -162,9 +162,9 @@ properties.
     mechanism allows contracts to maintain a persistent state.  When called with
     an argument, the following occurs:
 
-    - The evaluation spec, which is a function of the argument, is executed.
-      This evaluates any number of other contracts (given by entry ID) with
-      various derived arguments.
+    - The evaluation spec, which is a function of the argument and the
+      accumulator, is executed.  This evaluates any number of other contracts
+      (given by entry ID) with various derived arguments.
 
     - The result of this execution is a structure containing the return values
       of the called contracts.  The combining function is applied to the
@@ -204,7 +204,7 @@ data Contract =
   {
     result :: ContractResult accumType valType,
     combine :: ReturnValues -> argType -> accumType -> accumType,
-    evalSpec :: EvalSpec argType,
+    evalSpec :: EvalSpec argType accumType,
     accum :: accumType
   }
 
@@ -225,7 +225,7 @@ data ReturnValues =
 data EvalSpec argType =
   EvalSpec
   {
-    argM :: forall a. argType -> Maybe a,
+    argM :: forall a. argType -> accumType -> Maybe a,
     subEvals :: Map Text EvalSpec
   }
 ```
