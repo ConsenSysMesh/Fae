@@ -148,87 +148,108 @@ to write these policies.
 
 ### Storage
 
-Smart contracts in Fae operate on a notional *storage* with the following basic
-properties.
+Smart contracts in Fae operate on a notional *storage* consiting of the
+following three parts:
 
-  - The storage is a filesystem-like tree, each of whose *entries* bears a
-    textual *label* and possibly also a `Contract` value.  The sequence of
-    labels leading to an entry is its *entry ID*, by which it may be looked up.
-    The top-level entry IDs are transaction IDs, and the full entry ID with this
-    top level omitted is the entry's *relative path*.
+  1. [*Transactions.*](#transactions) Each transaction is stored under its
+     transaction ID.  The corresponding value is the transaction return value,
+     or an exception, if it threw one.  Transactions are read-only; although
+     transactions are provided as contracts, these contracts may not be
+     re-executed.
 
-  - A `Contract` type consists of a *result function*, a *combining function*,
-    an *evaluation spec*, and an *accumulator value*.  The accumulation
-    mechanism allows contracts to maintain a persistent state.  When called with
-    an argument, the following occurs:
+  2. [*Contracts.*](#contracts) All the contracts created in the course of
+     executing a transaction are stored by their contract IDs.  The contract
+     is the value corresponding to its key; each contract has a mutable state
+     and, therefore, potentially different return values upon invocation.
 
-    - The evaluation spec, which is a function of the argument and the
-      accumulator, is executed.  This evaluates any number of other contracts
-      (given by entry ID) with various derived arguments.
+  3. [*Escrows.*](#escrow) Contracts may programmatically open escrow
+     accounts, which are stored globally by their escrow ID.  Escrow IDs may
+     not be supplied as literals but only passed around as runtime values,
+     which ensures that lazy contract execution is not forced by closing an
+     escrow account, as the contracts that reference it must have already been
+     executed anyway.
 
-    - The result of this execution is a structure containing the return values
-      of the called contracts.  The combining function is applied to the
-      argument, this structure, and the accumulator value, the result of which
-      is the new accumulator value.
+Transactions are simply a special kind of contract, and are evaluated as soon as
+they are sequenced into the blockchain.  When any contract is evaluated (as
+opposed to executed; see [Block execution](#block-execution)), its input
+contracts are updated lazily and its output contracts created lazily in storage.
+The execution of return values, output contracts, escrow openings and closings,
+and accumulator updates (see below) are linked, in that each one forces all the
+others.  If during the course of this execution any exception occurs, the escrow
+changes and accumulator update are discarded, and the return values and output
+contracts are replaced by the raised exception.
 
-    - The result function is applied to the accumulator value, evaluating to a
-      structure specifying the return value and any new contracts to be created.
-      These contracts are given by their paths relative to the relative path of
-      the entry containing the called contract. 
+### Contracts
 
-  - The storage state is only committed once each transaction terminates.
-    During execution, exceptions may occur as ordinary programming errors or
-    invalid contract calls.  If that happens, all storage changes are voided and
-    the transaction terminates immediately.
+A contract (and a transaction) is a function that takes an argument and computes
+a return value, possibly with the side effect of invoking or creating other
+contracts or escrows.  
 
-Entries have the following structure.  The careful wrapping of functions into
-fields of the various data types is important because it forces the contract to
-specify *at creation* the precise entry IDs it calls and creates.  This allows
-lazy evaluation to avoid forcing the expensive thunks created by the various
-functions when traversing the storage tree (see [Block
-execution](#block-execution)).
+The contracts (but not the escrows) that it invokes must be enumerated with
+their arguments at the time of the caller's creation; likewise, the contracts
+that it creates must be enumerated, though their contents may be programmatic.
+This restriction is imposed to ensure that contracts may be executed lazily:
 
-```hs
-type Entry = Contracts () Identity
+  - For output contracts, it is necessary to know exactly the contract IDs that
+    are created, even for transactions that are not otherwise executed, so that
+    their existence is known to later transactions that invoke them.
+    
+  - For input contracts, not only the existence of an update to a particular
+    contract must be known in advance, but also the *nonexistence* of updates to
+    other contracts, so that future transactions may selectively execute just
+    those contracts in their dependency tree.
 
-data Contracts accumType m =
-  Entry
-  {
-    contractM :: accumType -> Maybe (m Contract),
-    contracts :: Map Text (Contracts accumType)
-  }
+    There is also a security detail.  The arguments cannot be computed by the
+    calling contract because to allow untrusted computation to intervene in
+    contract invocation exposes the entire system to crippling denial-of-service
+    attacks where transactions spuriously invoke contracts via a nonterminating
+    computation, thus blocking them from ever being used by another transaction.
 
-data Contract =
-  forall argType accumType valType.
-  Entry
-  {
-    result :: ContractResult accumType valType,
-    combine :: ReturnValues -> argType -> accumType -> accumType,
-    evalSpec :: EvalSpec argType accumType,
-    accum :: accumType
-  }
+Contracts have an internal state called the *accumulator* that they may
+update.  When a contract is invoked, the following sequence is executed:
 
-data ContractResult accumType valType =
-  ContractResult
-  {
-    returnValue :: accumType -> Fae valType,
-    newContracts :: Contracts accumType Fae
-  }
+  1. Each of its input contracts is invoked with its supplied argument and the
+     return values made available.  The tuple of the argument, the accumulator,
+     and these return values is called the *data*.
 
-data ReturnValues =
-  ReturnValues
-  {
-    valM :: forall b. Maybe b,
-    subVals :: Map Text ReturnValues
-  }
+  2. Each of its output contracts is created as a lazy function of the data.
 
-data EvalSpec argType =
-  EvalSpec
-  {
-    argM :: forall a. argType -> accumType -> Maybe a,
-    subEvals :: Map Text EvalSpec
-  }
-```
+  3. The return value is computed as a lazy function of the data.
+
+  4. The accumulator is recomputed as a lazy function of the data.
+
+Each of these lazy functions is part of the contract definition.
+
+#### Contract philosophy
+
+These restrictions mean that one should design contracts according to the
+following principles:
+
+  - *Single responsibility.* Contracts are effectively functions from their
+    argument to their return value; the input contracts are merely "advisory".
+    Chained evaluation of other contracts is severely limited, and therefore,
+    contracts should really be considered as *contracts*, namely, agreements to
+    provide particular results for a particular request.  The role of the input
+    contracts is limited to obtaining various rights and then building a derived
+    asset from them.
+
+  - *Pull rewards.* Since contracts cannot invoke a computed set of other
+    contracts, it is not possible to create a contract that, say, accepts
+    several contract IDs in successive calls and then invokes them when it is
+    "full".  Instead, one should view these dependent invocations as *rewards*,
+    and these rewards should be provided via the return values of the original
+    calls, dependent on the contract becoming full before they can be claimed.
+    Effectively, the contract is a complex valued asset to which various parties
+    obtain rights as it is called and, possibly, its state changes.
+
+  - *No library contracts.* If in the above scenario the dependent invocations
+    are truly required as function calls and not rights to an asset, the
+    contracts thus invoked are misconceived: their true purpose is actually as
+    *library functions*.  This kind of function should be part of a source
+    module instead; functions in a source module are no less trustworthy than
+    contracts, since the modules are synchronized just like the storage state,
+    and can therefore be understood as a kind of meta-contract that conveys no
+    value.
 
 ### Escrow
 
@@ -237,30 +258,23 @@ be handled in contract code.  At any time various internal escrow accounts may
 be open, each with an *escrow ID* that contains the type of escrowed value but
 *not* the value itself.    
 
-  - An escrow account can be created in any `Fae` code (which only occurs in a
-    `ContractResult`; see above).  It is an error for an account to remain open
-    when a transaction completes.  Escrow IDs are only valid during the
-    transaction in which they are created.
-
-  - An escrow account is created with an *access control token*, whose presence
-    proves that the caller is authorized to close the escrow account.  An escrow
-    account may be *closed* with a token of this type, returning its *private
-    value* and invalidating its escrow ID.
+  - An escrow account can be created in the course of computing a contract's
+    return value, producing an escrow ID.  Passing this ID around via contract
+    or function arguments is the only way it can be communicated; escrow IDs
+    cannot be computed or supplied as literals, and escrows cannot be called
+    like contracts.
 
   - Each escrow account has a *private value*, its actual contents, and a
     *public value*.  Regardless of access control, the account may be *peeked
     at* to obtain the public value.
 
-```hs
-type EscrowID tokType privType pubType
+  - An escrow account is created with an *access control token*, whose presence
+    proves that the caller is authorized to *close* the escrow account.  Closing
+    an escrow account returns its private value and invalidates its escrow ID.
 
-data Escrow tokType privType pubType =
-  Escrow
-  {
-    private :: privType,
-    public :: pubType
-  }
-```
+  - Escrow IDs are typed to include public, private, and token types, so that
+    functions may express precisely through the type of the escrow ID what kind
+    of escrowed value they accept.
 
 ## Virtual machine
 
@@ -271,10 +285,10 @@ this execution.
 
 Fae also does not impose any restrictions on computational resource usage.  This
 is possible because of the lazy evaluation of transactions (see [Block
-execution](#block-execution)), which means that no one transaction can force any
-participant to waste their time executing it.  Needlessly expensive transactions
-will be shunned by other participants, and any participant is free to impose its
-own, local restrictions on execution time and space for the purposes of
-retrieving specific transaction results.  This does not affect the synchronicity
-of the storage across the entire network.
+execution](#block-execution)), which means that no one contract (or transaction)
+can force any participant to waste their time executing it.  Needlessly
+expensive contracts will be shunned by other participants, and any participant
+is free to impose its own, local restrictions on execution time and space for
+the purposes of retrieving specific transaction results.  This does not affect
+the synchronicity of the storage across the entire network.
 

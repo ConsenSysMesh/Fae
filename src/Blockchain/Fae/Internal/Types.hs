@@ -4,60 +4,43 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens
 
 import Control.Applicative
-import Control.Exception.Safe
 
 import Control.Monad
+import Control.Monad.Catch
 import Control.Monad.Fix
 import Control.Monad.State
 
 import Data.Dynamic
 import Data.Functor
-import Data.IORef.Lifted
-import Data.Set (Set)
 import Data.Map (Map)
+import Data.Set (Set)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 
-import qualified Data.Map as Map
-
-import GHC.Generics
-
-import Numeric.Natural
+{- The main monad -}
 
 newtype Fae a = 
-  Fae { getFae :: StateT FaeState IO a }
+  Fae { useFae :: StateT FaeState IO a }
+  -- Don't derive 'MonadState'!
   deriving (Functor, Applicative, Monad, MonadFix, MonadThrow, MonadCatch)
 
 data FaeState =
   FaeState
   {
-    -- We use the IORef to implement state commits when handling exceptions
-    persistentState :: IORef FaePersist,
-    currentFacet :: IORef FacetID,
+    transactions :: Transactions,
+    contracts :: Contracts,
+    escrows :: Escrows,
     transientState :: FaeTransient,
     parameters :: FaeParameters
-  }
-
-data FaePersist =
-  FaePersist 
-  {
-    entries :: Entries,
-    facets :: Facets,
-    outputs :: Outputs,
-    lastHash :: Digest
   }
 
 data FaeTransient =
   FaeTransient
   {
-    entryUpdates :: Entries,
-    newOutput :: Output,
-    escrows :: Escrows,    
+    contractUpdates :: Contracts,
+    escrowUpdates :: Escrows,
     sender :: PublicKey,
-    lastHashUpdate :: Digest,
-    currentTransaction :: TransactionID,
-    currentEntry :: Maybe EntryID,
-    localLabel :: Seq Text
+    lastHash :: Digest
   }
 
 data FaeParameters =
@@ -65,96 +48,80 @@ data FaeParameters =
   {
   }
 
-newtype Entries = 
-  Entries
+{- Transactions -}
+
+newtype Transactions = 
+  Transactions
   {
-    useEntries :: Map EntryID Entry
+    useTransactions :: Map TransactionID (Either SomeException Dynamic)
   }
 
-newtype Facets =
-  Facets
+newtype TransactionID = TransactionID Digest deriving (Eq, Ord, Show)
+
+{- Contracts -}
+
+newtype Contracts = 
+  Contracts
   {
-    useFacets :: Map FacetID Facet
+    useContracts :: Map ContractID (Either SomeException AbstractContract)
   }
 
-newtype Outputs =
-  Outputs
+type AbstractContract = Dynamic -> Fae Dynamic
+
+data Contract argType accumType valType =
+  Contract
   {
-    useOutputs :: Map TransactionID OutputPlus
+    inputs :: Fae (Seq Dynamic), -- Invocation return values
+    result :: DataF argType accumType
+      (
+        [ContractID -> AbstractContract], -- Created contracts
+        valType,
+        accumType
+      ),
+    accum :: accumType
   }
-newtype TransactionID = TransactionID Digest
-  deriving (Eq, Ord, Show)
+
+type DataF argType accumType a = Seq Dynamic -> argType -> accumType -> Fae a
+newtype ContractID = ContractID Digest deriving (Eq, Ord, Show)
+
+{- Escrows -}
 
 newtype Escrows =
   Escrows
   {
-    useEscrows :: Map EntryID Escrow
+    useEscrows :: Map EntryID Dynamic -- Escrow tok pub priv
   }
 
-data Entry =
-  Entry
-  {
-    contract :: Dynamic, -- :: accumT -> Fae valT
-    combine :: Dynamic, -- :: argT -> accumT -> accumT
-    accum :: Dynamic, -- :: accumT
-    inFacet :: FacetID
-  }
-newtype EntryID = EntryID Digest deriving (Eq, Ord, Show, Generic)
-instance Serialize EntryID
-instance Digestible EntryID
-
-data OutputPlus =
-  OutputPlus
-  {
-    txOutput :: Output,
-    facetException :: Maybe ExceptionPlus
-  }
-data Output =
-  Output
-  {
-    outputEntryID :: Maybe EntryID,
-    subOutputs :: Map Text Output
-  }
-data ExceptionPlus =
-  ExceptionPlus
-  {
-    facetThrew :: FacetID,
-    thrown :: SomeException
-  }
-
-data Facet =
-  Facet
-  {
-    depends :: Set FacetID -- all transitive dependencies
-  }
-newtype FacetID = FacetID Natural deriving (Eq, Ord, Show)
-
-data Escrow =
+data Escrow tokType pubType privType =
   Escrow
   {
-    private :: Dynamic, -- privT
-    public :: Dynamic, -- pubT
-    token :: Dynamic, -- tokT
-    contractMaker :: EntryID -> PublicKey -> Dynamic -- Signature -> EscrowID tokT pubT privT
+    private :: privType,
+    public :: pubType
   }
+
+newtype EntryID = EntryID Digest deriving (Eq, Ord, Show)
 newtype PublicEscrowID tokT pubT privT = PublicEscrowID EntryID
 newtype PrivateEscrowID tokT pubT privT = PrivateEscrowID EntryID
 type EscrowID tokT pubT privT =
   (PublicEscrowID tokT pubT privT, PrivateEscrowID tokT pubT privT)
 
 -- TH 
-makeLenses ''Entries
 makeLenses ''FaeParameters
 makeLenses ''FaeTransient
-makeLenses ''FaePersist
 makeLenses ''FaeState
-makeLenses ''Facets
-makeLenses ''Outputs
+makeLenses ''Transactions
+makeLenses ''Contracts
+makeLenses ''Contract
 makeLenses ''Escrows
-makeLenses ''Entry
-makeLenses ''Facet
-makeLenses ''OutputPlus
-makeLenses ''Output
-makeLenses ''ExceptionPlus
 makeLenses ''Escrow
+
+uniqueDigest :: (Digestible a) => a -> Fae Digest
+uniqueDigest x = Fae $ do
+  h <- use $ _transientState . _lastHash
+  let newHash = h <> digest x
+  _transientState . _lastHash .= newHash
+  return newHash
+
+signer :: Fae PublicKey
+signer = Fae $ use $ _transientState . _sender
 

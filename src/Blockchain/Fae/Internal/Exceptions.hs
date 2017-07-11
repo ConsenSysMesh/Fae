@@ -1,42 +1,28 @@
 module Blockchain.Fae.Internal.Exceptions
   (
     module Blockchain.Fae.Internal.Exceptions,
-    module Control.Exception.Safe
+    module Control.Monad.Catch
   ) where
 
 import Blockchain.Fae.Internal.Types
 
-import Control.Exception.Safe
+import Control.Monad.Catch
 
 import Control.Monad.IO.Class
 
 import Data.Typeable
 
-data EntryException =
-  NoCurrentEntry |
-  BadEntryID EntryID |
-  WrongFacet EntryID FacetID FacetID |
-  BadEntryArgType EntryID TypeRep TypeRep |
-  BadEntryValType EntryID TypeRep TypeRep
-  deriving (Typeable, Show)
+data ContractException =
+  BadContractID ContractID |
+  BadContract ContractID SomeException |
+  BadArgType ContractID TypeRep TypeRep | 
+  BadValType ContractID TypeRep TypeRep
+  deriving (Show, Typeable)
 
 data EscrowException =
   BadEscrowID EntryID |
-  BadTokenType EntryID TypeRep TypeRep |
-  BadPublicType EntryID TypeRep TypeRep |
-  BadPrivateType EntryID TypeRep TypeRep 
+  BadEscrowType EntryID TypeRep TypeRep
   deriving (Typeable, Show)
 
-data FacetException =
-  NotAFacet FacetID |
-  NotADependentFacet FacetID FacetID
-  deriving (Typeable, Show)
-
-data TransactionException =
-  BadTransactionID TransactionID
-  deriving (Typeable, Show)
-
-instance Exception EntryException 
+instance Exception ContractException 
 instance Exception EscrowException
-instance Exception FacetException
-instance Exception TransactionException

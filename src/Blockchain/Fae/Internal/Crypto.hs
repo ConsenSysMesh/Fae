@@ -33,6 +33,8 @@ instance Serialize Digest where
     where hashSize = Hash.hashDigestSize Hash.SHA3_256
 
 instance Digestible Digest
+instance Digestible ()
+instance Digestible Int
 
 (<>) :: Digest -> Digest -> Digest
 d1 <> d2 = 

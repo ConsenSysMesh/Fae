@@ -1,77 +1,62 @@
 module Blockchain.Fae.Internal.Transaction where
 
-import Blockchain.Fae
-import Blockchain.Fae.Internal
-import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto hiding (signer)
+import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Types
 
-import Control.Monad
-import Control.Monad.Fix
+import qualified Data.Map as Map
+import Data.Sequence (Seq)
 
 import Data.Dynamic
-import Data.IORef.Lifted
 
-import qualified Data.Map as Map
-import qualified Data.Sequence as Seq
-import qualified Data.Text as Text
+newtype Transaction a = Transaction { getTransaction :: Contract () () a }
 
-runTransaction :: TransactionID -> PublicKey -> Fae () -> Fae ()
-runTransaction txID sender x = handleAsync setOutputException $ do
-  transient <- newTransient txID sender
-  Fae $ _transientState .= transient
-  () <- x -- Force evaluation to flush out exceptions
-  -- If x throws an exception, we don't save anything
-  saveEscrows
-  saveTransient
+newTransaction ::
+  (Typeable valType) =>
+  [InputContract] ->
+  (Seq Dynamic -> Fae ([OutputContract], valType)) ->
+  Transaction valType
+newTransaction inputCs f = Transaction $
+  newPureContract inputCs $ \retVals _ -> f retVals
+
+runTransaction :: 
+  (Typeable a) =>
+  TransactionID -> PublicKey -> Transaction a -> Fae ()
+runTransaction txID sender x = 
+  handleAll (setException txID) $ do
+    transient <- newTransient txID sender
+    Fae $ _transientState .= transient
+    retVal <- evalContract Nothing (getTransaction x) ()
+    -- If x throws an exception, we don't save anything
+    saveTransient
+    saveReturnValue txID retVal
 
 newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
-newTransient txID@(TransactionID txID0) senderKey = Fae $ do
-  pStateRef <- use _persistentState
-  pState <- readIORef pStateRef
-  let
-    entries = pState ^. _entries
-    lastHash = pState ^. _lastHash
-  cFacet <- use _currentFacet
-  writeIORef cFacet zeroFacet
+newTransient (TransactionID txID) senderKey = Fae $ do
+  contracts <- use _contracts
   return $
     FaeTransient
     {
-      entryUpdates = entries,
-      newOutput = Output Nothing Map.empty,
-      escrows = Escrows Map.empty,
+      contractUpdates = contracts,
+      escrowUpdates = Escrows Map.empty,
       sender = senderKey,
-      lastHashUpdate = lastHash <> txID0,
-      currentTransaction = txID,
-      currentEntry = Nothing,
-      localLabel = Seq.empty
+      lastHash = txID
     }
 
-saveEscrows :: Fae ()
-saveEscrows = Fae $ do
-  escrows <- use $ _transientState . _escrows . _useEscrows
-  getFae $ label "escrows" $ sequence_ $ Map.mapWithKey convertEscrow escrows
+saveTransient :: Fae ()
+saveTransient = Fae $ do
+  contracts <- use $ _transientState . _contractUpdates
+  _contracts .= contracts
+  escrows <- use $ _transientState . _escrowUpdates
+  _escrows .= escrows
 
-convertEscrow :: EntryID -> Escrow -> Fae ()
-convertEscrow entryID escrow = do
-  key <- signer
-  _ <- label (Text.pack $ show entryID) $ mfix $ addEntry . makeEntry key
-  return ()
+setException :: TransactionID -> SomeException -> Fae ()
+setException txID e = Fae $
+  _transactions . _useTransactions . at txID ?= Left e
 
-  where
-    makeEntry key newEntryID = Entry fDyn (toDyn c) (toDyn a) where
-      fDyn = contractMaker escrow newEntryID key
-      c = const @Signature @Signature
-      a = undefined :: Signature
-
-setOutputException :: SomeException -> Fae ()
-setOutputException e = Fae $ do
-  txID <- use $ _transientState . _currentTransaction
-  facetIDRef <- use _currentFacet
-  facetID <- readIORef facetIDRef
-  pState <- use _persistentState
-  modifyIORef' pState $
-    _outputs . _useOutputs . at txID . each . _facetException ?~
-      ExceptionPlus facetID e
-
+saveReturnValue :: (Typeable a) => TransactionID -> a -> Fae ()
+saveReturnValue txID x = Fae $
+  _transactions . _useTransactions . at txID ?= Right (toDyn x)
+  
