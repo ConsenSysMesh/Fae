@@ -2,14 +2,28 @@ module Blockchain.Fae.Internal.Contract where
 
 import Blockchain.Fae.Internal.Crypto hiding ((<>))
 import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.Fae
 import Blockchain.Fae.Internal.Lens
-import Blockchain.Fae.Internal.Types
+
+import Control.Monad.State
+import Control.Monad.Trans
 
 import Data.Dynamic
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
-import Data.Monoid
 import Data.Proxy
+
+data Contract argType accumType valType =
+  Contract
+  {
+    inputs :: Fae (Seq Dynamic), -- Invocation return values
+    result :: ResultF argType accumType valType AbstractIDContract,
+    accum :: accumType
+  }
+
+type AbstractIDContract = ContractID -> AbstractContract
+type ResultF argType accumType valType output =
+  Seq Dynamic -> argType -> StateT accumType Fae ([output], valType)
 
 data CallTree =
   CallTree
@@ -30,29 +44,26 @@ newtype OutputContract =
     getOutputContract :: CallTree -> AbstractIDContract
   }
 
+makeLenses ''Contract
+
 newContract :: 
   (Typeable argType, Typeable accumType, Typeable valType) =>
   CallTree ->
   accumType ->
-  DataF argType accumType
-    (
-      [OutputContract],
-      valType,
-      accumType
-    ) ->
+  ResultF argType accumType valType OutputContract ->
   Contract argType accumType valType
 newContract callTree accum0 f =
   Contract
   {
     inputs = Seq.fromList <$> traverse getInputContract (directInputs callTree),
     accum = accum0,
-    result = \retVals arg acc -> do
-      (outputCs, val, acc') <- f retVals arg acc
+    result = \retVals arg -> do
+      (outputCs, val) <- f retVals arg
       let 
         xOutputCs = 
           outputCs ++ repeat (OutputContract $ \_ -> throw . MissingOutput)
         outputs = zipWith getOutputContract xOutputCs (outputTrees callTree) 
-      return (outputs, val, acc')
+      return (outputs, val)
   }
 
 newPureContract ::
@@ -61,19 +72,7 @@ newPureContract ::
   (Seq Dynamic -> argType -> Fae ([OutputContract], valType)) ->
   Contract argType () valType
 newPureContract callTree f = 
-  newContract callTree () $ \retVals arg _ -> do
-    (outputCs, val) <- f retVals arg
-    return (outputCs, val, ())
-
-newMonoidContract ::
-  (Monoid argType, Typeable argType, Typeable valType) =>
-  CallTree ->
-  (Seq Dynamic -> argType -> argType -> Fae ([OutputContract], valType)) ->
-  Contract argType argType valType
-newMonoidContract callTree f =
-  newContract callTree mempty $ \retVals arg accum -> do
-    (outputCs, val) <- f retVals arg accum
-    return (outputCs, val, accum <> arg)
+  newContract callTree () $ \retVals arg -> lift $ f retVals arg
 
 inputContract :: (Typeable a) => ContractID -> a -> InputContract
 inputContract !cID !x = InputContract $ do
@@ -90,7 +89,7 @@ inputContract !cID !x = InputContract $ do
 outputContract :: 
   (Typeable argType, Typeable accumType, Typeable valType) =>
   accumType ->
-  DataF argType accumType ([OutputContract], valType, accumType) -> 
+  ResultF argType accumType valType OutputContract ->
   OutputContract
 outputContract accum0 f = OutputContract $ \callTree cID ->
   abstract cID $ evalContract (Just cID) $ newContract callTree accum0 f
@@ -100,7 +99,7 @@ evalContract ::
   Maybe ContractID -> Contract argType accumType valType -> argType -> Fae valType
 evalContract thisIDM c@Contract{..} arg = do
   inputSeq <- inputs
-  (outputs, retVal, newAccum) <- result inputSeq arg accum
+  ((outputs, retVal), newAccum) <- runStateT (result inputSeq arg) accum
   sequence_ $ zipWith newOutput [0 ..] outputs
   case thisIDM of
     Nothing -> return ()
@@ -130,3 +129,4 @@ newOutput i f = do
   cID <- ContractID <$> uniqueDigest i
   cOrErr <- try (evaluate $ f cID) 
   Fae $ _transientState . _contractUpdates . _useContracts . at cID ?= cOrErr
+

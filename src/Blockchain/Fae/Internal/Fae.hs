@@ -1,4 +1,4 @@
-module Blockchain.Fae.Internal.Types where
+module Blockchain.Fae.Internal.Fae where
 
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens
@@ -14,7 +14,6 @@ import Data.Dynamic
 import Data.Functor
 import Data.Map (Map)
 import Data.Set (Set)
-import Data.Sequence (Seq)
 import Data.Text (Text)
 
 {- The main monad -}
@@ -53,7 +52,7 @@ data FaeParameters =
 newtype Transactions = 
   Transactions
   {
-    useTransactions :: Map TransactionID (Either SomeException Dynamic)
+    useTransactions :: Map TransactionID (Either SomeException Dynamic) -- valType
   }
 
 newtype TransactionID = TransactionID Digest deriving (Eq, Ord, Show)
@@ -66,22 +65,7 @@ newtype Contracts =
     useContracts :: Map ContractID (Either SomeException AbstractContract)
   }
 
-data Contract argType accumType valType =
-  Contract
-  {
-    inputs :: Fae (Seq Dynamic), -- Invocation return values
-    result :: DataF argType accumType
-      (
-        [AbstractIDContract], -- Created contracts
-        valType,
-        accumType
-      ),
-    accum :: accumType
-  }
-
-type AbstractContract = Dynamic -> Fae Dynamic
-type AbstractIDContract = ContractID -> AbstractContract
-type DataF argType accumType a = Seq Dynamic -> argType -> accumType -> Fae a
+type AbstractContract = Dynamic -> Fae Dynamic -- argType -> Fae valType
 newtype ContractID = ContractID Digest deriving (Eq, Ord, Show)
 
 {- Escrows -}
@@ -92,18 +76,7 @@ newtype Escrows =
     useEscrows :: Map EntryID Dynamic -- Escrow tok pub priv
   }
 
-data Escrow tokType pubType privType =
-  Escrow
-  {
-    private :: privType,
-    public :: pubType
-  }
-
 newtype EntryID = EntryID Digest deriving (Eq, Ord, Show)
-newtype PublicEscrowID tokT pubT privT = PublicEscrowID EntryID
-newtype PrivateEscrowID tokT pubT privT = PrivateEscrowID EntryID
-type EscrowID tokT pubT privT =
-  (PublicEscrowID tokT pubT privT, PrivateEscrowID tokT pubT privT)
 
 -- TH 
 makeLenses ''FaeParameters
@@ -111,9 +84,7 @@ makeLenses ''FaeTransient
 makeLenses ''FaeState
 makeLenses ''Transactions
 makeLenses ''Contracts
-makeLenses ''Contract
 makeLenses ''Escrows
-makeLenses ''Escrow
 
 uniqueDigest :: (Digestible a) => a -> Fae Digest
 uniqueDigest x = Fae $ do

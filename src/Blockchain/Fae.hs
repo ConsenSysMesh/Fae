@@ -5,7 +5,7 @@ module Blockchain.Fae
     -- * Contract
     Contract, ContractID,
     InputContract, OutputContract,
-    newContract, newPureContract, newMonoidContract,
+    newContract, newPureContract,
     inputContract, outputContract,
     -- * Escrow
     EscrowID, PublicEscrowID, PrivateEscrowID,
@@ -18,5 +18,5 @@ module Blockchain.Fae
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Escrow
 import Blockchain.Fae.Internal.Transaction
-import Blockchain.Fae.Internal.Types
+import Blockchain.Fae.Internal.Fae
 

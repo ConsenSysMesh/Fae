@@ -2,10 +2,10 @@ module Blockchain.Fae.Internal.Exceptions
   (
     module Blockchain.Fae.Internal.Exceptions,
     module Control.Monad.Catch,
-    Ex.throw, evaluate
+    Ex.throw
   ) where
 
-import Blockchain.Fae.Internal.Types
+import Blockchain.Fae.Internal.Fae
 
 import qualified Control.Exception as Ex
 

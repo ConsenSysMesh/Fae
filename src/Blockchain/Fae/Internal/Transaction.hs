@@ -3,8 +3,8 @@ module Blockchain.Fae.Internal.Transaction where
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto hiding (signer)
 import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.Fae
 import Blockchain.Fae.Internal.Lens
-import Blockchain.Fae.Internal.Types
 
 import qualified Data.Map as Map
 import Data.Sequence (Seq)

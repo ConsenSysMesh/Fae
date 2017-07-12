@@ -2,11 +2,25 @@ module Blockchain.Fae.Internal.Escrow where
 
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.Fae
 import Blockchain.Fae.Internal.Lens
-import Blockchain.Fae.Internal.Types
 
 import Data.Dynamic
 import Data.Typeable
+
+data Escrow tokType pubType privType =
+  Escrow
+  {
+    private :: privType,
+    public :: pubType
+  }
+
+newtype PublicEscrowID tokT pubT privT = PublicEscrowID EntryID
+newtype PrivateEscrowID tokT pubT privT = PrivateEscrowID EntryID
+type EscrowID tokT pubT privT =
+  (PublicEscrowID tokT pubT privT, PrivateEscrowID tokT pubT privT)
+
+makeLenses ''Escrow
 
 escrow ::
   forall tokT pubT privT.
