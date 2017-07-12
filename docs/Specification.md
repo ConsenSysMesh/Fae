@@ -188,22 +188,21 @@ contracts or escrows.
 The contracts (but not the escrows) that it invokes must be enumerated with
 their arguments at the time of the caller's creation; likewise, the contracts
 that it creates must be enumerated, though their contents may be programmatic.
-This restriction is imposed to ensure that contracts may be executed lazily:
+This restriction is imposed to ensure that contracts may be executed lazily, for
+the following reason.
 
-  - For output contracts, it is necessary to know exactly the contract IDs that
-    are created, even for transactions that are not otherwise executed, so that
-    their existence is known to later transactions that invoke them.
-    
-  - For input contracts, not only the existence of an update to a particular
-    contract must be known in advance, but also the *nonexistence* of updates to
-    other contracts, so that future transactions may selectively execute just
-    those contracts in their dependency tree.
+Both the existence of an update to a particular contract, as well as the
+*nonexistence* of updates to other contracts, must be known in advance, so that
+future transactions may selectively execute just those contracts in their
+dependency tree.  The entire information necessary for resolving state changes
+to input contracts must be known *without* having to execute irrelevant and
+possibly untrusted code.
 
-    There is also a security detail.  The arguments cannot be computed by the
-    calling contract because to allow untrusted computation to intervene in
-    contract invocation exposes the entire system to crippling denial-of-service
-    attacks where transactions spuriously invoke contracts via a nonterminating
-    computation, thus blocking them from ever being used by another transaction.
+There is also a security detail.  The arguments cannot be computed by the
+calling contract because to allow untrusted computation to intervene in contract
+invocation exposes the entire system to crippling denial-of-service attacks
+where transactions spuriously invoke contracts via a nonterminating computation,
+thus blocking them from ever being used by another transaction.
 
 Contracts have an internal state called the *accumulator* that they may
 update.  When a contract is invoked, the following sequence is executed:

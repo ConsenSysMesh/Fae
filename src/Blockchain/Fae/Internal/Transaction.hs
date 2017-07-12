@@ -15,11 +15,11 @@ newtype Transaction a = Transaction { getTransaction :: Contract () () a }
 
 newTransaction ::
   (Typeable valType) =>
-  [InputContract] ->
+  CallTree ->
   (Seq Dynamic -> Fae ([OutputContract], valType)) ->
   Transaction valType
-newTransaction inputCs f = Transaction $
-  newPureContract inputCs $ \retVals _ -> f retVals
+newTransaction callTree f = Transaction $
+  newPureContract callTree $ \retVals _ -> f retVals
 
 runTransaction :: 
   (Typeable a) =>

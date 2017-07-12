@@ -11,6 +11,13 @@ import qualified Data.Sequence as Seq
 import Data.Monoid
 import Data.Proxy
 
+data CallTree =
+  CallTree
+  {
+    directInputs :: [InputContract],
+    outputTrees :: [CallTree]
+  }
+
 newtype InputContract = 
   InputContract 
   { 
@@ -20,12 +27,12 @@ newtype InputContract =
 newtype OutputContract = 
   OutputContract 
   { 
-    getOutputContract :: ContractID -> AbstractContract 
+    getOutputContract :: CallTree -> AbstractIDContract
   }
 
 newContract :: 
   (Typeable argType, Typeable accumType, Typeable valType) =>
-  [InputContract] ->
+  CallTree ->
   accumType ->
   DataF argType accumType
     (
@@ -34,33 +41,37 @@ newContract ::
       accumType
     ) ->
   Contract argType accumType valType
-newContract inputCs accum0 f =
+newContract callTree accum0 f =
   Contract
   {
-    inputs = Seq.fromList <$> sequence (map getInputContract inputCs),
+    inputs = Seq.fromList <$> traverse getInputContract (directInputs callTree),
     accum = accum0,
     result = \retVals arg acc -> do
       (outputCs, val, acc') <- f retVals arg acc
-      return (map getOutputContract outputCs, val, acc')
+      let 
+        xOutputCs = 
+          outputCs ++ repeat (OutputContract $ \_ -> throw . MissingOutput)
+        outputs = zipWith getOutputContract xOutputCs (outputTrees callTree) 
+      return (outputs, val, acc')
   }
 
 newPureContract ::
   (Typeable argType, Typeable valType) =>
-  [InputContract] ->
+  CallTree ->
   (Seq Dynamic -> argType -> Fae ([OutputContract], valType)) ->
   Contract argType () valType
-newPureContract inputCs f = 
-  newContract inputCs () $ \retVals arg _ -> do
+newPureContract callTree f = 
+  newContract callTree () $ \retVals arg _ -> do
     (outputCs, val) <- f retVals arg
     return (outputCs, val, ())
 
 newMonoidContract ::
   (Monoid argType, Typeable argType, Typeable valType) =>
-  [InputContract] ->
+  CallTree ->
   (Seq Dynamic -> argType -> argType -> Fae ([OutputContract], valType)) ->
   Contract argType argType valType
-newMonoidContract inputCs f =
-  newContract inputCs mempty $ \retVals arg accum -> do
+newMonoidContract callTree f =
+  newContract callTree mempty $ \retVals arg accum -> do
     (outputCs, val) <- f retVals arg accum
     return (outputCs, val, accum <> arg)
 
@@ -77,10 +88,12 @@ inputContract !cID !x = InputContract $ do
     fE
 
 outputContract :: 
-  (Typeable argType, Typeable valType) =>
-  Contract argType accumType valType -> OutputContract
-outputContract c = OutputContract $ \cID ->
-  abstract cID $ evalContract (Just cID) c
+  (Typeable argType, Typeable accumType, Typeable valType) =>
+  accumType ->
+  DataF argType accumType ([OutputContract], valType, accumType) -> 
+  OutputContract
+outputContract accum0 f = OutputContract $ \callTree cID ->
+  abstract cID $ evalContract (Just cID) $ newContract callTree accum0 f
 
 evalContract :: 
   (Typeable argType, Typeable valType) =>
@@ -115,6 +128,5 @@ abstract cID f argDyn =
 newOutput :: Int -> (ContractID -> AbstractContract) -> Fae ()
 newOutput i f = do
   cID <- ContractID <$> uniqueDigest i
-  Fae $ _transientState . _contractUpdates . _useContracts . at cID ?= 
-    Right (f cID)
-
+  cOrErr <- try (evaluate $ f cID) 
+  Fae $ _transientState . _contractUpdates . _useContracts . at cID ?= cOrErr

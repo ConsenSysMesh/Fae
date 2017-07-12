@@ -66,21 +66,21 @@ newtype Contracts =
     useContracts :: Map ContractID (Either SomeException AbstractContract)
   }
 
-type AbstractContract = Dynamic -> Fae Dynamic
-
 data Contract argType accumType valType =
   Contract
   {
     inputs :: Fae (Seq Dynamic), -- Invocation return values
     result :: DataF argType accumType
       (
-        [ContractID -> AbstractContract], -- Created contracts
+        [AbstractIDContract], -- Created contracts
         valType,
         accumType
       ),
     accum :: accumType
   }
 
+type AbstractContract = Dynamic -> Fae Dynamic
+type AbstractIDContract = ContractID -> AbstractContract
 type DataF argType accumType a = Seq Dynamic -> argType -> accumType -> Fae a
 newtype ContractID = ContractID Digest deriving (Eq, Ord, Show)
 
