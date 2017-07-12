@@ -6,20 +6,24 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Fae
 import Blockchain.Fae.Internal.Lens
 
+import Control.Monad.Reader
+import Control.Monad.Trans
+
 import qualified Data.Map as Map
 import Data.Sequence (Seq)
 
 import Data.Dynamic
 
 newtype Transaction a = Transaction { getTransaction :: Contract () () a }
+type FaeTransaction a = FaeContract () () a
 
 newTransaction ::
   (Typeable valType) =>
   CallTree ->
-  (Seq Dynamic -> Fae ([OutputContract], valType)) ->
+  FaeTransaction valType ->
   Transaction valType
-newTransaction callTree f = Transaction $
-  newPureContract callTree $ \retVals _ -> f retVals
+newTransaction callTree faeTransaction = Transaction $
+  newContract callTree () faeTransaction
 
 runTransaction :: 
   (Typeable a) =>

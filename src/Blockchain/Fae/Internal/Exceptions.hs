@@ -22,6 +22,7 @@ data ContractException =
   BadContractID ContractID |
   BadContract ContractID SomeException |
   MissingOutput ContractID |
+  MissingInput Int |
   BadArgType ContractID TypeRep TypeRep | 
   BadValType ContractID TypeRep TypeRep
   deriving (Show, Typeable)

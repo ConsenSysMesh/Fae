@@ -48,6 +48,7 @@ library
     FlexibleContexts
     FlexibleInstances
     GeneralizedNewtypeDeriving
+    MultiParamTypeClasses
     OverloadedStrings
     RankNTypes
     RecordWildCards

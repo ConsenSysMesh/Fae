@@ -5,7 +5,6 @@ module Blockchain.Fae
     -- * Contract
     Contract, ContractID,
     InputContract, OutputContract,
-    newContract, newPureContract,
     inputContract, outputContract,
     -- * Escrow
     EscrowID, PublicEscrowID, PrivateEscrowID,
