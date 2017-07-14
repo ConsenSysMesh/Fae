@@ -24,7 +24,7 @@ data Contract argType accumType valType =
     escrows :: Escrows
   }
 
-type AbstractIDContract = ContractID -> AbstractContract
+type AbstractIDContract = [ContractID] -> Digest -> ContractID -> AbstractContract
 type ResultF output argType accumType valType =
   RWST (Seq (ContractID, Dynamic), argType) [output] accumType Fae valType
 
@@ -84,7 +84,7 @@ newContract callTree accum0 faeContract =
     makeOutputs outputCs = 
       zipWith getOutputContract (pad outputCs) (outputTrees callTree) 
     pad outputCs = 
-      outputCs ++ repeat (OutputContract $ \_ -> throw . MissingOutput)
+      outputCs ++ repeat (OutputContract $ \_ _ _ -> throw . MissingOutput)
 
 inputContract :: (Typeable a) => ContractID -> a -> InputContract
 inputContract !cID !x = InputContract cID $ do
@@ -105,9 +105,9 @@ outputContract ::
   FaeContract argType' accumType' ()
 outputContract accum0 faeContract = FaeContract $ tell 
   [
-    OutputContract $ \callTree cID ->
+    OutputContract $ \callTree ancestors lastHash cID ->
       abstract cID $ 
-      evalContract cID $ 
+      evalContract ancestors lastHash cID $ 
       newContract callTree accum0 faeContract
   ]
 
@@ -127,15 +127,16 @@ inputValue i = do
 
 evalContract :: 
   (Typeable argType, Typeable valType) =>
-  ContractID -> Contract argType accumType valType -> argType -> Fae valType
-evalContract thisID c@Contract{..} arg = do
+  [ContractID] -> Digest -> ContractID -> 
+  Contract argType accumType valType -> argType -> Fae valType
+evalContract ancestors lastHash thisID c@Contract{..} arg = do
   Fae $ _transientState . _contractEscrows .= escrows
   inputSeq <- inputs
   (retVal, newAccum, outputs) <- runRWST result (inputSeq, arg) accum
-  sequence_ $ zipWith (newOutput thisID) [0 ..] outputs
+  sequence_ $ zipWith (newOutput (thisID : ancestors) lastHash) [0 ..] outputs
   contractEscrows <- Fae $ use $ _transientState . _contractEscrows
   setContract thisID $ 
-    evalContract thisID $
+    evalContract ancestors lastHash thisID $
     c & _accum .~ newAccum
       & _escrows .~ contractEscrows
   return retVal
@@ -158,9 +159,11 @@ abstract cID f argDyn =
       throwM (BadArgType cID (dynTypeRep argDyn) $ typeRep (Proxy @argType))
     Just x -> return x
 
-newOutput :: ContractID -> Int -> (ContractID -> AbstractContract) -> Fae ()
-newOutput (ContractID thisID) i f = do
-  let cID = ContractID $ thisID <#> i
-  cOrErr <- try (evaluate $ f cID) 
+newOutput :: [ContractID] -> Digest -> Int -> AbstractIDContract -> Fae ()
+newOutput ancestors lastHash i f = do
+  let 
+    newHash = lastHash <#> i
+    cID = ContractID newHash 
+  cOrErr <- try (evaluate $ f ancestors newHash cID) 
   Fae $ _transientState . _contractUpdates . _useContracts . at cID ?= cOrErr
 

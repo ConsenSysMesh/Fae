@@ -28,11 +28,11 @@ newTransaction callTree faeTransaction = Transaction $
 runTransaction :: 
   (Typeable a) =>
   TransactionID -> PublicKey -> Transaction a -> Fae ()
-runTransaction txID sender x = 
+runTransaction txID@(TransactionID d) sender x = 
   handleAll (setException txID) $ do
     transient <- newTransient sender
     Fae $ _transientState .= transient
-    retVal <- evalContract (toContractID txID) (getTransaction x) ()
+    retVal <- evalContract [] d (ContractID d) (getTransaction x) ()
     -- If x throws an exception, we don't save anything
     saveContracts
     saveReturnValue txID retVal
