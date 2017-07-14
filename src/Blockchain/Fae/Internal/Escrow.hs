@@ -6,6 +6,7 @@ import Blockchain.Fae.Internal.Fae
 import Blockchain.Fae.Internal.Lens
 
 import Data.Dynamic
+import qualified Data.Map as Map
 import Data.Typeable
 
 data Escrow tokType pubType privType =
@@ -28,8 +29,8 @@ escrow ::
   tokT -> pubT -> privT -> 
   Fae (EscrowID tokT pubT privT)
 escrow tok pub priv = do
-  eID <- EntryID <$> uniqueDigest ()
-  Fae $ _transientState . _escrowUpdates . _useEscrows . at eID ?= 
+  eID <- newEscrowID
+  Fae $ _transientState . _contractEscrows . _useEscrows . at eID ?= 
     toDyn (Escrow @tokT priv pub)
   return (PublicEscrowID eID, PrivateEscrowID eID)
 
@@ -48,7 +49,7 @@ close ::
 -- know that the caller was able to access the correct type.
 close pID@(PrivateEscrowID escrowID) !_ = do
   priv <- useEscrow _private pID escrowID
-  Fae $ _transientState . _escrowUpdates . _useEscrows . at escrowID .= Nothing
+  Fae $ _transientState . _contractEscrows . _useEscrows . at escrowID .= Nothing
   return priv
 
 useEscrow :: 
@@ -59,7 +60,7 @@ useEscrow ::
   EntryID -> 
   Fae a
 useEscrow l p eID = Fae $ do
-  escrowDM <- use $ _transientState . _escrowUpdates . _useEscrows . at eID
+  escrowDM <- use $ _transientState . _contractEscrows . _useEscrows . at eID
   escrowD <- maybe
     (throwM $ BadEscrowID eID)
     return
@@ -69,3 +70,7 @@ useEscrow l p eID = Fae $ do
       BadEscrowType eID (typeRep $ Proxy @(proxy tokT pubT privT)) (dynTypeRep escrowD)
   return $ escrow ^. l
 
+newEscrowID :: Fae EntryID
+newEscrowID = Fae $ use $ 
+  _transientState . _contractEscrows . _useEscrows . 
+  to (EntryID . digest . Map.size)

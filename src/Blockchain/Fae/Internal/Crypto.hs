@@ -36,8 +36,8 @@ instance Digestible Digest
 instance Digestible ()
 instance Digestible Int
 
-(<>) :: Digest -> Digest -> Digest
-d1 <> d2 = 
+(<#>) :: (Serialize a, Serialize b) => a -> b -> Digest
+d1 <#> d2 = 
   Hash.hashFinalize $ 
   Hash.hashUpdates Hash.hashInit $
   [Ser.encode d1, Ser.encode d2] 

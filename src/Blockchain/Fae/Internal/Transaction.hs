@@ -30,37 +30,37 @@ runTransaction ::
   TransactionID -> PublicKey -> Transaction a -> Fae ()
 runTransaction txID sender x = 
   handleAll (setException txID) $ do
-    transient <- newTransient txID sender
+    transient <- newTransient sender
     Fae $ _transientState .= transient
-    retVal <- evalContract Nothing (getTransaction x) ()
+    retVal <- evalContract (toContractID txID) (getTransaction x) ()
     -- If x throws an exception, we don't save anything
-    saveTransient
+    saveContracts
     saveReturnValue txID retVal
 
-newTransient :: TransactionID -> PublicKey -> Fae FaeTransient
-newTransient (TransactionID txID) senderKey = Fae $ do
+newTransient :: PublicKey -> Fae FaeTransient
+newTransient senderKey = Fae $ do
   contracts <- use _contracts
   return $
     FaeTransient
     {
       contractUpdates = contracts,
-      escrowUpdates = Escrows Map.empty,
-      sender = senderKey,
-      lastHash = txID
+      contractEscrows = Escrows Map.empty,
+      sender = senderKey
     }
 
-saveTransient :: Fae ()
-saveTransient = Fae $ do
+saveContracts :: Fae ()
+saveContracts = Fae $ do
   contracts <- use $ _transientState . _contractUpdates
   _contracts .= contracts
-  escrows <- use $ _transientState . _escrowUpdates
-  _escrows .= escrows
 
 setException :: TransactionID -> SomeException -> Fae ()
 setException txID e = Fae $
   _transactions . _useTransactions . at txID ?= Left e
 
 saveReturnValue :: (Typeable a) => TransactionID -> a -> Fae ()
-saveReturnValue txID x = Fae $
+saveReturnValue txID x = Fae $ do
+  _contracts . _useContracts . at (toContractID txID) .= Nothing
   _transactions . _useTransactions . at txID ?= Right (toDyn x)
   
+toContractID :: TransactionID -> ContractID
+toContractID (TransactionID d) = ContractID d

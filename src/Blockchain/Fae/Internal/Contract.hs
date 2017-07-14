@@ -1,15 +1,16 @@
 module Blockchain.Fae.Internal.Contract where
 
-import Blockchain.Fae.Internal.Crypto hiding ((<>))
+import Blockchain.Fae.Internal.Crypto 
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Fae
 import Blockchain.Fae.Internal.Lens
 
 import Control.Monad.Fix
-import Control.Monad.RWS
+import Control.Monad.RWS hiding ((<>))
 import Control.Monad.Trans
 
 import Data.Dynamic
+import qualified Data.Map as Map
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Proxy
@@ -19,7 +20,8 @@ data Contract argType accumType valType =
   {
     inputs :: Fae (Seq (ContractID, Dynamic)),
     result :: ResultF AbstractIDContract argType accumType valType,
-    accum :: accumType
+    accum :: accumType,
+    escrows :: Escrows
   }
 
 type AbstractIDContract = ContractID -> AbstractContract
@@ -75,7 +77,8 @@ newContract callTree accum0 faeContract =
       ) 
       (directInputs callTree),
     accum = accum0,
-    result = mapRWST (fmap $ _3 %~ makeOutputs) $ getFaeContract faeContract
+    result = mapRWST (fmap $ _3 %~ makeOutputs) $ getFaeContract faeContract,
+    escrows = Escrows $ Map.empty
   }
   where
     makeOutputs outputCs = 
@@ -104,7 +107,7 @@ outputContract accum0 faeContract = FaeContract $ tell
   [
     OutputContract $ \callTree cID ->
       abstract cID $ 
-      evalContract (Just cID) $ 
+      evalContract cID $ 
       newContract callTree accum0 faeContract
   ]
 
@@ -124,14 +127,17 @@ inputValue i = do
 
 evalContract :: 
   (Typeable argType, Typeable valType) =>
-  Maybe ContractID -> Contract argType accumType valType -> argType -> Fae valType
-evalContract thisIDM c@Contract{..} arg = do
+  ContractID -> Contract argType accumType valType -> argType -> Fae valType
+evalContract thisID c@Contract{..} arg = do
+  Fae $ _transientState . _contractEscrows .= escrows
   inputSeq <- inputs
   (retVal, newAccum, outputs) <- runRWST result (inputSeq, arg) accum
-  sequence_ $ zipWith newOutput [0 ..] outputs
-  case thisIDM of
-    Nothing -> return ()
-    Just thisID -> setContract thisID $ evalContract thisIDM c{accum = newAccum}
+  sequence_ $ zipWith (newOutput thisID) [0 ..] outputs
+  contractEscrows <- Fae $ use $ _transientState . _contractEscrows
+  setContract thisID $ 
+    evalContract thisID $
+    c & _accum .~ newAccum
+      & _escrows .~ contractEscrows
   return retVal
 
 setContract :: 
@@ -152,9 +158,9 @@ abstract cID f argDyn =
       throwM (BadArgType cID (dynTypeRep argDyn) $ typeRep (Proxy @argType))
     Just x -> return x
 
-newOutput :: Int -> (ContractID -> AbstractContract) -> Fae ()
-newOutput i f = do
-  cID <- ContractID <$> uniqueDigest i
+newOutput :: ContractID -> Int -> (ContractID -> AbstractContract) -> Fae ()
+newOutput (ContractID thisID) i f = do
+  let cID = ContractID $ thisID <#> i
   cOrErr <- try (evaluate $ f cID) 
   Fae $ _transientState . _contractUpdates . _useContracts . at cID ?= cOrErr
 

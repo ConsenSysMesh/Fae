@@ -28,23 +28,15 @@ data FaeState =
   {
     transactions :: Transactions,
     contracts :: Contracts,
-    escrows :: Escrows,
-    transientState :: FaeTransient,
-    parameters :: FaeParameters
+    transientState :: FaeTransient
   }
 
 data FaeTransient =
   FaeTransient
   {
     contractUpdates :: Contracts,
-    escrowUpdates :: Escrows,
-    sender :: PublicKey,
-    lastHash :: Digest
-  }
-
-data FaeParameters =
-  FaeParameters
-  {
+    contractEscrows :: Escrows,
+    sender :: PublicKey
   }
 
 {- Transactions -}
@@ -79,19 +71,11 @@ newtype Escrows =
 newtype EntryID = EntryID Digest deriving (Eq, Ord, Show)
 
 -- TH 
-makeLenses ''FaeParameters
 makeLenses ''FaeTransient
 makeLenses ''FaeState
 makeLenses ''Transactions
 makeLenses ''Contracts
 makeLenses ''Escrows
-
-uniqueDigest :: (Digestible a) => a -> Fae Digest
-uniqueDigest x = Fae $ do
-  h <- use $ _transientState . _lastHash
-  let newHash = h <> digest x
-  _transientState . _lastHash .= newHash
-  return newHash
 
 signer :: Fae PublicKey
 signer = Fae $ use $ _transientState . _sender
