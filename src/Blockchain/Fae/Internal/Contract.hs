@@ -1,9 +1,10 @@
 module Blockchain.Fae.Internal.Contract where
 
 import Blockchain.Fae.Internal.Crypto 
+import Blockchain.Fae.Internal.Escrow
 import Blockchain.Fae.Internal.Exceptions
-import Blockchain.Fae.Internal.Fae
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.Monads
 
 import Control.Monad.Fix
 import Control.Monad.RWS hiding ((<>))
@@ -15,155 +16,130 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Proxy
 
-data Contract argType accumType valType =
+type ConcreteContract argType valType = argType -> FaeContract valType
+
+newtype Contract argType accumType valType =
   Contract
   {
-    inputs :: Fae (Seq (ContractID, Dynamic)),
-    result :: ResultF AbstractIDContract argType accumType valType,
-    accum :: accumType,
-    escrows :: Escrows
+    getContract :: FaeContract (Fae argType accumType valType)
   }
 
-type AbstractIDContract = [ContractID] -> Digest -> ContractID -> AbstractContract
-type ResultF output argType accumType valType =
-  RWST (Seq (ContractID, Dynamic), argType) [output] accumType Fae valType
-
-newtype FaeContract argType accumType valType =
-  FaeContract 
-  { 
-    getFaeContract :: ResultF OutputContract argType accumType valType
-  }
-  deriving (Functor, Applicative, Monad, MonadThrow, MonadCatch, MonadFix, MonadState accumType)
-
-instance MonadReader argType (FaeContract argType accumType) where
-  ask = FaeContract $ view _2
-  local f = FaeContract . local (_2 %~ f) . getFaeContract
-
-data CallTree =
-  CallTree
-  {
-    directInputs :: [InputContract],
-    outputTrees :: [CallTree]
-  }
-
-data InputContract = 
-  InputContract 
-  { 
-    inputContractID :: ContractID,
-    getInputContract :: Fae Dynamic 
-  }
-
-newtype OutputContract = 
-  OutputContract 
-  { 
-    getOutputContract :: CallTree -> AbstractIDContract
-  }
-
-makeLenses ''Contract
-
-newContract :: 
+concrete :: 
   (Typeable argType, Typeable valType) =>
-  CallTree ->
-  accumType ->
-  FaeContract argType accumType valType ->
-  Contract argType accumType valType
-newContract callTree accum0 faeContract =
-  Contract
-  {
-    inputs = Seq.fromList <$> traverse 
-      (\inputC -> do
-        val <- getInputContract inputC
-        return (inputContractID inputC, val)
-      ) 
-      (directInputs callTree),
-    accum = accum0,
-    result = mapRWST (fmap $ _3 %~ makeOutputs) $ getFaeContract faeContract,
-    escrows = Escrows $ Map.empty
-  }
-  where
-    makeOutputs outputCs = 
-      zipWith getOutputContract (pad outputCs) (outputTrees callTree) 
-    pad outputCs = 
-      outputCs ++ repeat (OutputContract $ \_ _ _ -> throw . MissingOutput)
-
-inputContract :: (Typeable a) => ContractID -> a -> InputContract
-inputContract !cID !x = InputContract cID $ do
-  cM <- Fae $ use $ _transientState . _contractUpdates . _useContracts . at cID
-  fE <- maybe
-    (throwM $ BadContractID cID)
-    return
-    cM
-  either
-    (throwM . BadContract cID) 
-    ($ toDyn x)
-    fE
-
-outputContract :: 
-  (Typeable argType, Typeable valType) =>
-  accumType ->
-  FaeContract argType accumType valType ->
-  FaeContract argType' accumType' ()
-outputContract accum0 faeContract = FaeContract $ tell 
-  [
-    OutputContract $ \callTree ancestors lastHash cID ->
-      abstract cID $ 
-      evalContract ancestors lastHash cID $ 
-      newContract callTree accum0 faeContract
-  ]
-
-inputValue ::
-  forall argType accumType valType.
-  (Typeable valType) =>
-  Int -> FaeContract argType accumType valType
-inputValue i = do
-  inputM <- FaeContract $ asks $ Seq.lookup i . fst
-  (inputID, inputDyn) <-
-    maybe
-      (throwM $ MissingInput i)
-      return
-      inputM
-  let err = BadValType inputID (typeRep $ Proxy @valType) (dynTypeRep inputDyn)
-  maybe (throwM err) return $ fromDynamic inputDyn
-
-evalContract :: 
-  (Typeable argType, Typeable valType) =>
-  [ContractID] -> Digest -> ContractID -> 
-  Contract argType accumType valType -> argType -> Fae valType
-evalContract ancestors lastHash thisID c@Contract{..} arg = do
-  Fae $ _transientState . _contractEscrows .= escrows
-  inputSeq <- inputs
-  (retVal, newAccum, outputs) <- runRWST result (inputSeq, arg) accum
-  sequence_ $ zipWith (newOutput (thisID : ancestors) lastHash) [0 ..] outputs
-  contractEscrows <- Fae $ use $ _transientState . _contractEscrows
-  setContract thisID $ 
-    evalContract ancestors lastHash thisID $
-    c & _accum .~ newAccum
-      & _escrows .~ contractEscrows
+  StateData accumType ->
+  Contract argType accumType valType -> 
+  ConcreteContract argType valType
+concrete state contract arg = do -- FaeContract
+  Fae f <- getContract contract
+  escrowArgM <- FaeContract $ view _escrowArg
+  let
+    state' = 
+      case escrowArgM of
+        Nothing -> state
+        Just (eID, entry) -> state & _escrows . _useEscrows . at eID ?~ entry
+    inputValues = Seq.empty
+    input = InputData{..}
+    (retVal, newState, outputs) = runRWS f input state'
+  sequence_ $ zipWith newOutput [0 ..] outputs
+  setContract $ concrete newState contract
   return retVal
 
+newOutput :: Integer -> AbstractContract -> FaeContract ()
+newOutput basename f = FaeContract $ do
+  cID <- view $ _callPath . to (flip ContractID basename)
+  let f' arg = pushContractState (_contractID .~ cID) $ f arg
+  lift $ FaeTX $ at cID ?= f'
+
 setContract :: 
-  forall argType valType.
   (Typeable argType, Typeable valType) =>
-  ContractID -> (argType -> Fae valType) -> Fae ()
-setContract cID f = Fae $
-  _transientState . _contractUpdates . _useContracts . at cID ?= 
-    Right (abstract cID f)
+  ConcreteContract argType valType -> 
+  FaeContract ()
+setContract f = FaeContract $ do
+  cID <- view _contractID
+  lift $ FaeTX $ at cID ?= abstract f
 
 abstract ::
   forall argType valType.
   (Typeable argType, Typeable valType) =>
-  ContractID -> (argType -> Fae valType) -> AbstractContract
-abstract cID f argDyn = 
-  case toDyn f `dynApply` argDyn of
-    Nothing -> 
-      throwM (BadArgType cID (dynTypeRep argDyn) $ typeRep (Proxy @argType))
-    Just x -> return x
-
-newOutput :: [ContractID] -> Digest -> Int -> AbstractIDContract -> Fae ()
-newOutput ancestors lastHash i f = do
+  ConcreteContract argType valType -> AbstractContract
+abstract c argDyn = do -- FaeContract
+  cID <- FaeContract $ view _contractID
   let 
-    newHash = lastHash <#> i
-    cID = ContractID newHash 
-  cOrErr <- try (evaluate $ f ancestors newHash cID) 
-  Fae $ _transientState . _contractUpdates . _useContracts . at cID ?= cOrErr
+    arg = fromDyn argDyn $
+      throw $ BadArgType cID (typeRep (Proxy @argType)) (dynTypeRep argDyn)
+  val <- c arg
+  return $ toDyn val
+
+-- Construction functions
+
+newContract :: 
+  Fae argType accumType valType -> 
+  Fae argType' accumType' (Contract argType accumType valType)
+newContract = return . Contract . return
+
+class ContractInput a where
+  inputContract :: 
+    (Typeable a) => 
+    ContractID -> a -> 
+    Contract argType accumType valType ->
+    Fae argType' accumType' (Contract argType accumType valType)
+
+inputContract_ ::
+  (Typeable a) =>
+  Maybe (EntryID, Dynamic) ->
+  ContractID -> a ->
+  Contract argType accumType valType ->
+  Fae argType' accumType' (Contract argType accumType valType)
+inputContract_ eArg cID x (Contract mf) = return $ Contract $ do -- FaeContract
+  CallPath path <- FaeContract $ view _callPath
+  c <- FaeContract $ lift $ FaeTX $ use $ 
+    at cID . 
+    defaultLens (throw $ BadContractID cID)
+  let 
+    newPath = CallPath $ snoc path $ shorten cID
+    update s =
+      s & _callPath .~ newPath
+        & _escrowArg .~ eArg
+  y <- pushContractState update (c $ toDyn x)
+  let update = _inputValues %~ flip snoc (cID, y)
+  pushFaeState update <$> mf
+
+instance ContractInput a where
+  inputContract = inputContract_ Nothing
+
+instance {-# OVERLAPPING #-} ContractInput (EscrowID tokT pubT privT) where
+  inputContract cID x c0 = do
+    (eID, entry) <- getEscrow $ entryID x
+    inputContract_ (Just (eID, entry)) cID x c0
+
+getEscrow :: EntryID -> Fae argType accumType (EntryID, Dynamic)
+getEscrow eID = Fae $ do
+  entry <- use $ _escrows . _useEscrows . at eID .
+    defaultLens (throw $ BadEscrowID eID)
+  _escrows . _useEscrows %= sans eID
+  return (eID, entry)
+
+outputContract :: 
+  (Typeable argType, Typeable valType) =>
+  accumType -> [EntryID] ->
+  Contract argType accumType valType ->
+  Fae argType' accumType' ()
+outputContract accum gives contract = do
+  escrows <- Escrows . Map.fromList <$> traverse getEscrow gives
+  let state = StateData{..}
+  Fae $ tell [abstract $ concrete state contract]
+
+inputValue ::
+  forall argType accumType valType.
+  (Typeable valType) =>
+  Int -> Fae argType accumType valType
+inputValue i = do
+  inputM <- Fae $ asks $ Seq.lookup i . inputValues
+  (inputID, inputDyn) <-
+    maybe
+      (throw $ MissingInput i)
+      return
+      inputM
+  let err = BadValType inputID (typeRep $ Proxy @valType) (dynTypeRep inputDyn)
+  maybe (throw err) return $ fromDynamic inputDyn
 

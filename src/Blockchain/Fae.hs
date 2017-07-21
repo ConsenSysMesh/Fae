@@ -1,21 +1,19 @@
 module Blockchain.Fae
   (
     -- * Fae
-    Fae, signer,
+    Fae,
     -- * Contract
     Contract, ContractID,
-    InputContract, OutputContract,
-    inputContract, outputContract,
+    inputContract, outputContract, inputValue,
     -- * Escrow
     EscrowID, PublicEscrowID, PrivateEscrowID,
     escrow, peek, close,
     -- * Transaction
-    Transaction,
-    newTransaction
+    Transaction
   ) where
 
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Escrow
 import Blockchain.Fae.Internal.Transaction
-import Blockchain.Fae.Internal.Fae
+import Blockchain.Fae.Internal.Monads
 
