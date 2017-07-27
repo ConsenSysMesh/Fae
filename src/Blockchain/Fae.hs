@@ -5,7 +5,7 @@ module Blockchain.Fae
     -- * Contract
     ContractID, spend, outputContract, inputValue,
     -- * Escrow
-    EscrowID, entryID, close,
+    EscrowID, entryID, close, returnEscrow
   ) where
 
 import Blockchain.Fae.Internal.Contract

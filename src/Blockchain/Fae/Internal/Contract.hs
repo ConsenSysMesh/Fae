@@ -100,14 +100,15 @@ returnContract accum gives contract = Fae $ do
     FaeContract . local (_inputs .~ inputs) . getFaeContract . 
     concrete state contract
 
-spend ::
+spend :: Fae argType accumType ()
+spend = Fae $ _spent .= True
+
+returnEscrow ::
   (Typeable argType, Typeable valType) =>
   [EntryID] -> 
   Fae argType () valType ->
   Fae argType' accumType' (Escrow argType valType)
-spend gives contract = do
-  Fae $ _spent .= True
-  Escrow <$> returnContract () gives contract
+returnEscrow gives contract = Escrow <$> returnContract () gives contract
 
 outputContract :: 
   (Typeable argType, Typeable valType) =>

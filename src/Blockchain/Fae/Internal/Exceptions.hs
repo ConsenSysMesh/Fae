@@ -32,7 +32,8 @@ data ContractException =
 data EscrowException =
   BadEscrowType EntryID TypeRep TypeRep |
   BadEscrowID EntryID |
-  StatefulEscrow ContractID
+  StatefulEscrow ContractID |
+  ClosedRewardEscrow EntryID
   deriving (Typeable, Show)
 
 instance Exception TransactionException 

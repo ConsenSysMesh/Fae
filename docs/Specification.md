@@ -195,6 +195,9 @@ The execution may not be caught, but terminates the entire transaction that
 called the contract as input; its return value is therefore replaced by an
 exceptional value that may be caught by any query of transaction return values.
 
+Finally, contracts (including [escrows](#escrows)) can be *spent*, which causes
+them to be deleted from storage.
+
 ### Contracts
 
 A contract is a function taking one argument and evaluating to a single return
@@ -212,18 +215,25 @@ contracts in their dependency tree.  The entire information necessary for
 resolving state changes to input contracts must be known *without* having to
 execute irrelevant and possibly untrusted code.
 
+Contracts may be "spent", which causes them to be removed from storage once
+their execution completes.
+
 ### Escrow
 
 Fae provides an "escrow" facility to securely pass private values between
 contracts.  An escrow account is simply a contract stored within another
-contract, which, when evaluated, is deleted.  Escrows are therefore not
-maintained as part of the persistent contract state but are specific to a single
-contract execution.  Evaluating an escrow is called "closing" it.
+contract, with no state; spending an escrow is called "closing" it, and it is an
+error for any contract evaluation to complete with escrows still open.  Escrows
+are therefore not maintained as part of the persistent contract state but are
+specific to a single contract execution.  Evaluating an escrow is called
+"closing" it.  
 
 Contracts (including escrows) can return escrow contracts to the caller; these
-escrow contracts can themselves be endowed with escrows, which are only
-available while the containing escrow contract is being evaluated.  It is an
-error for any contract evaluation to complete with escrows still open.
+escrow contracts, as well as any output contracts, can themselves be endowed
+with escrows, which are only available while the containing escrow contract is
+being evaluated.  These endowed escrow IDs are available as the inputs of the
+escrow or output contract, similarly to how [rewards](#block-rewards) are
+provided to transactions. 
 
 Escrows are identified by their *escrow ID*, which is a typed identifier that
 records the signature of the contract function.  This allows library functions

@@ -18,7 +18,7 @@ import Data.Maybe
 
 type Transaction a = Fae () () a
 
-data Reward = Reward
+data Reward
 
 runTransaction :: 
   forall a result.
@@ -39,7 +39,7 @@ runTransaction txID inputArgs transactionKey isReward f =
       escrowID = EscrowID entryID
 
       rewardEscrow :: Escrow () Reward
-      rewardEscrow = error "Rewards not implemented"
+      rewardEscrow = Escrow $ \arg -> throw $ ClosedRewardEscrow entryID
 
       inputs 
         | isReward = s |> (contractID, toDyn escrowID)
