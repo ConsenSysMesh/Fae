@@ -33,12 +33,7 @@ instance Serialize Digest where
     where hashSize = Hash.hashDigestSize Hash.SHA3_256
 
 instance Digestible Digest
-
-(<#>) :: (Serialize a, Serialize b) => a -> b -> Digest
-d1 <#> d2 = 
-  Hash.hashFinalize $ 
-  Hash.hashUpdates Hash.hashInit $
-  [Ser.encode d1, Ser.encode d2] 
+instance (Serialize a) => Digestible [a]
 
 signer :: Signature -> a -> PublicKey
 signer = undefined

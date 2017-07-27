@@ -10,132 +10,113 @@ import Control.Monad.RWS
 import Control.Monad.State
 
 import Data.Dynamic
+import qualified Data.IntMap as IntMap
+import Data.IntMap (IntMap)
 import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Sequence as Seq 
 import Data.Sequence (Seq)
 
+import GHC.Generics
+
 {- Internal monads -}
 
-newtype CallPath = CallPath (Seq ShortContractID)
-  deriving (Show, Serialize)
+data ContractID =
+  JustTransaction TransactionID |
+  TransactionOutput TransactionID Int |
+  InputOutput TransactionID ShortContractID Int
+  deriving (Show, Generic)
 
-instance Digestible CallPath
+instance Serialize ContractID
+instance Digestible ContractID
 
 newtype ShortContractID = ShortContractID Digest
   deriving (Eq, Ord, Show, Serialize)
 
-data ContractID =
-  ContractID
+instance Digestible ShortContractID
+
+type TransactionID = ShortContractID -- For simplicity
+
+newtype Storage = Storage { getStorage :: Map TransactionID TransactionEntry }
+
+data TransactionEntry =
+  TransactionEntry 
   {
-    path :: CallPath,
-    basename :: Integer
-  }
-  deriving (Show)
-
-data Contracts = 
-  Contracts
-  {
-    inputStorage :: Map ShortContractID Contracts,
-    outputStorage :: Map Integer AbstractContract
+    inputContracts :: Map ShortContractID Outputs,
+    outputs :: Outputs,
+    returnValue :: Dynamic
   }
 
-type AbstractContract = Dynamic -> FaeContract Dynamic
+type Outputs = IntMap AbstractContract
 
-newtype FaeBlock a = FaeBlock (StateT Contracts IO a)
-  deriving (Functor, Applicative, Monad, MonadThrow, MonadCatch)
-
-newtype FaeTX a = FaeTX (RWS PublicKey () Contracts a)
-  deriving (Functor, Applicative, Monad)
+type FaeBlock a = StateT Storage IO a
 
 data ContractData =
   ContractData
   {
-    callPath :: CallPath,
+    inputs :: Seq (ContractID, Dynamic),
     contractID :: ContractID,
-    escrowArg :: Maybe (EntryID, Dynamic)
+    outputID :: Int -> ContractID,
+    transactionKey :: PublicKey
   }
 
-newtype FaeContract a = FaeContract (ReaderT ContractData FaeTX a)
+data OutputData a =
+  OutputData 
+  {
+    updatedContract :: Maybe AbstractContract,
+    outputContracts :: Seq AbstractContract,
+    retVal :: a,
+    newEscrow :: Maybe (EntryID, Dynamic)
+  }
+
+newtype FaeContract a = FaeContract { getFaeContract :: Reader ContractData a }
   deriving (Functor, Applicative, Monad)
+
+type AbstractContract = Dynamic -> FaeContract (OutputData Dynamic)
 
 {- Monad for contract authors -}
 
-newtype EntryID = EntryID Int
+type ConcreteContract argType valType = 
+  argType -> FaeContract (OutputData valType)
+
+newtype EntryID = EntryID Digest
   deriving (Eq, Ord, Show)
 
-newtype Escrows =
-  Escrows
-  {
-    useEscrows :: Map EntryID Dynamic -- Escrow tok pub priv
-  }
+newtype EscrowID argType valType = EscrowID { entryID :: EntryID }
 
-data InputData argType = 
-  InputData
-  {
-    inputValues :: Seq (ContractID, Dynamic),
-    arg :: argType
-  }
+type Escrows = Map EntryID Dynamic -- Escrow argType valType
+newtype Escrow argType valType = Escrow (ConcreteContract argType valType)
 
 data StateData accumType =
   StateData
   {
     escrows :: Escrows,
-    accum :: accumType
+    accum :: accumType,
+    spent :: Bool
   }
 
 newtype Fae argType accumType valType =
-  Fae (RWS (InputData argType) [AbstractContract] (StateData accumType) valType)
+  Fae 
+  {
+    getFae :: RWST argType (Seq AbstractContract) (StateData accumType) 
+             FaeContract valType
+  }
   deriving (Functor, Applicative, Monad)
 
 -- TH
-makeLenses ''Contracts
-makeLenses ''Escrows
+makeLenses ''Storage
+makeLenses ''TransactionEntry
 makeLenses ''ContractData
-makeLenses ''InputData
+makeLenses ''OutputData
 makeLenses ''StateData
 
 shorten :: ContractID -> ShortContractID
-shorten ContractID{..} = ShortContractID $ digest path <#> basename
-
-type instance Index Contracts = ContractID
-type instance IxValue Contracts = AbstractContract
-instance Ixed Contracts 
-instance At Contracts where
-  at (ContractID (CallPath path) basename) =
-    case uncons path of
-      Nothing -> 
-        _outputStorage . at basename
-      Just (sID, rest) -> 
-        _inputStorage . 
-        at sID . 
-        defaultLens (Contracts Map.empty Map.empty) .
-        at (ContractID (CallPath rest) basename)
-
-instance MonadReader argType (Fae argType accumType) where
-  ask = Fae $ view _arg
-  local f = pushFaeState (_arg %~ f)
+shorten = ShortContractID . digest
 
 instance MonadState accumType (Fae argType accumType) where
   get = Fae $ use _accum
   put = Fae . (_accum .=)
 
-runTX :: 
-  (Typeable a) =>
-  PublicKey -> Contracts -> ContractData -> FaeContract a -> Contracts
-runTX k s d (FaeContract m) = fst $ execRWS m' k s
-  where
-    FaeTX m' = do
-      retVal <- runReaderT m d
-      FaeTX $ at (contractID d) ?= const (return $ toDyn retVal)
-
-pushContractState :: 
-  (ContractData -> ContractData) -> FaeContract a -> FaeContract a
-pushContractState f (FaeContract m) = FaeContract $ local f m
-
-pushFaeState :: 
-  (InputData argType -> InputData argType) -> 
-  Fae argType accumType valType -> 
-  Fae argType accumType valType
-pushFaeState f (Fae m) = Fae $ local f m
+sender :: Fae argType accumType PublicKey
+sender = Fae $ lift $ FaeContract $ view _transactionKey
 

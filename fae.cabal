@@ -21,7 +21,6 @@ library
   other-modules:
     Blockchain.Fae.Internal.Contract
     Blockchain.Fae.Internal.Crypto
-    Blockchain.Fae.Internal.Escrow
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.Lens
     Blockchain.Fae.Internal.Monads

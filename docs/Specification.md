@@ -69,30 +69,29 @@ A transaction is the following data type:
 ```hs
 type Code
 type Signature -- Some cryptographic signature type
+type ContractID
 
 data Transaction =
   Transaction
   {
     source :: Text,
-    calls :: [Text],
-    creates :: [Text],
+    inputs :: [(ContractID, Text)],
     extra :: [(Text, Text)],
     signature :: Signature
   }
 ```
 
 The `source` is executed as described in [Smart Contracts](#smart-contracts).
-It must define a value `tx`, whose type is analogous to a `Contract` taking no
-arguments (see [Storage](#storage)).  The contract's return value may be used by
-the implementation as a kind of return status for the transaction.
+It must define a value `tx`, whose type is a contract taking no arguments and
+maintaining no state.  The contract's return value may be used by the
+implementation as a kind of return status for the transaction.
 
-The `calls` and `creates` fields specify the exact entry IDs that are,
-respectively, called and created by the transaction contract.  These IDs are
-used to construct the actual `Contract` that is called in the transaction.  The
+The `inputs` specifies the exact contracts and their arguments that are called
+by the transaction; this is the only place that contracts may be called.  The
 purpose of this stricture is to prevent the transaction author from maliciously
-embedding expensive code in the definition of the entry IDs.  These two fields
-must be given as lists of *literals* in the transaction as it is transmitted
-throughout the network.
+embedding expensive code in the definition of the entry IDs.  This field must be
+given as a list of *literals* in the transaction as it is transmitted throughout
+the network.
 
 The `extra` field is an associative list each entry of which contains module
 names and associated files (e.g. Haskell interface files) facilitating the
@@ -122,11 +121,12 @@ open-ended manner.
 
 According to the policy of the implementation, special *reward* transactions may
 be placed in the `txs` list.  These transactions are like any other except that
-their `tx` contract takes one argument, an escrow ID (see [Escrow](#escrow)) for
-a special type `Reward`, which is defined to have just one value, which is an
-opaque token.  During execution, this escrow ID is valid and refers to an escrow
-account containing a `Reward` value.  Thus, custom currencies may provide funds
-in exchange for a `Reward`, social contracts may offer privileges, and so on.
+their `tx` contract is run with an additional "input", placed after all the
+others, which is an escrow ID (see [Escrow](#escrow)) for a special type
+`Reward`, which is defined to have just one value, which is an opaque token.
+During execution, this escrow ID is valid and refers to an escrow account
+containing a `Reward` value.  Thus, custom currencies may provide funds in
+exchange for a `Reward`, social contracts may offer privileges, and so on.
 
 ### Source modules
 
@@ -148,100 +148,105 @@ to write these policies.
 
 ### Storage
 
-Smart contracts in Fae occupy positions in a filesystem-like storage: each has a
-unique hash identifier called the *basename* that is contained in a *path*,
-which specifies the call stack leading to the creation of the basenamed
-contract.  The pair of the path and basename is the *contract ID*; the path
-components are themselves contract IDs.  
+Smart contracts in Fae are organized in a three-level storage hierarchy.  The top
+level is indexed by transaction IDs, each one containing an object with three
+components:
 
-Transactions are simply contracts at the top level of the storage; each output
-of a contract is placed with its basename under the path of its parent; and each
-input initiates a new path component at its contract ID.  As contracts,
-transations are treated specially and are not themselves stored, but rather just
-their return value, so the transaction cannot be replayed.
+  - The *inputs*, referenced by contract ID;
+  - The *direct outputs*, namely, the outputs created by the code of the
+    transaction itself, listed in order of creation;
+  - The *return value*.
 
-Immediately upon evaluation (as opposed to [execution](#block-execution)) of any
-contract, the path components of its inputs are created and the inputs
-themselves are lazily evaluated.  Upon complete execution of the contract, its
-outputs are assigned basenames and stored under them.
+Each input ID stores its own list of direct outputs, which are those created by
+the invocation of the input by the transaction.  The various lists of direct
+outputs contain the contracts themselves, as descrived in
+[Contracts](#contracts).  The return value of the transaction is whatever the
+transaction code evaluates to eventually, stored as a dynamically typed value.
+Transaction return values may not be referenced from within Fae, and are
+intended to be informational.
 
-Contracts themselves, as stored under their contract ID, contain two pieces of
-mutable data: the escrows and the state.  These are updated in-memory during
-contract execution and the results stored back under the same contract ID once
-execution is complete.  Contract execution also produces a return value, but
-this is not stored, as it may contain private information.
+Note that although transactions are abstractly considered as contracts, they
+store the return value and not the contract code, because the code may contain
+sensitive computations that must not be replayed; by contrast, actual contracts
+(stored as some direct output) store the code and not the return value, because
+the code is intended to be called repeatedly, and the latest return value may be
+sensitive data that must not be made public.
+
+Each contract is identified by its *contract id*, which is the list of *path
+components* leading to the direct output containing the contract.  Thus, every
+contract is a two- or three-level path, consisting of a transaction id,
+optionally an input contract ID, and a sequence number in the list of direct
+outputs.  The optional second component may be abbreviated by its hash to avoid
+creating indefinitely long contract IDs.
+
+When a transaction is executed, its input contracts are immediately evaluated
+with their given arguments and their entries in the hierarchy populated with
+their outputs, in the order that the inputs were given.  The outputs of any
+transaction or contract are created dynamically during execution and their
+hierarchy entries are created after execution is complete.
+
+Contracts themselves, as stored under their contract ID, contain a piece of
+mutable data that is updated in-memory during contract execution and the results
+stored back under the same contract ID once execution is complete.
 
 If, during the course of contract execution, an exception occurs, then it
 follows that no outputs are created and none of the mutable data is changed.
-Exceptions cannot be caught in a contract but rather terminate all contract
-executions in the path above the contract that first raised them.
+The execution may not be caught, but terminates the entire transaction that
+called the contract as input; its return value is therefore replaced by an
+exceptional value that may be caught by any query of transaction return values.
 
 ### Contracts
 
-A contract (and a transaction) is a function that takes an argument and computes
-a return value, possibly with the side effect of invoking or creating other
-contracts or escrows.  A contract may maintain a nontrivial mutable state, and
-therefore the executions of these contracts must be sequenced in order for the
-state updates to avoid race conditions, which entails some restrictions on their
-operation for security reasons.
+A contract is a function taking one argument and evaluating to a single return
+value, maintaining an author-defined state.
 
-The contracts (but not the escrows) that it invokes must be enumerated with
-their arguments at the time of the caller's creation; by contrast, output
-contracts can be created programmatically during execution.  This restriction is
-imposed to ensure that contracts may be executed lazily, for the following
-reason.
+Since contracts are stateful, their execution must be sequenced to avoid race
+conditions.  This is the primary reason that the format for input contract
+arguments is so restricted, because if a contract's evaluation is locked up by a
+nonterminating computation, the contract is forever unusable thereafter.
 
 Both the existence of an update to a particular contract, as well as the
-*nonexistence* of updates to other contracts, must be known in advance, so that
-future transactions may selectively execute just those contracts in their
-dependency tree.  The entire information necessary for resolving state changes
-to input contracts must be known *without* having to execute irrelevant and
-possibly untrusted code.
-
-There is also a security detail.  The arguments cannot be computed by the
-calling contract because to allow untrusted computation to intervene in contract
-invocation exposes the entire system to crippling denial-of-service attacks
-where transactions spuriously invoke contracts via a nonterminating computation,
-thus blocking them from ever being used by another transaction.
-
-Because a contract cannot directly accept variable arguments, some operations
-must span several transactions in which the first calls some contracts to obtain
-resources, then creates outputs that use these resources in their own inputs,
-and so on.  The outputs must, of course, be called in later transactions.  This
-scheme has the aspect of a "confirmation" mechanism that proves that the caller
-does, in fact, possess the resources before attempting to use them.  Possession
-is demonstrated by *complete and successful* execution of the contract, and the
-burden of this execution must fall on the transaction that attempts to obtain
-the resource, and not on the contract that will receive it.
+*nonexistence* of updates to other contracts, must be known without executing
+any user code, so that future transactions may selectively execute just those
+contracts in their dependency tree.  The entire information necessary for
+resolving state changes to input contracts must be known *without* having to
+execute irrelevant and possibly untrusted code.
 
 ### Escrow
 
-Fae provides an "internal escrow" facility to enable private or scarce values to
-be handled in contract code.  At any time various internal escrow accounts may
-be open, each with an *escrow ID* that contains the type of escrowed value but
-*not* the value itself.    
+Fae provides an "escrow" facility to securely pass private values between
+contracts.  An escrow account is simply a contract stored within another
+contract, which, when evaluated, is deleted.  Escrows are therefore not
+maintained as part of the persistent contract state but are specific to a single
+contract execution.  Evaluating an escrow is called "closing" it.
 
-  - Escrow accounts are private to the contract that created them, and escrow
-    IDs cannot be (meaningfully) directly passed as arguments to input
-    contracts.
+Contracts (including escrows) can return escrow contracts to the caller; these
+escrow contracts can themselves be endowed with escrows, which are only
+available while the containing escrow contract is being evaluated.  It is an
+error for any contract evaluation to complete with escrows still open.
 
-  - Each escrow account has a *private value*, its actual contents, and a
-    *public value*.  Regardless of access control, the account may be *peeked
-    at* to obtain the public value.
+Escrows are identified by their *escrow ID*, which is a typed identifier that
+records the signature of the contract function.  This allows library functions
+in [source modules](#source-modules) to take escrow IDs of a particular
+signature in order to manipulate private values as part of the library.
 
-  - An escrow account is created with an *access control token*, whose presence
-    proves that the caller is authorized to *close* the escrow account.  Closing
-    an escrow account returns its private value and invalidates its escrow ID.
+This feature enables complex economic activity:
 
-  - Escrow IDs are typed to include public, private, and token types, so that
-    functions may express precisely through the type of the escrow ID what kind
-    of escrowed value they accept.
+  - A scarce value can be passed around in contract code by wrapping it in an
+    escrow taking as its argument a private token type.  This value can then
+    only be directly manipulated by library functions to which the creator of
+    the value provided the token.
 
-Although escrows are contract-specific, there is a facility to transfer their
-contents from a contract to one of its outputs.  Doing so causes the parent
-contract to close its escrow and the output contract to open a new one with the
-same contents.  Thus, responsibility for the private value contained in the
-escrow rests with the contract that owns the escrow ID.
+  - A contract can function as a storefront by using complex escrow contracts to
+    clear sales.  The storefront contract accepts an argument identifying the
+    product the caller wishes to purchase, and returns an escrow contract to
+    sell it.  This escrow contract takes a value in some currency (likely
+    itself an escrow), checks it against the price, and if correct, returns a
+    simple escrow for the product.  If the payment is insufficient, the selling
+    escrow may throw an exception, causing the entire transaction to be rolled
+    back, so that the product returns to the storefront.  Since it is also an
+    error if the selling escrow is never closed, the buyer cannot maliciously
+    sit on the product without either buying or returning it. 
 
 ## Virtual machine
 
@@ -269,11 +274,12 @@ the next iteration of this cycle.  This structure is adapted to the adversarial
 situation of a blockchain by assigning *ownership* to some of the intermediate
 values; these are the contracts.  Such values can only be used by proving
 ownership via supplied arguments to the contracts.  Once this is done, those
-values can be passed to the function body of the calling contract, which in turn
-produces another value (the one owned by the calling contract) and possibly
+values can be passed to the function body of the calling transaction, which in
+turn produces another value (the one owned by the calling contract) and possibly
 several other owned values, the output contracts.
 
 Ideally, a self-contained fragment of a Fae blockchain could be created by
 writing simply a normal functional program, annotating those expressions that
 should receive ownership.  As it is impractical to create a new language for
 this purpose, the present structure serves the same purpose.
+
