@@ -3,8 +3,9 @@ module Blockchain.Fae.Internal.Transaction where
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto hiding (signer)
 import Blockchain.Fae.Internal.Exceptions
-import Blockchain.Fae.Internal.Monads
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.Monads
+import Blockchain.Fae.Internal.Reward
 
 import Control.Monad.Reader
 
@@ -18,8 +19,6 @@ import Data.Maybe
 
 type Transaction a = Fae () () a
 
-data Reward
-
 runTransaction :: 
   forall a result.
   (Typeable a, FaeReturn a a) =>
@@ -32,15 +31,25 @@ runTransaction txID inputArgs transactionKey isReward f =
       inputIDs = map fst inputArgs
     inputOutputData <- zip inputIDs <$> 
       traverse (getInput txID transactionKey) inputArgs
-    let 
+    let
       entryID = EntryID $ digest txID
 
-      escrowID :: EscrowID () Reward
+      escrowID :: RewardEscrowID
       escrowID = EscrowID entryID
 
-      rewardEscrow :: Escrow () Reward
-      rewardEscrow = Escrow $ \arg -> throw $ ClosedRewardEscrow entryID
+      rewardState = 
+        StateData
+        {
+          escrows = Map.empty,
+          accum = (),
+          spent = False
+        }
 
+      rewardEscrow :: RewardEscrow
+      rewardEscrow = Escrow $ concrete rewardState $ do
+        Token <- ask
+        return Reward
+    let 
       inputs 
         | isReward = s |> (contractID, toDyn escrowID)
         | otherwise = s

@@ -2,6 +2,7 @@
 module BCoin
   (
     BCoin, -- The constructor is not exported
+    CoinArg(Peek),
     CoinEscrow,
     deposit,
     add,
@@ -10,8 +11,6 @@ module BCoin
   ) where
 
 import Blockchain.Fae
-import Blockchain.Fae.Contracts (sigContract)
-import Blockchain.Fae.Crypto (verifySig)
 
 import Numeric.Natural
 
@@ -19,31 +18,26 @@ import Numeric.Natural
 -- able to construct this, preserving scarcity.
 newtype BCoin = BCoin { value :: Natural }
 
--- | Private escrow token
-data Token = Token
+data CoinArg = Peek | Close
 
-type CoinEscrow = EscrowID Token Natural BCoin 
+type CoinEscrowID = EscrowID CoinArg (Either Natural BCoin)
+type CoinEscrow = Escrow CoinArg BCoin
 
-coinEscrow :: BCoin -> CoinEscrow
-coinEscrow = escrow Token value
-
-coinClose :: CoinEscrow -> BCoin
-coinClose = close Token
-
--- | The first argument is evaluated during creation.
---   The second argument is a coin to spend and an identity to give it to.
-deposit :: (CoinEscrow, PublicKey) -> Fae EntryID
-deposit (coinID, key) = mdo
-  coin <- coinClose coinID
-  newID <- label "BCoin" $ createPure (sigContract coin coinEscrow key newID)
-  return newID
+coinEscrow :: Coin -> Fae argType accumType CoinEscrow
+coinEscrow coin = returnEscrow [] $ do
+  arg <- ask
+  case arg of
+    Peek -> return $ Left (value coin)
+    Close -> do
+      spend
+      return $ Right coin
 
 -- | The first argument is evaluated during creation.
 --   The second argument is a pair of coins to add.
 add :: (CoinEscrow, CoinEscrow) -> Fae CoinEscrow
 add (coin1ID, coin2ID) = do
-  coin1 <- coinClose coin1ID
-  coin2 <- coinClose coin2ID
+  coin1 <- close coin1ID Close
+  coin2 <- close coin2ID Close
   let coin = BCoin $ value coin1 + value coin2
   coinEscrow coin 
 

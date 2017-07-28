@@ -101,7 +101,9 @@ newtype Fae argType accumType valType =
     getFae :: RWST argType (Seq AbstractContract) (StateData accumType) 
              FaeContract valType
   }
-  deriving (Functor, Applicative, Monad)
+  deriving (Functor, Applicative, Monad, MonadReader argType)
+
+type AnyFae valType = forall argType accumType. Fae argType accumType valType
 
 -- TH
 makeLenses ''Storage

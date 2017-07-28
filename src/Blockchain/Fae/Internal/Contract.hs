@@ -30,24 +30,6 @@ instance {-# OVERLAPPING #-}
     eID <- EntryID . digest <$> lift (FaeContract $ view _contractID)
     return (EscrowID eID, Just (eID, toDyn e))
 
-close :: 
-  (Typeable argType, Typeable result, FaeReturn result valType) =>
-  EscrowID argType valType -> argType -> Fae argType' accumType' result
-close (EscrowID eID) arg = do
-  eDyn <- Fae $ use $ _escrows . at eID . defaultLens (throw $ BadEscrowID eID)
-  let 
-    Escrow e = 
-      fromDyn eDyn $ 
-        throw $ BadEscrowType eID (dynTypeRep $ toDyn eID) (dynTypeRep eDyn)
-  OutputData{..} <- Fae $ lift $ e arg
-  when (isNothing updatedContract) $ Fae $ _escrows %= sans eID 
-  Fae $ tell outputContracts
-  case newEscrow of
-    Nothing -> return retVal
-    Just (eID, escrow) -> Fae $ do
-      _escrows . at eID ?= escrow
-      return retVal
-
 concrete :: 
   forall result argType accumType valType.
   (Typeable argType, Typeable result, FaeReturn result valType) =>
@@ -120,6 +102,35 @@ outputContract accum gives contract = do
   Fae $ tell $ Seq.singleton $ abstract c
   outputID <- Fae $ lift $ FaeContract $ view $ _outputID . to ($ i)
   return outputID
+
+open ::
+  (Typeable argType, Typeable valType) =>
+  [EntryID] ->
+  Fae argType () valType ->
+  Fae argType' accumType' (EscrowID argType valType)
+open gives contract = do
+  e <- returnEscrow gives contract
+  (esID, Just (eID, eDyn)) <- faeReturn e
+  Fae $ _escrows . at eID ?= eDyn
+  return esID
+
+close :: 
+  (Typeable argType, Typeable result, FaeReturn result valType) =>
+  EscrowID argType valType -> argType -> Fae argType' accumType' result
+close (EscrowID eID) arg = do
+  eDyn <- Fae $ use $ _escrows . at eID . defaultLens (throw $ BadEscrowID eID)
+  let 
+    Escrow e = 
+      fromDyn eDyn $ 
+        throw $ BadEscrowType eID (dynTypeRep $ toDyn eID) (dynTypeRep eDyn)
+  OutputData{..} <- Fae $ lift $ e arg
+  when (isNothing updatedContract) $ Fae $ _escrows %= sans eID 
+  Fae $ tell outputContracts
+  case newEscrow of
+    Nothing -> return retVal
+    Just (eID, escrow) -> Fae $ do
+      _escrows . at eID ?= escrow
+      return retVal
 
 inputValue ::
   forall argType accumType valType.

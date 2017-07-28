@@ -1,14 +1,17 @@
 module Blockchain.Fae
   (
     -- * Fae
-    Fae, sender,
+    AnyFae, Fae, sender,
     -- * Contract
     ContractID, spend, outputContract, inputValue,
     -- * Escrow
-    EscrowID, entryID, close, returnEscrow
+    EscrowID, entryID, open, close, returnEscrow,
+    -- * Rewards
+    Reward, RewardEscrow, RewardEscrowID, claimReward
   ) where
 
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Monads
+import Blockchain.Fae.Internal.Reward
 

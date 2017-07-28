@@ -17,6 +17,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     
     Blockchain.Fae
+    Blockchain.Fae.Contracts.Currency
     Blockchain.Fae.Crypto
   other-modules:
     Blockchain.Fae.Internal.Contract
@@ -24,6 +25,7 @@ library
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.Lens
     Blockchain.Fae.Internal.Monads
+    Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Transaction
   build-depends:       
     base >= 4.7 && < 5,
