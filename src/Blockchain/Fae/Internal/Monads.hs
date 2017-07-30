@@ -82,10 +82,18 @@ type ConcreteContract argType valType =
 newtype EntryID = EntryID Digest
   deriving (Eq, Ord, Show)
 
-newtype EscrowID argType valType = EscrowID { entryID :: EntryID }
+newtype EscrowID argType valType = EscrowID EntryID deriving (Typeable)
+newtype Escrow argType valType = Escrow (ConcreteContract argType valType)
+
+data AnyEscrowID = 
+  forall argType valType. SomeEscrowID (EscrowID argType valType)
+
+newtype PrivateEscrowID argType valType = 
+  PrivateEscrowID EntryID deriving (Typeable)
+newtype PrivateEscrow argType valType = 
+  PrivateEscrow (ConcreteContract argType valType)
 
 type Escrows = Map EntryID Dynamic -- Escrow argType valType
-newtype Escrow argType valType = Escrow (ConcreteContract argType valType)
 
 data StateData accumType =
   StateData

@@ -17,8 +17,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     
     Blockchain.Fae
-    Blockchain.Fae.Contracts.Currency
     Blockchain.Fae.Crypto
+    Blockchain.Fae.Currency
   other-modules:
     Blockchain.Fae.Internal.Contract
     Blockchain.Fae.Internal.Crypto

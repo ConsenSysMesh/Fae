@@ -1,4 +1,4 @@
-module Blockchain.Fae.Contracts.Currency 
+module Blockchain.Fae.Currency 
   (
     Currency(..),
     Coin, Token, reward
