@@ -12,6 +12,7 @@ type RewardEscrow = Escrow Token Reward
 type RewardEscrowID = EscrowID Token Reward
 
 claimReward :: 
+  (Typeable argType, Typeable valType) =>
   RewardEscrowID -> Fae argType accumType valType -> Fae argType accumType valType
 claimReward eID f = do
   Reward <- close eID Token

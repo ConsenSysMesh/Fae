@@ -5,11 +5,11 @@ module Blockchain.Fae
     -- * Contract
     ContractID, spend, outputContract, inputValue,
     -- * Escrow
-    EscrowID, open, close, returnEscrow,
+    Escrow, EscrowID, AnyEscrowID(..), open, close, returnEscrow, transferEscrow,
     -- * Rewards
     Reward, RewardEscrow, RewardEscrowID, claimReward,
     -- * Overloaded functions
-    FaeReturn, IsEscrow, Close
+    FaeReturn, IsEscrow, HasEntryID
   ) where
 
 import Blockchain.Fae.Internal.Contract

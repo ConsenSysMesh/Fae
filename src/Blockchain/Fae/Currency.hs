@@ -22,7 +22,7 @@ import Numeric.Natural
 -- because, possibly, not all "encryptions" support all the below
 -- "homomorphic" operations.  Note that no actual encryption needs to be
 -- involved.
-class Currency tok coin where
+class (Typeable tok, Typeable coin) => Currency tok coin where
   -- | Almost an @Ord@ instance; for comparing coin values.  
   balance :: EscrowID tok coin -> EscrowID tok coin -> AnyFae Ordering
   -- | Create a new value.  It is important that this function be strict in

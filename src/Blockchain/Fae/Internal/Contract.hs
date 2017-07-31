@@ -17,7 +17,7 @@ import qualified Data.Sequence as Seq
 import Data.Proxy
 
 class (Typeable result) => FaeReturn result valType where
-  faeReturn :: valType -> Fae argType accumType (result, Maybe (EntryID, Dynamic))
+  faeReturn :: valType -> AnyFae (result, Maybe (EntryID, Dynamic))
 
 instance (Typeable valType) => FaeReturn valType valType where
   faeReturn x = return (x, Nothing)
@@ -44,9 +44,14 @@ concrete ::
   StateData accumType ->
   Fae argType accumType valType -> 
   ConcreteContract argType result
-concrete state f arg = do -- FaeContract
+concrete state f InputData{..} = do -- FaeContract
+  let 
+    state' =
+      case inputEscrow of
+        Nothing -> state
+        Just (eID, escrow) -> state & _escrows %~ Map.insert eID escrow
   ((retVal, newEscrow), newState, outputContracts) <-
-    runRWST (getFae $ faeReturn =<< f) arg state
+    runRWST (getFae $ faeReturn =<< f) inputArg state'
   contractID <- FaeContract $ view $ _contractID
   when (not $ Map.null $ escrows newState) $
     throw $ OpenEscrows contractID
@@ -64,11 +69,11 @@ abstract ::
   forall argType valType.
   (Typeable argType, Typeable valType) =>
   ConcreteContract argType valType -> AbstractContract
-abstract c argDyn = do
+abstract c InputData{..} = do
   cID <- FaeContract $ view _contractID
   let 
-    arg = fromDyn argDyn $
-      throw $ BadArgType cID (typeRep (Proxy @argType)) (dynTypeRep argDyn)
+    arg = fromDyn inputArg $
+      throw $ BadArgType cID (typeRep (Proxy @argType)) (dynTypeRep inputArg)
   val <- c arg
   return $ val & _retVal %~ toDyn
 
@@ -76,7 +81,7 @@ returnContract ::
   (Typeable argType, Typeable valType) =>
   accumType -> [AnyEscrowID] -> 
   Fae argType accumType valType ->
-  Fae argType' accumType' (ConcreteContract argType valType)
+  AnyFae (ConcreteContract argType valType)
 returnContract accum gives contract = Fae $ do
   escrowList <- forM gives $ \(SomeEscrowID (EscrowID eID)) -> do
     entry <- use $ _escrows . at eID . defaultLens (throw $ BadEscrowID eID)
@@ -105,18 +110,31 @@ instance IsEscrow PrivateEscrow where
   escrow = PrivateEscrow
 
 returnEscrow ::
-  forall escrow argType valType argType' accumType'.
+  forall escrow argType valType.
   (Typeable argType, Typeable valType, IsEscrow escrow) =>
   [AnyEscrowID] -> 
   Fae argType () valType ->
-  Fae argType' accumType' (escrow argType valType)
+  AnyFae (escrow argType valType)
 returnEscrow gives contract = escrow <$> returnContract () gives contract
+
+transferEscrow ::
+  (Typeable argType, Typeable valType) =>
+  EscrowID argType valType ->
+  AnyFae (Escrow argType valType)
+transferEscrow (EscrowID eID) = Fae $ do
+  eDyn <- use $ _escrows . at eID . defaultLens (throw $ BadEscrowID eID)
+  let 
+    e = 
+      fromDyn eDyn $ 
+        throw $ BadEscrowType eID (dynTypeRep $ toDyn eID) (dynTypeRep eDyn)
+  _escrows %= sans eID
+  return e
 
 outputContract :: 
   (Typeable argType, Typeable valType) =>
   accumType -> [AnyEscrowID] ->
   Fae argType accumType valType ->
-  Fae argType' accumType' ContractID
+  AnyFae ContractID
 outputContract accum gives contract = do
   (c, i) <- Fae $ listens Seq.length $ getFae $ returnContract accum gives contract
   Fae $ tell $ Seq.singleton $ abstract c
@@ -128,34 +146,35 @@ open ::
   (Typeable argType, Typeable valType) =>
   [AnyEscrowID] ->
   Fae argType () valType ->
-  Fae argType' accumType' (EscrowID argType valType)
+  AnyFae (EscrowID argType valType)
 open gives contract = do
   (e :: Escrow argType valType) <- returnEscrow gives contract
   (esID, Just (eID, eDyn)) <- faeReturn e
   Fae $ _escrows . at eID ?= eDyn
   return esID
 
-class Close escrowID where
-  close :: 
-    (Typeable argType, Typeable result, FaeReturn result valType) =>
-    escrowID argType valType -> argType -> Fae argType' accumType' result
+class HasEntryID escrowID where
+  entryID :: escrowID argType valType -> EntryID
 
-instance Close EscrowID where
-  close (EscrowID eID) = close_ eID
+instance HasEntryID EscrowID where
+  entryID (EscrowID eID) = eID
 
-instance Close PrivateEscrowID where
-  close (PrivateEscrowID eID) = close_ eID
+instance HasEntryID PrivateEscrowID where
+  entryID (PrivateEscrowID eID) = eID
 
-close_ :: 
-  (Typeable argType, Typeable result) =>
-  EntryID -> argType -> Fae argType' accumType' result
-close_ eID arg = do
+close :: 
+  forall input result argType escrowID.
+  (HasEntryID escrowID, FaeReturn input argType, Typeable input, Typeable result) =>
+  escrowID input result -> argType -> AnyFae result
+close escrowID arg = do
+  let eID = entryID escrowID
   eDyn <- Fae $ use $ _escrows . at eID . defaultLens (throw $ BadEscrowID eID)
   let 
     Escrow e = 
       fromDyn eDyn $ 
         throw $ BadEscrowType eID (dynTypeRep $ toDyn eID) (dynTypeRep eDyn)
-  OutputData{..} <- Fae $ lift $ e arg
+  (inputArg :: input, inputEscrow) <- faeReturn arg
+  OutputData{..} <- Fae $ lift $ e InputData{..}
   when (isNothing updatedContract) $ Fae $ _escrows %= sans eID 
   Fae $ tell outputContracts
   case newEscrow of
@@ -165,9 +184,9 @@ close_ eID arg = do
       return retVal
 
 inputValue ::
-  forall argType accumType valType.
+  forall valType.
   (Typeable valType) =>
-  Int -> Fae argType accumType valType
+  Int -> AnyFae valType
 inputValue i = Fae $ do
   inputM <- lift $ FaeContract $ asks $ Seq.lookup i . inputs
   (inputID, inputDyn) <-

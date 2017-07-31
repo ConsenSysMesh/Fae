@@ -14,7 +14,7 @@ import qualified Data.Serialize as Ser
 import qualified Data.Serialize.Put as Ser
 import qualified Data.Serialize.Get as Ser
 
-data PublicKey = PublicKey deriving (Eq)
+data PublicKey = PublicKey deriving (Eq, Show)
 data Signature = Signature
 type Digest = Hash.Digest Hash.SHA3_256
 

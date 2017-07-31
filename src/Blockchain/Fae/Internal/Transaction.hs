@@ -63,8 +63,11 @@ runTransaction txID inputArgs transactionKey isReward f =
         | otherwise = Map.fromList newEscrows
       accum = ()
       stateData = StateData{spent = False, ..}
+
+      inputArg = ()
+      inputEscrow = Nothing
       
-    let FaeContract c = concrete stateData f ()
+    let FaeContract c = concrete stateData f InputData{..}
     let outputData = runReader c contractData 
 
     traverse (uncurry (assign.at) . (_2 %~ updatedContract)) inputOutputData
@@ -93,13 +96,14 @@ runTransaction txID inputArgs transactionKey isReward f =
 getInput :: 
   TransactionID -> PublicKey -> (ContractID, Dynamic) -> 
   FaeBlock (OutputData Dynamic)
-getInput txID transactionKey (contractID, arg) = do
+getInput txID transactionKey (contractID, inputArg) = do
   c <- use $ at contractID . defaultLens (throw $ BadContractID contractID) 
   let 
     inputs = Seq.empty
     outputID = InputOutput txID (shorten contractID)
     contractData = ContractData{..}
-  let FaeContract f = c arg
+    inputEscrow = Nothing
+  let FaeContract f = c InputData{..}
   return $ runReader f contractData 
 
 type instance Index Storage = ContractID

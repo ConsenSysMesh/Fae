@@ -72,12 +72,19 @@ data OutputData a =
 newtype FaeContract a = FaeContract { getFaeContract :: Reader ContractData a }
   deriving (Functor, Applicative, Monad)
 
-type AbstractContract = Dynamic -> FaeContract (OutputData Dynamic)
+data InputData a =
+  InputData
+  {
+    inputArg :: a,
+    inputEscrow :: Maybe (EntryID, Dynamic)
+  }
+
+type AbstractContract = InputData Dynamic -> FaeContract (OutputData Dynamic)
 
 {- Monad for contract authors -}
 
 type ConcreteContract argType valType = 
-  argType -> FaeContract (OutputData valType)
+  InputData argType -> FaeContract (OutputData valType)
 
 newtype EntryID = EntryID Digest
   deriving (Eq, Ord, Show)
@@ -86,7 +93,9 @@ newtype EscrowID argType valType = EscrowID EntryID deriving (Typeable)
 newtype Escrow argType valType = Escrow (ConcreteContract argType valType)
 
 data AnyEscrowID = 
-  forall argType valType. SomeEscrowID (EscrowID argType valType)
+  forall argType valType. 
+  (Typeable argType, Typeable valType) =>
+  SomeEscrowID (EscrowID argType valType)
 
 newtype PrivateEscrowID argType valType = 
   PrivateEscrowID EntryID deriving (Typeable)
@@ -111,7 +120,10 @@ newtype Fae argType accumType valType =
   }
   deriving (Functor, Applicative, Monad, MonadReader argType)
 
-type AnyFae valType = forall argType accumType. Fae argType accumType valType
+type AnyFae valType = 
+  forall argType accumType. 
+  (Typeable argType, Typeable valType) =>
+  Fae argType accumType valType
 
 -- TH
 makeLenses ''Storage
