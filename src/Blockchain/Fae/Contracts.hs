@@ -28,7 +28,7 @@ signOver eID recip =
 vendor :: 
   (Currency tok coin, Typeable tok', Typeable val) =>
   EscrowID tok' val -> Natural -> PublicKey -> 
-  AnyFae (Escrow (EscrowID tok coin) (Escrow tok' val))
+  AnyFae (PrivateEscrow (EscrowID tok coin) (Escrow tok' val))
 vendor itemID price seller =
   returnEscrow [SomeEscrowID itemID] $ do
     paymentID <- ask

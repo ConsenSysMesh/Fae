@@ -5,7 +5,8 @@ module Blockchain.Fae
     -- * Contract
     ContractID, spend, outputContract, inputValue,
     -- * Escrow
-    Escrow, EscrowID, AnyEscrowID(..), open, close, returnEscrow, transferEscrow,
+    Escrow, PrivateEscrow, EscrowID, AnyEscrowID(..), PrivateEscrowID,
+    open, close, returnEscrow, transferEscrow,
     -- * Rewards
     Reward, RewardEscrow, RewardEscrowID, claimReward,
     -- * Overloaded functions
