@@ -91,7 +91,8 @@ by the transaction; this is the only place that contracts may be called.  The
 purpose of this stricture is to prevent the transaction author from maliciously
 embedding expensive code in the definition of the entry IDs.  This field must be
 given as a list of *literals* in the transaction as it is transmitted throughout
-the network.
+the network.  The meaning of the literals is described below, in
+[Storage](#storage).
 
 The `extra` field is an associative list each entry of which contains module
 names and associated files (e.g. Haskell interface files) facilitating the
@@ -179,6 +180,12 @@ optionally an input contract ID, and a sequence number in the list of direct
 outputs.  The optional second component may be abbreviated by its hash to avoid
 creating indefinitely long contract IDs.
 
+The argument to an input contract can be one of two things: either a literal
+value, or, under [some circumstances](#Contracts), a reference to an input
+appearing earlier in the list of inputs.  The limitation of circumstances allows
+contracts to be designed with chained arguments in mind, without allowing
+malicious contracts to be passed at will to other contracts.
+
 When a transaction is executed, its input contracts are immediately evaluated
 with their given arguments and their entries in the hierarchy populated with
 their outputs, in the order that the inputs were given.  The outputs of any
@@ -191,9 +198,13 @@ stored back under the same contract ID once execution is complete.
 
 If, during the course of contract execution, an exception occurs, then it
 follows that no outputs are created and none of the mutable data is changed.
-The execution may not be caught, but terminates the entire transaction that
-called the contract as input; its return value is therefore replaced by an
-exceptional value that may be caught by any query of transaction return values.
+However, all transaction input contracts *are* evaluated and their states
+updated, in order to prevent untrusted contract code from affecting the state of
+unrelated contracts.  Exceptions thrown by input contracts are caught when their
+return values are used.  The execution may not be caught by the contract author,
+but terminates the entire transaction that called the contract as input; its
+return value is therefore replaced by an exceptional value that may be caught by
+any query of transaction return values.
 
 Finally, contracts (including [escrows](#escrows)) can be *spent*, which causes
 them to be deleted from storage.
@@ -217,6 +228,13 @@ execute irrelevant and possibly untrusted code.
 
 Contracts may be "spent", which causes them to be removed from storage once
 their execution completes.
+
+On creation, a contract must be given a list of *trusted* contracts.  These are
+the contracts whose outputs may serve as arguments to the given contract when
+they both appear as inputs to a transaction.  Trusted contracts may be given
+either singly, as the set of all outputs created during a particular
+transaction, or as the set of all outputs created by a particular contract
+(regardless of the transaction that calls it).
 
 ### Escrow
 
