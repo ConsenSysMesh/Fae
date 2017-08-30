@@ -132,12 +132,12 @@ transferEscrow (EscrowID eID) = Fae $ do
 
 outputContract :: 
   (Typeable argType, Typeable valType) =>
-  accumType -> [AnyEscrowID] ->
+  accumType -> [AnyEscrowID] -> [ShortContractID] ->
   Fae argType accumType valType ->
   AnyFae ContractID
-outputContract accum gives contract = do
+outputContract accum gives trusts contract = do
   (c, i) <- Fae $ listens Seq.length $ getFae $ returnContract accum gives contract
-  Fae $ tell $ Seq.singleton $ abstract c
+  Fae $ tell $ Seq.singleton (abstract c, trusts)
   outputID <- Fae $ lift $ FaeContract $ view $ _outputID . to ($ i)
   return outputID
 

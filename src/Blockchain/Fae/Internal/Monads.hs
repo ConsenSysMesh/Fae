@@ -47,7 +47,9 @@ data TransactionEntry =
     returnValue :: Dynamic
   }
 
-type Outputs = IntMap AbstractContract
+type Outputs = IntMap TrustContract
+
+type TrustContract = (AbstractContract, [ShortContractID])
 
 type FaeBlock a = StateT Storage IO a
 
@@ -64,7 +66,7 @@ data OutputData a =
   OutputData 
   {
     updatedContract :: Maybe AbstractContract,
-    outputContracts :: Seq AbstractContract,
+    outputContracts :: Seq TrustContract,
     retVal :: a,
     newEscrow :: Maybe (EntryID, Dynamic)
   }
@@ -115,7 +117,7 @@ data StateData accumType =
 newtype Fae argType accumType valType =
   Fae 
   {
-    getFae :: RWST argType (Seq AbstractContract) (StateData accumType) 
+    getFae :: RWST argType (Seq TrustContract) (StateData accumType) 
              FaeContract valType
   }
   deriving (Functor, Applicative, Monad, MonadReader argType)

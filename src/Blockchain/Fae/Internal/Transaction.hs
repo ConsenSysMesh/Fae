@@ -7,6 +7,7 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Monads
 import Blockchain.Fae.Internal.Reward
 
+import Control.Monad.Fix
 import Control.Monad.Reader
 
 import qualified Data.IntMap as IntMap
@@ -16,21 +17,28 @@ import qualified Data.Sequence as Seq
 import Data.Dynamic
 import Data.Foldable
 import Data.Maybe
+import Data.Sequence (Seq)
 
 type Transaction a = Fae () () a
+
+data InputArg =
+  LiteralArg Dynamic |
+  TrustedArg Int
 
 runTransaction :: 
   forall a result.
   (Typeable a, FaeReturn a a) =>
-  TransactionID -> [(ContractID, Dynamic)] -> PublicKey -> Bool ->
+  TransactionID -> Seq (ContractID, InputArg) -> PublicKey -> Bool ->
   Transaction a -> FaeBlock ()
 runTransaction txID inputArgs transactionKey isReward f = 
   handleAll (setException txID) $ do
     let 
       contractID = JustTransaction txID
-      inputIDs = map fst inputArgs
-    inputOutputData <- zip inputIDs <$> 
-      traverse (getInput txID transactionKey) inputArgs
+      inputIDs = fst <$> inputArgs
+    inputOutputData <- mfix $ \outputData ->
+      fmap (Seq.zip inputIDs) $
+      sequence $ Seq.zipWith (getInput txID transactionKey) 
+      (Seq.inits $ (_2 %~ retVal) <$> outputData) inputArgs
     let
       entryID = EntryID $ digest txID
 
@@ -53,11 +61,11 @@ runTransaction txID inputArgs transactionKey isReward f =
       inputs 
         | isReward = s |> (contractID, toDyn escrowID)
         | otherwise = s
-        where s = Seq.fromList $ map (_2 %~ retVal) inputOutputData
+        where s = (_2 %~ retVal) <$> inputOutputData
       outputID = TransactionOutput txID
       contractData = ContractData{..}
 
-      newEscrows = catMaybes $ map (newEscrow . snd) inputOutputData
+      newEscrows = catMaybes $ (newEscrow . snd) <$> toList inputOutputData
       escrows
         | isReward = Map.fromList $ (entryID, toDyn rewardEscrow) : newEscrows
         | otherwise = Map.fromList newEscrows
@@ -70,15 +78,25 @@ runTransaction txID inputArgs transactionKey isReward f =
     let FaeContract c = concrete stateData f InputData{..}
     let outputData = runReader c contractData 
 
-    traverse (uncurry (assign.at) . (_2 %~ updatedContract)) inputOutputData
+    traverse
+      (\(cID, OutputData{..}) -> 
+        modifying (at cID) 
+          (\pM -> do
+            uC <- updatedContract
+            p <- pM
+            return $ p & _1 .~ uC
+          )
+      )
+      inputOutputData
+    
     _getStorage . at txID ?=
       TransactionEntry
       {
         returnValue = toDyn (retVal outputData :: a),
         outputs = seqToOutputs $ outputContracts outputData,
         inputContracts = 
-          Map.fromList $ 
-          map (\p -> p & _1 %~ shorten & _2 %~ seqToOutputs . outputContracts) 
+          Map.fromList $ toList $
+          fmap (\p -> p & _1 %~ shorten & _2 %~ seqToOutputs . outputContracts) 
           inputOutputData
       }
      
@@ -94,20 +112,30 @@ runTransaction txID inputArgs transactionKey isReward f =
         }
 
 getInput :: 
-  TransactionID -> PublicKey -> (ContractID, Dynamic) -> 
+  TransactionID -> PublicKey -> 
+  Seq (ContractID, Dynamic) -> (ContractID, InputArg) -> 
   FaeBlock (OutputData Dynamic)
-getInput txID transactionKey (contractID, inputArg) = do
-  c <- use $ at contractID . defaultLens (throw $ BadContractID contractID) 
+getInput txID transactionKey prevOuts (contractID, givenArg) = do
+  (c, trusts) <- 
+    use $ at contractID . defaultLens (throw $ BadContractID contractID) 
   let 
     inputs = Seq.empty
     outputID = InputOutput txID (shorten contractID)
+    inputArg =
+      case givenArg of
+        LiteralArg x -> x
+        TrustedArg i
+          | Just (prevCID, x) <- prevOuts Seq.!? i,
+            shorten prevCID `elem` trusts
+            -> x
+          | otherwise -> throw $ BadChainedInput contractID i
     contractData = ContractData{..}
     inputEscrow = Nothing
   let FaeContract f = c InputData{..}
   return $ runReader f contractData 
 
 type instance Index Storage = ContractID
-type instance IxValue Storage = AbstractContract
+type instance IxValue Storage = TrustContract
 instance Ixed Storage 
 instance At Storage where
   at cID@(JustTransaction _) = 

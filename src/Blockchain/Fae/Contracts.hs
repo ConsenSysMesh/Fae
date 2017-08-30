@@ -9,9 +9,20 @@ import Control.Monad
 
 import Control.Monad.Reader.Class
 
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 import Data.Typeable
 
 import Numeric.Natural
+
+data TwoPartyToken = A2 | B2 
+
+offerA2 :: EscrowID argType valType -> ContractID -> AnyFae ContractID
+offerA2 eID dealID = outputContract () [SomeEscrowID eID] [dealID] $ do
+  A2 <- ask
+
+  transferEscrow
 
 signOver :: 
   forall tok val.
@@ -48,8 +59,7 @@ vendor itemID price seller =
     transferEscrow itemID
 
 data ContractsError =
-  SignOver PublicKey PublicKey |
-  Vendor Natural Natural
+  NotAParty PublicKey
   deriving (Typeable, Show)
 
 instance Exception ContractsError

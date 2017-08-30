@@ -17,7 +17,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     
     Blockchain.Fae
-    Blockchain.Fae.Contracts
+--    Blockchain.Fae.Contracts
     Blockchain.Fae.Crypto
     Blockchain.Fae.Currency
   other-modules:
@@ -51,7 +51,9 @@ library
     FlexibleInstances
     GeneralizedNewtypeDeriving
     MultiParamTypeClasses
+    MultiWayIf
     OverloadedStrings
+    PatternGuards
     RankNTypes
     RecordWildCards
     ScopedTypeVariables

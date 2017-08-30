@@ -19,7 +19,8 @@ data TransactionException =
   BadContractID ContractID |
   BadTransactionID TransactionID |
   BadInputID ShortContractID |
-  BadInput ContractID 
+  BadInput ContractID |
+  BadChainedInput ContractID Int
   deriving (Show, Typeable)
 
 data ContractException =
