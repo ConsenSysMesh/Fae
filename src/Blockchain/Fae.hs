@@ -3,7 +3,7 @@ module Blockchain.Fae
     -- * Fae
     AnyFae, Fae, sender,
     -- * Contract
-    ContractID, spend, outputContract, inputValue,
+    ContractID, ShortContractID, spend, outputContract, inputValue,
     -- * Escrow
     Escrow, PrivateEscrow, EscrowID, AnyEscrowID(..), PrivateEscrowID,
     open, close, returnEscrow, transferEscrow,
