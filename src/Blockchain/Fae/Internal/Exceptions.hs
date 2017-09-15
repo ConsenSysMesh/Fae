@@ -15,28 +15,17 @@ import Control.Monad.IO.Class
 
 import Data.Typeable
 
-data TransactionException =
-  BadContractID ContractID |
+data FaeException =
   BadTransactionID TransactionID |
+  BadContractID ContractID |
   BadInputID ShortContractID |
   BadInput ContractID |
-  BadChainedInput ContractID Int
-  deriving (Show, Typeable)
-
-data ContractException =
-  OpenEscrows ContractID |
+  BadChainedInput ContractID Int |
   MissingInput Int |
-  BadArgType ContractID TypeRep TypeRep | 
-  BadValType ContractID TypeRep TypeRep
-  deriving (Show, Typeable)
-
-data EscrowException =
-  BadEscrowType EntryID TypeRep TypeRep |
+  BadArgType TypeRep TypeRep | 
+  BadValType TypeRep TypeRep |
   BadEscrowID EntryID |
-  StatefulEscrow ContractID |
-  ClosedRewardEscrow EntryID
+  OpenEscrows 
   deriving (Typeable, Show)
 
-instance Exception TransactionException 
-instance Exception ContractException 
-instance Exception EscrowException
+instance Exception FaeException 

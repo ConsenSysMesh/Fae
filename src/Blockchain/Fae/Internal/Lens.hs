@@ -4,7 +4,7 @@ module Blockchain.Fae.Internal.Lens
     module Control.Lens
   ) where
 
-import Control.Lens hiding (makeLenses)
+import Control.Lens hiding (makeLenses, Wrapped)
 
 import Data.Maybe
 
@@ -23,3 +23,4 @@ makeLenses = makeLensesWith myLensRules
 
 defaultLens :: a -> Lens' (Maybe a) a
 defaultLens x = lens (fromMaybe x) (flip $ const . Just)
+

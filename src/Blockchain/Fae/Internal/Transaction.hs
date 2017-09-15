@@ -5,10 +5,13 @@ import Blockchain.Fae.Internal.Crypto hiding (signer)
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Monads
-import Blockchain.Fae.Internal.Reward
 
+import Control.Monad.Coroutine
 import Control.Monad.Fix
 import Control.Monad.Reader
+import Control.Monad.State
+import Control.Monad.RWS
+import Control.Monad.Writer
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -19,7 +22,17 @@ import Data.Foldable
 import Data.Maybe
 import Data.Sequence (Seq)
 
-type Transaction a = Fae () () a
+data Reward = Reward
+data RewardToken = Token
+type RewardEscrowID = EscrowID RewardToken Reward 
+
+rewardEscrow :: Contract RewardToken Reward
+rewardEscrow Token = spend Reward
+
+claimReward :: RewardEscrowID -> Fae argType valType ()
+claimReward eID = do
+  Reward <- useEscrow eID Token
+  return ()
 
 data InputArg =
   LiteralArg Dynamic |
@@ -27,133 +40,93 @@ data InputArg =
 
 runTransaction :: 
   forall a result.
-  (Typeable a, FaeReturn a a) =>
-  TransactionID -> Seq (ContractID, InputArg) -> PublicKey -> Bool ->
-  Transaction a -> FaeBlock ()
-runTransaction txID inputArgs transactionKey isReward f = 
-  handleAll (setException txID) $ do
-    let 
-      contractID = JustTransaction txID
-      inputIDs = fst <$> inputArgs
-    inputOutputData <- mfix $ \outputData ->
-      fmap (Seq.zip inputIDs) $
-      sequence $ Seq.zipWith (getInput txID transactionKey) 
-      (Seq.inits $ (_2 %~ retVal) <$> outputData) inputArgs
-    let
-      entryID = EntryID $ digest txID
+  (Typeable a) =>
+  TransactionID -> PublicKey -> Bool ->
+  Seq (ContractID, InputArg) -> 
+  Transaction a -> FaeBlock a
+runTransaction txID txKey isReward inputArgs f = state $ 
+  runFaeContract txID txKey . 
+  transaction txID isReward inputArgs f 
 
-      escrowID :: RewardEscrowID
-      escrowID = EscrowID entryID
+runFaeContract :: TransactionID -> PublicKey -> FaeContractStateT Naught a -> a
+runFaeContract txID txKey =
+  fst .
+  (\r s m -> evalRWS m r s) txKey (txID, 0) .
+  unWrapped . 
+  flip evalStateT Map.empty .
+  runCoroutine
 
-      rewardState = 
-        StateData
-        {
-          escrows = Map.empty,
-          accum = (),
-          spent = False
-        }
+transaction :: 
+  (Typeable a) =>
+  TransactionID ->
+  Bool -> 
+  Seq (ContractID, InputArg) -> 
+  Transaction a -> 
+  Storage -> FaeContractStateT Naught (a, Storage)
+transaction txID isReward inputArgs f storage = do
+  (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
+  inputs <- withReward inputs0
+  (result0, outputs) <- listen $ unWrapped $ f (Inputs inputs)
+  let result = toDyn result0
+  escrows <- get
+  unless (Map.null escrows) $ throw OpenEscrows
+  let newStorage = storage' & _getStorage . at txID ?~ TransactionEntry{..}
+  return (result0, newStorage)
 
-      rewardEscrow :: RewardEscrow
-      rewardEscrow = Escrow $ concrete rewardState $ do
-        Token <- ask
-        return Reward
-    let 
-      inputs 
-        | isReward = s |> (contractID, toDyn escrowID)
-        | otherwise = s
-        where s = (_2 %~ retVal) <$> inputOutputData
-      outputID = TransactionOutput txID
-      contractData = ContractData{..}
-
-      newEscrows = catMaybes $ (newEscrow . snd) <$> toList inputOutputData
-      escrows
-        | isReward = Map.fromList $ (entryID, toDyn rewardEscrow) : newEscrows
-        | otherwise = Map.fromList newEscrows
-      accum = ()
-      stateData = StateData{spent = False, ..}
-
-      inputArg = ()
-      inputEscrow = Nothing
-      
-    let FaeContract c = concrete stateData f InputData{..}
-    let outputData = runReader c contractData 
-
-    traverse
-      (\(cID, OutputData{..}) -> 
-        modifying (at cID) 
-          (\pM -> do
-            uC <- updatedContract
-            p <- pM
-            return $ p & _1 .~ uC
-          )
-      )
-      inputOutputData
-    
-    _getStorage . at txID ?=
-      TransactionEntry
-      {
-        returnValue = toDyn (retVal outputData :: a),
-        outputs = seqToOutputs $ outputContracts outputData,
-        inputContracts = 
-          Map.fromList $ toList $
-          fmap (\p -> p & _1 %~ shorten & _2 %~ seqToOutputs . outputContracts) 
-          inputOutputData
-      }
-     
   where
-    seqToOutputs = IntMap.fromList . zip [0 ..] . toList
-    setException txID e = 
-      _getStorage . at txID ?= 
-        TransactionEntry
-        {
-          returnValue = toDyn e,
-          outputs = IntMap.empty,
-          inputContracts = Map.empty
-        }
+    withReward inputs
+      | isReward = unWrapped $ do
+          eID <- newEscrow [] rewardEscrow
+          return $ inputs |> toDyn eID
+      | otherwise = return inputs
 
-getInput :: 
-  TransactionID -> PublicKey -> 
-  Seq (ContractID, Dynamic) -> (ContractID, InputArg) -> 
-  FaeBlock (OutputData Dynamic)
-getInput txID transactionKey prevOuts (contractID, givenArg) = do
-  (c, trusts) <- 
-    use $ at contractID . defaultLens (throw $ BadContractID contractID) 
-  let 
-    inputs = Seq.empty
-    outputID = InputOutput txID (shorten contractID)
-    inputArg =
-      case givenArg of
-        LiteralArg x -> x
-        TrustedArg i
-          | Just (prevCID, x) <- prevOuts Seq.!? i,
-            shorten prevCID `elem` trusts
-            -> x
-          | otherwise -> throw $ BadChainedInput contractID i
-    contractData = ContractData{..}
-    inputEscrow = Nothing
-  let FaeContract f = c InputData{..}
-  return $ runReader f contractData 
+runInputContracts ::
+  (Functor s) =>
+  Seq (ContractID, InputArg) ->
+  Storage ->
+  FaeContractStateT s (Seq Dynamic, Storage, InputOutputs)
+runInputContracts inputArgs storage = 
+  (\x s f -> foldl f x s) (return (Seq.empty, storage, Map.empty)) inputArgs $
+  \accM (cID, arg) -> do
+    (results, storage, inputOutputs) <- accM
+    let 
+      realArg = case arg of
+        LiteralArg xDyn -> xDyn
+        TrustedArg i -> 
+          fromMaybe (throw $ BadChainedInput cID i) (results Seq.!? i) 
+      ConcreteContract fAbs = 
+        storage ^. 
+        at cID . defaultLens (throw $ BadInput cID) . 
+        _abstractContract
+    ((gAbsM, result), outputs) <- listen $ fAbs realArg
+    censor (const Seq.empty) $ return
+      (
+        results |> result,
+        storage & at cID %~ liftM2 (_abstractContract .~) gAbsM,
+        inputOutputs & at (shorten cID) ?~ outputs
+      )
 
 type instance Index Storage = ContractID
 type instance IxValue Storage = TrustContract
 instance Ixed Storage 
 instance At Storage where
-  at cID@(JustTransaction _) = 
-    throw $ BadContractID cID
+  at cID@(JustTransaction txID) = throw (BadContractID cID)
 
   at cID@(TransactionOutput txID i) =
     _getStorage .
     at txID .
     defaultLens (throw $ BadTransactionID txID) .
     _outputs .
-    at i
+    atSeq i
 
   at cID@(InputOutput txID sID i) = 
     _getStorage .
     at txID .
     defaultLens (throw $ BadTransactionID txID) .
-    _inputContracts .
+    _inputOutputs .
     at sID .
     defaultLens (throw $ BadInputID sID) .
-    at i
+    atSeq i
 
+atSeq :: Int -> Lens' (Seq a) (Maybe a)
+atSeq i = lens (Seq.lookup i) (\s (Just x) -> Seq.update i x s)
