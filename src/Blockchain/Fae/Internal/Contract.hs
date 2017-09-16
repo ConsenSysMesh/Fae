@@ -36,7 +36,7 @@ spend ::
   (HasEscrowIDs valType) =>
   valType -> AnyFae (WithEscrows valType)
 spend x = Wrapped $ do
-  outputEscrows <- takeEscrows $ getEscrowIDs x
+  outputEscrows <- takeEscrows [bearer x]
   return $ WithEscrows outputEscrows x
 
 useEscrow ::
@@ -58,7 +58,7 @@ newEscrow ::
     HasEscrowIDs argType, HasEscrowIDs valType,
     Typeable argType, Typeable valType
   ) =>
-  [AnEscrowID] ->
+  [BearsEscrowIDs] ->
   Contract argType valType ->
   AnyFae (EscrowID argType valType)
 newEscrow eIDs f = Wrapped $ do
@@ -75,7 +75,7 @@ newContract ::
     HasEscrowIDs argType, HasEscrowIDs valType,
     Typeable argType, Typeable valType
   ) =>
-  [AnEscrowID] ->
+  [BearsEscrowIDs] ->
   [ShortContractID] ->
   Contract argType valType ->
   AnyFae ()
@@ -96,14 +96,14 @@ makeContract ::
     Typeable argType, Typeable valType,
     Functor s
   ) =>
-  [AnEscrowID] ->
+  [BearsEscrowIDs] ->
   Contract argType valType ->
   FaeContractStateT s AbstractContract
 makeContract eIDs f = makeAbstract . makeConcrete <$> makeInternal eIDs f
 
 makeInternal ::
   (HasEscrowIDs argType, HasEscrowIDs valType, Functor s) =>
-  [AnEscrowID] ->
+  [BearsEscrowIDs] ->
   Contract argType valType ->
   FaeContractStateT s (InternalContract argType valType)
 makeInternal eIDs f = do
@@ -153,9 +153,11 @@ unmakeAbstract (ConcreteContract f) = ConcreteContract $ \x -> do
       throw $ BadValType (typeRep (Proxy @valType)) (dynTypeRep yDyn)
   return (unmakeAbstract <$> gAbsM, y)
 
-takeEscrows :: (MonadState Escrows m) => [AnEscrowID] -> m Escrows
-takeEscrows ks = 
-  fmap Map.fromList $ forM ks $ \(AnEscrowID k) -> do
+takeEscrows :: (MonadState Escrows m) => [BearsEscrowIDs] -> m Escrows
+takeEscrows xs = 
+  fmap (Map.fromList . join) $ 
+  forM xs $ \(BearsEscrowIDs x) -> 
+  forM (getEscrowIDs x) $ \(AnEscrowID (EscrowID k)) -> do
     m <- get
     modify $ Map.delete k
     return (k, m Map.! k)

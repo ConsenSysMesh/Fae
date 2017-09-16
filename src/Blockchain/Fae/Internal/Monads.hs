@@ -74,10 +74,10 @@ type EntryID = (TransactionID, Int)
 type Escrows = Map EntryID AbstractContract
 
 newtype EscrowID argType valType = EscrowID EntryID
-newtype AnEscrowID = AnEscrowID EntryID
+data AnEscrowID = forall argType valType. AnEscrowID (EscrowID argType valType)
 
 anEscrowID :: EscrowID argType valType -> AnEscrowID
-anEscrowID (EscrowID eID) = AnEscrowID eID
+anEscrowID eID = AnEscrowID eID
 
 class HasEscrowIDs a where
   getEscrowIDs :: a -> [AnEscrowID]
@@ -93,6 +93,11 @@ instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b) where
 
 instance (HasEscrowIDs a, Foldable t) => HasEscrowIDs (t a) where
   getEscrowIDs = concatMap getEscrowIDs . toList
+
+data BearsEscrowIDs = forall a. (HasEscrowIDs a) => BearsEscrowIDs a
+
+bearer :: (HasEscrowIDs a) => a -> BearsEscrowIDs
+bearer x = BearsEscrowIDs x
 
 data WithEscrows a = WithEscrows Escrows a
 type FaeRequest argType valType = 

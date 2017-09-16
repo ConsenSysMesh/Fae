@@ -31,7 +31,7 @@ offer2 ::
   forall a.
   (HasEscrowIDs a, Typeable a) => 
   TwoParties -> a -> ShortContractID -> AnyFae ()
-offer2 party x dealID = newContract (getEscrowIDs x) [dealID] c where
+offer2 party x dealID = newContract [bearer x] [dealID] c where
   c :: Contract TwoPartyToken (Maybe a)
   c (TwoPartyToken party')
     | party == party' = spend $ Just x
