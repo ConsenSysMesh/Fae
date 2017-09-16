@@ -1,6 +1,6 @@
 module Blockchain.Fae.Contracts 
   (
-    TwoPartyToken, twoPartySwap--, offerA2, offerB2
+    TwoParties(..), TwoPartyToken, offer2, twoPartySwap
   )
   where
 
@@ -10,7 +10,8 @@ import Blockchain.Fae.Currency
 
 import Control.Exception
 import Control.Monad
-import Control.Monad.State.Class
+import Control.Monad.State
+import Control.Monad.Trans.Class
 
 import Control.Monad.Reader.Class
 
@@ -23,45 +24,52 @@ import Data.Typeable
 
 import Numeric.Natural
 
-newtype TwoPartyToken = TwoPartyToken Bool
-data TwoPartyState =
-  Undecided Tristate |
-  Decided (Bool -> TwoPartyToken)
-data Tristate = One Bool | Neither
-
-twoPartyChoice :: Bool -> Bool -> TwoPartyState -> TwoPartyState
-twoPartyChoice False _ _ = Decided coerce 
-twoPartyChoice _ isA (Undecided Neither) = Undecided (One isA)
-twoPartyChoice _ isA (Undecided (One wasA))
-  | isA /= wasA = Decided $ coerce . not
-twoPartyChoice _ _ s = s
+data TwoParties = A | B deriving (Eq)
+newtype TwoPartyToken = TwoPartyToken TwoParties
 
 offer2 :: 
-  forall argType valType.
-  (Typeable argType, Typeable valType) => 
-  Bool -> EscrowID argType valType -> ShortContractID -> AnyFae ContractID
-offer2 isA eID dealID = outputContract () [SomeEscrowID eID] [dealID] $ do
-  -- Fae TwoPartyToken () (EscrowID argType valType)
-  token <- coerce <$> ask @TwoPartyToken
-  unless (token == isA) $ throw WrongParty
-  spend
-  transferEscrow =<< inputValue @(EscrowID argType valType) 0
+  forall a.
+  (HasEscrowIDs a, Typeable a) => 
+  TwoParties -> a -> ShortContractID -> AnyFae ()
+offer2 party x dealID = newContract (getEscrowIDs x) [dealID] c where
+  c :: Contract TwoPartyToken (Maybe a)
+  c (TwoPartyToken party')
+    | party == party' = spend $ Just x
+    | otherwise = release Nothing >>= c
 
-twoPartySwap :: PublicKey -> PublicKey -> AnyFae ContractID
-twoPartySwap partyA partyB | partyA /= partyB = 
-  outputContract (Undecided Neither) [] [] $ do
-    -- Fae Bool TwoPartyState (Maybe TwoPartyToken)
-    party <- sender
+data TwoPartyState =
+  Undecided Tristate |
+  Decided (TwoParties -> TwoPartyToken)
+data Tristate = One TwoParties | Neither
+
+switchParty :: TwoParties -> TwoParties
+switchParty A = B
+switchParty B = A
+
+twoPartyChoice :: Bool -> TwoParties -> TwoPartyState -> TwoPartyState
+twoPartyChoice False _ _ = Decided $ TwoPartyToken
+twoPartyChoice _ party (Undecided Neither) = Undecided (One party)
+twoPartyChoice _ party (Undecided (One oldParty))
+  | party /= oldParty = Decided $ TwoPartyToken . switchParty
+twoPartyChoice _ _ s = s
+
+twoPartySwap :: PublicKey -> PublicKey -> AnyFae ()
+twoPartySwap partyA partyB | partyA /= partyB = newContract [] [] c where
+  c :: Contract Bool (Maybe TwoPartyToken)
+  c choice = flip evalStateT (Undecided Neither) $ do
+    partyKey <- lift sender
     let
-      isA = party == partyA
-      isB = party == partyB
+      isA = partyKey == partyA
+      isB = partyKey == partyB
+      party = if isA then A else B
     unless (isA || isB) $ throw NotAParty
-    choice <- ask
-    modify $ twoPartyChoice choice isA
+    modify $ twoPartyChoice choice party
     dealState <- get
-    return $ case dealState of
-      Undecided _ -> Nothing
-      Decided f -> Just $ f isA
+    lift $ do
+      nextChoice <- release $ case dealState of
+        Undecided _ -> Nothing
+        Decided f -> Just $ f party
+      c nextChoice
 
 -- signOver :: 
 --   forall tok val.

@@ -13,6 +13,7 @@ import Control.Monad.State
 import Control.Monad.Trans.Class
 
 import Data.Dynamic
+import Data.Foldable
 import Data.Functor.Identity
 import qualified Data.IntMap as IntMap
 import Data.IntMap (IntMap)
@@ -75,11 +76,23 @@ type Escrows = Map EntryID AbstractContract
 newtype EscrowID argType valType = EscrowID EntryID
 newtype AnEscrowID = AnEscrowID EntryID
 
+anEscrowID :: EscrowID argType valType -> AnEscrowID
+anEscrowID (EscrowID eID) = AnEscrowID eID
+
 class HasEscrowIDs a where
   getEscrowIDs :: a -> [AnEscrowID]
 
 instance {-# OVERLAPPABLE #-} HasEscrowIDs a where
   getEscrowIDs _ = []
+
+instance HasEscrowIDs (EscrowID argType valType) where
+  getEscrowIDs = (:[]) . anEscrowID
+
+instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b) where
+  getEscrowIDs (x, y) = getEscrowIDs x ++ getEscrowIDs y
+
+instance (HasEscrowIDs a, Foldable t) => HasEscrowIDs (t a) where
+  getEscrowIDs = concatMap getEscrowIDs . toList
 
 data WithEscrows a = WithEscrows Escrows a
 type FaeRequest argType valType = 
