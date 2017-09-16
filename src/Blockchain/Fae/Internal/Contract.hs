@@ -33,8 +33,8 @@ release x = do
     return y
 
 spend :: 
-  (HasEscrowIDs valType, Functor s) =>
-  valType -> Wrapped (FaeContractStateT s) (WithEscrows valType)
+  (HasEscrowIDs valType) =>
+  valType -> AnyFae (WithEscrows valType)
 spend x = Wrapped $ do
   outputEscrows <- takeEscrows $ getEscrowIDs x
   return $ WithEscrows outputEscrows x
@@ -42,11 +42,10 @@ spend x = Wrapped $ do
 useEscrow ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    Functor s
+    Typeable argType, Typeable valType
   ) =>
   EscrowID argType valType ->
-  argType -> Wrapped (FaeContractStateT s) valType
+  argType -> AnyFae valType
 useEscrow (EscrowID eID) x = Wrapped $ do
   fAbs <- use $ at eID . defaultLens (throw $ BadEscrowID eID)
   let ConcreteContract f = unmakeAbstract fAbs
@@ -57,12 +56,11 @@ useEscrow (EscrowID eID) x = Wrapped $ do
 newEscrow ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    Functor s
+    Typeable argType, Typeable valType
   ) =>
   [AnEscrowID] ->
   Contract argType valType ->
-  Wrapped (FaeContractStateT s) (EscrowID argType valType)
+  AnyFae (EscrowID argType valType)
 newEscrow eIDs f = Wrapped $ do
   cAbs <- makeContract eIDs f
   eID <- lift $ lift $ Wrapped $ do
@@ -75,13 +73,12 @@ newEscrow eIDs f = Wrapped $ do
 newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    Functor s
+    Typeable argType, Typeable valType
   ) =>
   [AnEscrowID] ->
   [ShortContractID] ->
   Contract argType valType ->
-  Wrapped (FaeContractStateT s) ()
+  AnyFae ()
 newContract eIDs trusts f = Wrapped $ do
   cAbs <- makeContract eIDs f
   lift $ lift $ Wrapped $ 

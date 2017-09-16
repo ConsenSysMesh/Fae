@@ -19,7 +19,7 @@ library
     Blockchain.Fae
 --    Blockchain.Fae.Contracts
     Blockchain.Fae.Crypto
---    Blockchain.Fae.Currency
+    Blockchain.Fae.Currency
   other-modules:
     Blockchain.Fae.Internal.Contract
     Blockchain.Fae.Internal.Crypto
@@ -51,6 +51,7 @@ library
     FlexibleContexts
     FlexibleInstances
     GeneralizedNewtypeDeriving
+    LambdaCase
     MultiParamTypeClasses
     MultiWayIf
     OverloadedStrings

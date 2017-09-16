@@ -29,7 +29,7 @@ type RewardEscrowID = EscrowID RewardToken Reward
 rewardEscrow :: Contract RewardToken Reward
 rewardEscrow Token = spend Reward
 
-claimReward :: RewardEscrowID -> Fae argType valType ()
+claimReward :: RewardEscrowID -> AnyFae ()
 claimReward eID = do
   Reward <- useEscrow eID Token
   return ()

@@ -5,7 +5,7 @@ module Blockchain.Fae
     -- * Contract
     ContractID, ShortContractID, spend, release, newContract,
     -- * Escrow
-    EscrowID, newEscrow, useEscrow,
+    EscrowID, AnEscrowID, HasEscrowIDs(..), newEscrow, useEscrow,
     -- * Rewards
     Reward, RewardEscrowID, claimReward
   ) where

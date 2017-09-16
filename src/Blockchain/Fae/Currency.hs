@@ -71,7 +71,7 @@ class (Typeable tok, Typeable coin) => Currency tok coin where
 
 {- The basic example -}
 
-newtype Coin = Coin Natural deriving (Typeable)
+newtype Coin = Coin Natural
 
 -- | @Spend@ exists so that we can get close the escrow and get its
 -- contents.  @UnsafePeek@ skips the closing part, and is therefore
@@ -89,26 +89,23 @@ data Token = Spend | UnsafePeek deriving (Typeable)
 
 instance Currency Token Coin where
   balance eID1 eID2 = do
-    Coin n1 <- close eID1 UnsafePeek
-    Coin n2 <- close eID2 UnsafePeek
+    Coin n1 <- useEscrow eID1 UnsafePeek
+    Coin n2 <- useEscrow eID2 UnsafePeek
     return $ compare n1 n2
 
-  mint !_ !n = open [] $ do
-    let coin = Coin n
-    arg <- ask
-    case arg of
-      UnsafePeek -> return coin
-      Spend -> do
-        spend
-        return coin
+  mint !_ !n = newEscrow [] f where
+    f :: Contract Token Coin
+    f UnsafePeek = release coin >>= f
+    f Spend = spend coin
+    coin = Coin n
 
   value eID = do
-    Coin n <- close eID UnsafePeek
+    Coin n <- useEscrow eID UnsafePeek
     return n
 
   add eID1 eID2 = do
-    Coin n1 <- close eID1 Spend
-    Coin n2 <- close eID2 Spend
+    Coin n1 <- useEscrow eID1 Spend
+    Coin n2 <- useEscrow eID2 Spend
     eID <- mint Spend $ n1 + n2
     return eID
 
@@ -116,14 +113,14 @@ instance Currency Token Coin where
     m <- value eID
     case m >= n of
       True -> do
-        Coin m <- close eID Spend
+        Coin m <- useEscrow eID Spend
         amtID <- mint Spend n
         remID <- mint Spend $ m - n
         return $ pure (amtID, remID)
       False -> return empty
 
   split eID weights = do
-    Coin n <- close eID Spend
+    Coin n <- useEscrow eID Spend
     let 
       s = sum weights
       (q, r) = n `quotRem` s
@@ -133,5 +130,7 @@ instance Currency Token Coin where
 
 -- This value is of course just an example.  It's not much of an incentive.
 reward :: RewardEscrowID -> AnyFae (EscrowID Token Coin)
-reward eID = claimReward eID $ mint Spend 1 
+reward eID = do
+  claimReward eID 
+  mint Spend 1 
 

@@ -124,7 +124,7 @@ type AbstractContract = ConcreteContract Dynamic Dynamic
 {- Contract authoring -}
 
 type Fae argType valType = Wrapped (FaeM argType valType)
-type AnyFae = forall argType valType. Fae argType valType
+type AnyFae a = forall s. (Functor s) => Wrapped (FaeContractStateT s) a
 
 type Contract argType valType = 
   argType -> Fae argType valType (WithEscrows valType)
