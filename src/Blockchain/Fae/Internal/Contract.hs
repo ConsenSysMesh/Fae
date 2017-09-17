@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 module Blockchain.Fae.Internal.Contract where
 
 import Blockchain.Fae.Internal.Crypto 
@@ -23,45 +24,120 @@ import Data.Proxy
 
 {- API functions -}
 
-release :: 
-  (HasEscrowIDs valType) =>
-  valType -> Fae argType valType argType
-release x = do
-  req <- spend x
-  Wrapped $ suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
-    lift $ modify $ Map.union inputEscrows
+data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
+
+bearer :: (HasEscrowIDs a) => a -> BearsValue
+bearer x = BearsValue x
+
+newtype Fae argType valType a = Fae { getFae :: FaeM argType valType a }
+  deriving (Functor, Applicative, Monad)
+
+sender :: (MonadFae argType valType m) => m PublicKey
+sender = liftFae $ Fae $ lift $ lift $ Wrapped ask
+
+type Contract m argType valType = 
+  (MonadFae argType valType m) => 
+  argType -> m (WithEscrows valType)
+
+type Contract' argType valType = Contract (Fae argType valType) argType valType
+
+type AnyFae a = forall argType valType m. (MonadFae argType valType m) => m a
+
+class (MonadFae argType valType m) => MonadFae' argType valType m where
+  release :: valType -> m argType
+
+class 
+  (HasEscrowIDs argType, HasEscrowIDs valType, MonadContracts m) => 
+  MonadFae argType valType m | m -> argType valType where
+
+  spend :: valType -> m (WithEscrows valType)
+  liftFae :: Fae argType valType a -> m a
+
+class (Monad m) => MonadContracts m where
+  useEscrow :: 
+    (
+      HasEscrowIDs argType, HasEscrowIDs valType,
+      Typeable argType, Typeable valType
+    ) =>
+    EscrowID argType valType -> argType -> m valType
+  newEscrow :: 
+    (
+      HasEscrowIDs argType, HasEscrowIDs valType,
+      Typeable argType, Typeable valType
+    ) =>
+    [BearsValue] -> Contract' argType valType -> m (EscrowID argType valType)
+  newContract ::
+    (
+      HasEscrowIDs argType, HasEscrowIDs valType,
+      Typeable argType, Typeable valType
+    ) =>
+    [BearsValue] -> [ShortContractID] -> Contract' argType valType -> m ()
+
+instance 
+  (MonadTrans t, MonadFae' argType valType m, Monad (t m)) =>
+  MonadFae' argType valType (t m) where
+
+  release = lift . release
+
+instance 
+  (MonadTrans t, MonadFae argType valType m, Monad (t m)) =>
+  MonadFae argType valType (t m) where
+
+  spend = lift . spend
+  liftFae = lift . liftFae
+
+instance 
+  (MonadTrans t, MonadContracts m, Monad (t m)) => 
+  MonadContracts (t m) where
+
+  useEscrow eID arg = lift $ useEscrow eID arg
+  newEscrow xs c = lift $ newEscrow xs c
+  newContract xs trusts c = lift $ newContract xs trusts c
+
+instance MonadFae' argType valType (Fae argType valType) where
+  release x = do
+    req <- spend x
+    Fae $ suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
+      lift $ modify $ Map.union inputEscrows
+      return y
+
+instance MonadFae argType valType (Fae argType valType) where
+  spend = Fae . internalSpend
+  liftFae = id
+
+instance MonadContracts (Fae argType valType) where
+  useEscrow (EscrowID eID) x = Fae $ do
+    fAbs <- use $ at eID . defaultLens (throw $ BadEscrowID eID)
+    let ConcreteContract f = unmakeAbstract fAbs
+    (gAbsM, y) <- f x
+    at eID .= gAbsM
     return y
 
-spend :: 
-  (HasEscrowIDs valType) =>
-  valType -> AnyFae (WithEscrows valType)
-spend x = Wrapped $ do
+  newEscrow eIDs f = Fae $ internalNewEscrow eIDs f
+
+  newContract eIDs trusts f = Fae $ do
+    cAbs <- makeContract eIDs f
+    lift $ lift $ Wrapped $ 
+      tell $ Seq.singleton $ TrustContract cAbs trusts
+
+{- Internal functions -}
+
+internalSpend :: 
+  (HasEscrowIDs valType, Functor s) =>
+  valType -> FaeContractStateT s (WithEscrows valType)
+internalSpend x = do
   outputEscrows <- takeEscrows [bearer x]
   return $ WithEscrows outputEscrows x
 
-useEscrow ::
+internalNewEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
+    Typeable argType, Typeable valType,
+    Functor s
   ) =>
-  EscrowID argType valType ->
-  argType -> AnyFae valType
-useEscrow (EscrowID eID) x = Wrapped $ do
-  fAbs <- use $ at eID . defaultLens (throw $ BadEscrowID eID)
-  let ConcreteContract f = unmakeAbstract fAbs
-  (gAbsM, y) <- f x
-  at eID .= gAbsM
-  return y
-
-newEscrow ::
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) =>
-  [BearsEscrowIDs] ->
-  Contract argType valType ->
-  AnyFae (EscrowID argType valType)
-newEscrow eIDs f = Wrapped $ do
+  [BearsValue] -> Contract' argType valType -> 
+  FaeContractStateT s (EscrowID argType valType)
+internalNewEscrow eIDs f = do
   cAbs <- makeContract eIDs f
   eID <- lift $ lift $ Wrapped $ do
     eID <- get
@@ -70,21 +146,6 @@ newEscrow eIDs f = Wrapped $ do
   modify $ Map.insert eID cAbs
   return $ EscrowID eID
 
-newContract ::
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) =>
-  [BearsEscrowIDs] ->
-  [ShortContractID] ->
-  Contract argType valType ->
-  AnyFae ()
-newContract eIDs trusts f = Wrapped $ do
-  cAbs <- makeContract eIDs f
-  lift $ lift $ Wrapped $ 
-    tell $ Seq.singleton $ TrustContract cAbs trusts
-
-{- Internal functions -}
 
 type InternalContract argType valType =
   WithEscrows argType -> 
@@ -96,21 +157,21 @@ makeContract ::
     Typeable argType, Typeable valType,
     Functor s
   ) =>
-  [BearsEscrowIDs] ->
-  Contract argType valType ->
+  [BearsValue] ->
+  Contract' argType valType ->
   FaeContractStateT s AbstractContract
 makeContract eIDs f = makeAbstract . makeConcrete <$> makeInternal eIDs f
 
 makeInternal ::
   (HasEscrowIDs argType, HasEscrowIDs valType, Functor s) =>
-  [BearsEscrowIDs] ->
-  Contract argType valType ->
+  [BearsValue] ->
+  Contract' argType valType ->
   FaeContractStateT s (InternalContract argType valType)
 makeInternal eIDs f = do
   escrows <- takeEscrows eIDs
   return $ \(WithEscrows inputEscrows x) ->
     let totalEscrows = escrows `Map.union` inputEscrows in 
-    mapMonad (unWrapped . flip evalStateT totalEscrows) $ unWrapped $ f x
+    mapMonad (unWrapped . flip evalStateT totalEscrows) $ getFae $ f x
 
 makeConcrete ::
   (
@@ -120,7 +181,7 @@ makeConcrete ::
   InternalContract argType valType ->
   ConcreteContract argType valType
 makeConcrete f = ConcreteContract $ \x -> do
-  xE <- unWrapped $ spend x
+  xE <- internalSpend x
   result <- lift $ lift $ Wrapped $ resume $ f xE
   let 
     (gM, WithEscrows outputEscrows z) =
@@ -153,10 +214,10 @@ unmakeAbstract (ConcreteContract f) = ConcreteContract $ \x -> do
       throw $ BadValType (typeRep (Proxy @valType)) (dynTypeRep yDyn)
   return (unmakeAbstract <$> gAbsM, y)
 
-takeEscrows :: (MonadState Escrows m) => [BearsEscrowIDs] -> m Escrows
+takeEscrows :: (MonadState Escrows m) => [BearsValue] -> m Escrows
 takeEscrows xs = 
   fmap (Map.fromList . join) $ 
-  forM xs $ \(BearsEscrowIDs x) -> 
+  forM xs $ \(BearsValue x) -> 
   forM (getEscrowIDs x) $ \(AnEscrowID (EscrowID k)) -> do
     m <- get
     modify $ Map.delete k

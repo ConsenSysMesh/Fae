@@ -50,6 +50,7 @@ library
     ExistentialQuantification
     FlexibleContexts
     FlexibleInstances
+    FunctionalDependencies
     GeneralizedNewtypeDeriving
     LambdaCase
     MultiParamTypeClasses

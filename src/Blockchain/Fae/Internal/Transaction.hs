@@ -26,7 +26,7 @@ data Reward = Reward
 data RewardToken = Token
 type RewardEscrowID = EscrowID RewardToken Reward 
 
-rewardEscrow :: Contract RewardToken Reward
+rewardEscrow :: (MonadFae argType valType m) => Contract m RewardToken Reward
 rewardEscrow Token = spend Reward
 
 claimReward :: RewardEscrowID -> AnyFae ()
@@ -75,8 +75,8 @@ transaction txID isReward inputArgs f storage = do
 
   where
     withReward inputs
-      | isReward = unWrapped $ do
-          eID <- newEscrow [] rewardEscrow
+      | isReward = do
+          eID <- internalNewEscrow [] rewardEscrow
           return $ inputs |> toDyn eID
       | otherwise = return inputs
 

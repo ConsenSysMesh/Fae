@@ -94,7 +94,7 @@ instance Currency Token Coin where
     return $ compare n1 n2
 
   mint !_ !n = newEscrow [] f where
-    f :: Contract Token Coin
+    f :: Contract' Token Coin
     f UnsafePeek = release coin >>= f
     f Spend = spend coin
     coin = Coin n

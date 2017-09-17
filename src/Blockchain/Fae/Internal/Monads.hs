@@ -73,7 +73,8 @@ type FaeBlock a = StateT Storage IO a
 type EntryID = (TransactionID, Int)
 type Escrows = Map EntryID AbstractContract
 
-newtype EscrowID argType valType = EscrowID EntryID
+data EscrowID argType valType = EscrowID EntryID
+
 data AnEscrowID = forall argType valType. AnEscrowID (EscrowID argType valType)
 
 anEscrowID :: EscrowID argType valType -> AnEscrowID
@@ -93,11 +94,6 @@ instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b) where
 
 instance (HasEscrowIDs a, Foldable t) => HasEscrowIDs (t a) where
   getEscrowIDs = concatMap getEscrowIDs . toList
-
-data BearsEscrowIDs = forall a. (HasEscrowIDs a) => BearsEscrowIDs a
-
-bearer :: (HasEscrowIDs a) => a -> BearsEscrowIDs
-bearer x = BearsEscrowIDs x
 
 data WithEscrows a = WithEscrows Escrows a
 type FaeRequest argType valType = 
@@ -141,12 +137,6 @@ type AbstractContract = ConcreteContract Dynamic Dynamic
 
 {- Contract authoring -}
 
-type Fae argType valType = Wrapped (FaeM argType valType)
-type AnyFae a = forall s. (Functor s) => Wrapped (FaeContractStateT s) a
-
-type Contract argType valType = 
-  argType -> Fae argType valType (WithEscrows valType)
-
 newtype Inputs = Inputs (Seq Dynamic)
 type Transaction a = Inputs -> Wrapped (FaeContractStateT Naught) a
 
@@ -157,7 +147,4 @@ makeLenses ''TrustContract
 
 shorten :: ContractID -> ShortContractID
 shorten = ShortContractID . digest
-
-sender :: Fae argType valType PublicKey
-sender = Wrapped $ lift $ lift $ Wrapped ask
 

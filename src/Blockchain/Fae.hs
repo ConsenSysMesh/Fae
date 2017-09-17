@@ -1,12 +1,13 @@
 module Blockchain.Fae
   (
     -- * Fae
-    Fae, AnyFae, Contract, Transaction, Inputs, sender,
+    Fae, AnyFae, Contract, Contract', Transaction, Inputs, sender,
+    MonadContracts(..), MonadFae(..), MonadFae'(..),
     -- * Contract
-    ContractID, ShortContractID, spend, release, newContract,
+    ContractID, ShortContractID,
     -- * Escrow
     EscrowID, AnEscrowID, anEscrowID, HasEscrowIDs(..), 
-    BearsEscrowIDs, bearer, newEscrow, useEscrow,
+    BearsValue, bearer,
     -- * Rewards
     Reward, RewardEscrowID, claimReward
   ) where

@@ -11,7 +11,6 @@ import Blockchain.Fae.Currency
 import Control.Exception
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Trans.Class
 
 import Control.Monad.Reader.Class
 
@@ -28,11 +27,10 @@ data TwoParties = A | B deriving (Eq)
 newtype TwoPartyToken = TwoPartyToken TwoParties
 
 offer2 :: 
-  forall a.
-  (HasEscrowIDs a, Typeable a) => 
+  forall a. (HasEscrowIDs a, Typeable a) => 
   TwoParties -> a -> ShortContractID -> AnyFae ()
 offer2 party x dealID = newContract [bearer x] [dealID] c where
-  c :: Contract TwoPartyToken (Maybe a)
+  c :: Contract' TwoPartyToken (Maybe a)
   c (TwoPartyToken party')
     | party == party' = spend $ Just x
     | otherwise = release Nothing >>= c
@@ -54,18 +52,18 @@ twoPartyChoice _ party (Undecided (One oldParty))
 twoPartyChoice _ _ s = s
 
 twoPartySwap :: PublicKey -> PublicKey -> AnyFae ()
-twoPartySwap partyA partyB | partyA /= partyB = newContract [] [] c where
-  c :: Contract Bool (Maybe TwoPartyToken)
-  c choice = flip evalStateT (Undecided Neither) $ do
-    partyKey <- lift sender
-    let
-      isA = partyKey == partyA
-      isB = partyKey == partyB
-      party = if isA then A else B
-    unless (isA || isB) $ throw NotAParty
-    modify $ twoPartyChoice choice party
-    dealState <- get
-    lift $ do
+twoPartySwap partyA partyB 
+  | partyA /= partyB = newContract [] [] $ flip evalStateT (Undecided Neither) . c
+  where
+    c choice = do
+      partyKey <- sender
+      let
+        isA = partyKey == partyA
+        isB = partyKey == partyB
+        party = if isA then A else B
+      unless (isA || isB) $ throw NotAParty
+      modify $ twoPartyChoice choice party
+      dealState <- get
       nextChoice <- release $ case dealState of
         Undecided _ -> Nothing
         Decided f -> Just $ f party
