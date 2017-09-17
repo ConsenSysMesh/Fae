@@ -1,8 +1,8 @@
 module Blockchain.Fae
   (
     -- * Fae
-    Fae, AnyFae, Contract, Contract', Transaction, Inputs, sender,
-    MonadContracts(..), MonadFae(..), MonadFae'(..),
+    Fae, FaeTX, AnyFae, Contract, Contract', Transaction, Inputs, sender,
+    MonadContracts(..), MonadFae(..),
     -- * Contract
     ContractID, ShortContractID,
     -- * Escrow

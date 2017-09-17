@@ -66,7 +66,7 @@ transaction ::
 transaction txID isReward inputArgs f storage = do
   (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
   inputs <- withReward inputs0
-  (result0, outputs) <- listen $ unWrapped $ f (Inputs inputs)
+  (result0, outputs) <- listen $ getFae $ f (Inputs inputs)
   let result = toDyn result0
   escrows <- get
   unless (Map.null escrows) $ throw OpenEscrows
@@ -76,7 +76,7 @@ transaction txID isReward inputArgs f storage = do
   where
     withReward inputs
       | isReward = do
-          eID <- internalNewEscrow [] rewardEscrow
+          eID <- newEscrow [] rewardEscrow
           return $ inputs |> toDyn eID
       | otherwise = return inputs
 

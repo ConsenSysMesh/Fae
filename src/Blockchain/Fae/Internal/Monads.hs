@@ -107,7 +107,6 @@ newtype Wrapped m a = Wrapped { unWrapped :: m a }
 type FaeContractRWST s = Coroutine s (RWS PublicKey Outputs EntryID)
 type FaeContractStateT s = 
   Coroutine s (StateT Escrows (Wrapped (RWS PublicKey Outputs EntryID)))
-type FaeM argType valType = FaeContractStateT (FaeRequest argType valType)
 
 instance (Functor f, MonadState s m) => MonadState s (Coroutine f m) where
   state = lift . state
@@ -134,11 +133,6 @@ newtype ConcreteContract argType valType =
   )
 
 type AbstractContract = ConcreteContract Dynamic Dynamic
-
-{- Contract authoring -}
-
-newtype Inputs = Inputs (Seq Dynamic)
-type Transaction a = Inputs -> Wrapped (FaeContractStateT Naught) a
 
 -- TH
 makeLenses ''Storage
