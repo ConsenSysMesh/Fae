@@ -57,7 +57,7 @@ data TransactionEntry =
   }
 
 type InputOutputs = Map ShortContractID Outputs
-type Outputs = Seq TrustContract
+type Outputs = IntMap TrustContract
 
 data TrustContract = 
   TrustContract
@@ -104,9 +104,9 @@ type FaeRequest argType valType =
 newtype Wrapped m a = Wrapped { unWrapped :: m a }
   deriving (Functor, Applicative, Monad)
 
-type FaeContractRWST s = Coroutine s (RWS PublicKey Outputs EntryID)
+type FaeContractRWST s = Coroutine s (RWS PublicKey [TrustContract] EntryID)
 type FaeContractStateT s = 
-  Coroutine s (StateT Escrows (Wrapped (RWS PublicKey Outputs EntryID)))
+  Coroutine s (StateT Escrows (Wrapped (RWS PublicKey [TrustContract] EntryID)))
 
 instance (Functor f, MonadState s m) => MonadState s (Coroutine f m) where
   state = lift . state

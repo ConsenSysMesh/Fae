@@ -19,6 +19,8 @@ import qualified Data.Sequence as Seq
 
 import Data.Dynamic
 import Data.Foldable
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 import Data.Maybe
 import Data.Sequence (Seq)
 
@@ -66,8 +68,10 @@ transaction ::
 transaction txID isReward inputArgs f storage = do
   (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
   inputs <- withReward inputs0
-  (result0, outputs) <- listen $ getFae $ f (Inputs inputs)
-  let result = toDyn result0
+  (result0, outputsL) <- listen $ getFae $ f (Inputs inputs)
+  let 
+    result = toDyn result0
+    outputs = intMapList outputsL
   escrows <- get
   unless (Map.null escrows) $ throw OpenEscrows
   let newStorage = storage' & _getStorage . at txID ?~ TransactionEntry{..}
@@ -98,12 +102,12 @@ runInputContracts inputArgs storage =
         storage ^. 
         at cID . defaultLens (throw $ BadInput cID) . 
         _abstractContract
-    ((gAbsM, result), outputs) <- listen $ fAbs realArg
-    censor (const Seq.empty) $ return
+    ((gAbsM, result), outputsL) <- listen $ fAbs realArg
+    censor (const []) $ return
       (
         results |> result,
         storage & at cID %~ liftM2 (_abstractContract .~) gAbsM,
-        inputOutputs & at (shorten cID) ?~ outputs
+        inputOutputs & at (shorten cID) ?~ intMapList outputsL
       )
 
 type instance Index Storage = ContractID
@@ -117,7 +121,7 @@ instance At Storage where
     at txID .
     defaultLens (throw $ BadTransactionID txID) .
     _outputs .
-    atSeq i
+    at i
 
   at cID@(InputOutput txID sID i) = 
     _getStorage .
@@ -126,7 +130,7 @@ instance At Storage where
     _inputOutputs .
     at sID .
     defaultLens (throw $ BadInputID sID) .
-    atSeq i
+    at i
 
-atSeq :: Int -> Lens' (Seq a) (Maybe a)
-atSeq i = lens (Seq.lookup i) (\s (Just x) -> Seq.update i x s)
+intMapList :: [a] -> IntMap a
+intMapList = IntMap.fromList . zip [0 ..]

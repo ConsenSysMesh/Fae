@@ -130,7 +130,7 @@ instance (Functor s) => MonadContracts (FaeContractStateT s) where
   newContract eIDs trusts f = do
     cAbs <- makeContract eIDs f
     lift $ lift $ Wrapped $ 
-      tell $ Seq.singleton $ TrustContract cAbs trusts
+      tell [TrustContract cAbs trusts]
 
 {- Internal functions -}
 
