@@ -19,9 +19,12 @@ import Data.Coerce
 import Data.Map (Map)
 import qualified Data.Map as Map
 
+import Data.Maybe
 import Data.Typeable
 
 import Numeric.Natural
+
+{- Two-party swap -}
 
 data TwoParties = A | B deriving (Eq)
 newtype TwoPartyToken = TwoPartyToken TwoParties
@@ -69,42 +72,29 @@ twoPartySwap partyA partyB
         Decided f -> Just $ f party
       c nextChoice
 
--- signOver :: 
---   forall tok val.
---   (Typeable tok, Typeable val) => 
---   EscrowID tok val -> PublicKey -> AnyFae ContractID
--- signOver eID recip = 
---   outputContract @() @(Escrow tok val) () [SomeEscrowID eID] $ do
---     who <- sender
---     when (who /= recip) $ throw $ SignOver who recip
---     spend
---     eID <- inputValue 0
---     transferEscrow eID
--- 
--- vendor :: 
---   (Currency tok coin, Typeable tok', Typeable val) =>
---   EscrowID tok' val -> Natural -> PublicKey -> 
---   AnyFae (PrivateEscrow (EscrowID tok coin) (Escrow tok' val))
--- vendor itemID price seller =
---   returnEscrow [SomeEscrowID itemID] $ do
---     paymentID <- ask
---     payment <- value paymentID
---     (exactID, changeID) <- do
---       changeM <- change paymentID price
---       return $ case changeM of
---         Nothing -> throw $ Vendor payment price
---         Just x -> x
---     changeVal <- value changeID
---     buyer <- sender
---     when (changeVal > 0) $ signOver changeID buyer >> return ()
---     _ <- signOver exactID seller
--- 
---     spend
---     itemID <- inputValue 0
---     transferEscrow itemID
+{- Vendor -}
+
+vendor :: 
+  (HasEscrowIDs a, Typeable a, Currency tok coin) =>
+  a -> Natural -> PublicKey -> 
+  AnyFae (EscrowID (EscrowID tok coin) (a, EscrowID tok coin))
+vendor x price seller = newEscrow [bearer x] $ \payment -> do
+  changeM <- change payment price
+  let (cost, remit) = fromMaybe (throw NotEnough) changeM
+  signOver cost seller
+  spend (x, remit)
+
+signOver ::
+  (HasEscrowIDs a, Typeable a) =>
+  a -> PublicKey -> AnyFae ()
+signOver x owner = newContract [bearer x] [] $ \() -> do
+  who <- sender
+  unless (owner == who) $ throw NotOwner
+  spend x
 
 data ContractsError =
-  WrongParty | NotAParty
+  WrongParty | NotAParty |
+  NotEnough | NotOwner
   deriving (Typeable, Show)
 
 instance Exception ContractsError

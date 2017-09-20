@@ -92,7 +92,9 @@ instance HasEscrowIDs (EscrowID argType valType) where
 instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b) where
   getEscrowIDs (x, y) = getEscrowIDs x ++ getEscrowIDs y
 
-instance (HasEscrowIDs a, Foldable t) => HasEscrowIDs (t a) where
+instance {-# OVERLAPPABLE #-} 
+  (HasEscrowIDs a, Foldable t) => HasEscrowIDs (t a) where
+
   getEscrowIDs = concatMap getEscrowIDs . toList
 
 data WithEscrows a = WithEscrows Escrows a
