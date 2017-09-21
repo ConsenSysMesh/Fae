@@ -5,7 +5,6 @@ module Blockchain.Fae.Contracts
   where
 
 import Blockchain.Fae
-import Blockchain.Fae.Crypto
 import Blockchain.Fae.Currency
 
 import Control.Exception

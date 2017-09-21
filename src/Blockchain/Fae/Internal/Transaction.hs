@@ -29,6 +29,10 @@ data InputArg =
   TrustedArg Int
 
 newtype Inputs = Inputs (Seq Dynamic)
+-- | Similar to the 'Contract' type but disallows 'release' and 'spend'.
+-- Unlike contracts, the return values of transactions are not used in
+-- contract code, but stored for external reference.  Thus, they need not
+-- (and cannot) bear value.
 type Transaction a = Inputs -> FaeTX a
 
 type Storage = StorageT AbstractContract

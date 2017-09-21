@@ -18,7 +18,6 @@ library
   exposed-modules:     
     Blockchain.Fae
     Blockchain.Fae.Contracts
-    Blockchain.Fae.Crypto
     Blockchain.Fae.Currency
   other-modules:
     Blockchain.Fae.Internal.Contract

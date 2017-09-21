@@ -9,16 +9,17 @@ import Blockchain.Fae.Internal.Storage
 
 data Reward = Reward
 data RewardToken = Token
+-- | The escrow ID of a reward token provided by the system.
 type RewardEscrowID = EscrowID RewardToken Reward 
 
 {- Functions -}
 
-rewardEscrow :: (MonadTX m) => ContractT m RewardToken Reward
+rewardEscrow :: Contract RewardToken Reward
 rewardEscrow Token = spend Reward
 
+-- | This function destroys the reward token, validating it in the process.
 claimReward :: (MonadTX m) => RewardEscrowID -> m ()
 claimReward eID = do
   Reward <- useEscrow eID Token
   return ()
-
 

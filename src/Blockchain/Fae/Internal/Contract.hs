@@ -32,7 +32,10 @@ type FaeContract s = Coroutine s (StateT Escrows (Wrapped FaeRWS))
 newtype FaeM s a = Fae { getFae :: FaeContract s a }
   deriving (Functor, Applicative, Monad)
 
+-- | The monad for multi-stage contracts taking an 'argType' and returning
+-- a 'valType'.  These may not be transactions.
 type Fae argType valType = FaeM (FaeRequest argType valType)
+-- | The monad for single-stage contracts, i.e. transactions.
 type FaeTX = FaeM Naught
 
 type InternalContract argType valType =
@@ -48,10 +51,17 @@ newtype ConcreteContract argType valType =
 
 type AbstractContract = ConcreteContract Dynamic Dynamic
 
+-- | A "contract transformer", for use with the 'MonadContract' and
+-- 'MonadTX' typeclasses.
 type ContractT m argType valType = argType -> m (WithEscrows valType)
+-- | This is the type to use when defining a new contract.  Its argument is
+-- the argument given in the first call to this contract; all subsequent
+-- calls pass in their arguments via 'release'.  Because a 'ContractT' must
+-- return a 'WithEscrows', the contract code must ultimately terminate with
+-- a 'spend', being the only API function returning this type.
 type Contract argType valType = ContractT (Fae argType valType) argType valType
 
-{- Instances -}
+{- Orphan instances -}
 
 deriving instance (Monoid w, MonadWriter w m) => MonadWriter w (Wrapped m)
 
