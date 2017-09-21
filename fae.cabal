@@ -22,10 +22,14 @@ library
     Blockchain.Fae.Currency
   other-modules:
     Blockchain.Fae.Internal.Contract
+    Blockchain.Fae.Internal.Coroutine
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
+    Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.Lens
-    Blockchain.Fae.Internal.Monads
+    Blockchain.Fae.Internal.MonadFae
+    Blockchain.Fae.Internal.Reward
+    Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Transaction
   build-depends:       
     base >= 4.7 && < 5,
@@ -61,7 +65,6 @@ library
     RecordWildCards
     ScopedTypeVariables
     StandaloneDeriving
-    TemplateHaskell
     TypeApplications
     TypeFamilies
 

@@ -30,10 +30,10 @@ data TwoParties = A | B deriving (Eq)
 newtype TwoPartyToken = TwoPartyToken TwoParties
 
 offer2 :: 
-  forall a. (HasEscrowIDs a, Typeable a) => 
-  TwoParties -> a -> ShortContractID -> AnyFae ()
+  forall a m. (HasEscrowIDs a, Typeable a, MonadTX m) => 
+  TwoParties -> a -> ShortContractID -> m ()
 offer2 party x dealID = newContract [bearer x] [dealID] c where
-  c :: Contract' TwoPartyToken (Maybe a)
+  c :: Contract TwoPartyToken (Maybe a)
   c (TwoPartyToken party')
     | party == party' = spend $ Just x
     | otherwise = release Nothing >>= c
@@ -54,7 +54,7 @@ twoPartyChoice _ party (Undecided (One oldParty))
   | party /= oldParty = Decided $ TwoPartyToken . switchParty
 twoPartyChoice _ _ s = s
 
-twoPartySwap :: PublicKey -> PublicKey -> AnyFae ()
+twoPartySwap :: (MonadTX m) => PublicKey -> PublicKey -> m ()
 twoPartySwap partyA partyB 
   | partyA /= partyB = newContract [] [] $ flip evalStateT (Undecided Neither) . c
   where
@@ -75,9 +75,9 @@ twoPartySwap partyA partyB
 {- Vendor -}
 
 vendor :: 
-  (HasEscrowIDs a, Typeable a, Currency tok coin) =>
+  (HasEscrowIDs a, Typeable a, Currency tok coin, MonadTX m) =>
   a -> Natural -> PublicKey -> 
-  AnyFae (EscrowID (EscrowID tok coin) (a, EscrowID tok coin))
+  m (EscrowID (EscrowID tok coin) (a, EscrowID tok coin))
 vendor x price seller = newEscrow [bearer x] $ \payment -> do
   changeM <- change payment price
   let (cost, remit) = fromMaybe (throw NotEnough) changeM
@@ -85,8 +85,8 @@ vendor x price seller = newEscrow [bearer x] $ \payment -> do
   spend (x, remit)
 
 signOver ::
-  (HasEscrowIDs a, Typeable a) =>
-  a -> PublicKey -> AnyFae ()
+  (HasEscrowIDs a, Typeable a, MonadTX m) =>
+  a -> PublicKey -> m ()
 signOver x owner = newContract [bearer x] [] $ \() -> do
   who <- sender
   unless (owner == who) $ throw NotOwner

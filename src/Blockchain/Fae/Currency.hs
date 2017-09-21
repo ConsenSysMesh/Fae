@@ -24,47 +24,47 @@ import Numeric.Natural
 -- involved.
 class (Typeable tok, Typeable coin) => Currency tok coin where
   -- | Almost an @Ord@ instance; for comparing coin values.  
-  balance :: EscrowID tok coin -> EscrowID tok coin -> AnyFae Ordering
+  balance :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Ordering
   -- | Create a new value.  It is important that this function be strict in
   -- its first argument, so that we know that the caller actually has
   -- a token and not just @undefined@.  This means that the correct way to
   -- handle bad permissions is to throw an exception.
-  mint :: tok -> Natural -> AnyFae (EscrowID tok coin)
+  mint :: (MonadTX m) => tok -> Natural -> m (EscrowID tok coin)
   -- | Peek at the value inside.  The ID remains valid.  Careful!  For
   -- semantic correctness, this function must also validate the escrow to
   -- prove that it actually has value.
-  value :: EscrowID tok coin -> AnyFae Natural
+  value :: (MonadTX m) => EscrowID tok coin -> m Natural
   -- | Close the given accounts and make a new one with their sum.
-  add :: EscrowID tok coin -> EscrowID tok coin -> AnyFae (EscrowID tok coin)
+  add :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m (EscrowID tok coin)
   -- | Take off the given amount and return it and the change if both are
   -- nonnegative, otherwise @empty@.
   change :: 
-    (Alternative f) =>
+    (Alternative f, MonadTX m) =>
     EscrowID tok coin -> Natural -> 
-    AnyFae (f (EscrowID tok coin, EscrowID tok coin))
+    m (f (EscrowID tok coin, EscrowID tok coin))
   -- | Partition the value into the given proportions and the remainder.
   split :: 
-    (Traversable t) =>
+    (Traversable t, MonadTX m) =>
     EscrowID tok coin -> t Natural -> 
-    AnyFae (t (EscrowID tok coin), EscrowID tok coin)
+    m (t (EscrowID tok coin), EscrowID tok coin)
 
   -- | Equality of values
-  balanced :: EscrowID tok coin -> EscrowID tok coin -> AnyFae Bool
+  balanced :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Bool
   balanced eID1 eID2 = (== EQ) <$> balance eID1 eID2
 
   -- | First value is greater than second
-  beats :: EscrowID tok coin -> EscrowID tok coin -> AnyFae Bool
+  beats :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Bool
   beats eID1 eID2 = (== GT) <$> balance eID1 eID2
 
   -- | First value is less than second
-  loses :: EscrowID tok coin -> EscrowID tok coin -> AnyFae Bool
+  loses :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Bool
   loses eID1 eID2 = (== LT) <$> balance eID1 eID2
 
   -- | Rounds a coin down to the nearest multiple of some number, returning
   -- this rounded coin and the remainder.
-  round :: 
+  round :: (MonadTX m) => 
     EscrowID tok coin -> Natural -> 
-    AnyFae (Maybe (EscrowID tok coin), EscrowID tok coin)
+    m (Maybe (EscrowID tok coin), EscrowID tok coin)
   round eID n = do
     (l, r) <- split eID [n]
     return (listToMaybe l, r)
@@ -94,7 +94,7 @@ instance Currency Token Coin where
     return $ compare n1 n2
 
   mint !_ !n = newEscrow [] f where
-    f :: Contract' Token Coin
+    f :: Contract Token Coin
     f UnsafePeek = release coin >>= f
     f Spend = spend coin
     coin = Coin n
@@ -129,7 +129,7 @@ instance Currency Token Coin where
     return (partIDs, remID)
 
 -- This value is of course just an example.  It's not much of an incentive.
-reward :: RewardEscrowID -> AnyFae (EscrowID Token Coin)
+reward :: (MonadTX m) => RewardEscrowID -> m (EscrowID Token Coin)
 reward eID = do
   claimReward eID 
   mint Spend 1 

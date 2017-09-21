@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Lens 
   (
     module Blockchain.Fae.Internal.Lens,

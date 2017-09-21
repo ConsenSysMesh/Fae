@@ -1,8 +1,8 @@
 module Blockchain.Fae
   (
     -- * Fae
-    Fae, FaeTX, AnyFae, Contract, Contract', Transaction, Inputs, sender,
-    MonadContracts(..), MonadFae(..),
+    Fae, FaeTX, ContractT, Contract, Transaction, Inputs, sender,
+    MonadContract(..), MonadTX(..),
     -- * Contract
     ContractID, ShortContractID,
     -- * Escrow
@@ -13,6 +13,8 @@ module Blockchain.Fae
   ) where
 
 import Blockchain.Fae.Internal.Contract
+import Blockchain.Fae.Internal.IDs
+import Blockchain.Fae.Internal.MonadFae
+import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Transaction
-import Blockchain.Fae.Internal.Monads
 

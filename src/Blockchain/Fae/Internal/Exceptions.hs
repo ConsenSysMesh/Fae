@@ -5,7 +5,7 @@ module Blockchain.Fae.Internal.Exceptions
     Ex.throw
   ) where
 
-import Blockchain.Fae.Internal.Monads
+import Blockchain.Fae.Internal.IDs
 
 import qualified Control.Exception as Ex
 
