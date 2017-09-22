@@ -5,6 +5,7 @@ module Blockchain.Fae.Internal.Crypto
   ) where
 
 import qualified Crypto.Hash as Hash
+import qualified Crypto.PubKey.Ed25519 as Ed
 
 import qualified Data.ByteArray as BA
 import Data.Dynamic
@@ -14,9 +15,9 @@ import qualified Data.Serialize as Ser
 import qualified Data.Serialize.Put as Ser
 import qualified Data.Serialize.Get as Ser
 
--- | The public key for our cryptographic algorithm.
-data PublicKey = PublicKey deriving (Eq, Show)
-data Signature = Signature
+newtype PublicKey = PublicKey Ed.PublicKey deriving (Eq, Show)
+data PrivateKey = PrivateKey Ed.PublicKey Ed.SecretKey
+data Signature = Signature Ed.PublicKey Ed.Signature
 type Digest = Hash.Digest Hash.SHA3_256
 
 class Digestible a where
@@ -33,11 +34,12 @@ instance Serialize Digest where
     return result
     where hashSize = Hash.hashDigestSize Hash.SHA3_256
 
-instance Digestible Digest
-instance (Serialize a) => Digestible [a]
+sign :: (Digestible a) => a -> PrivateKey -> Signature
+sign x (PrivateKey pubKey secKey) = 
+  Signature pubKey $ Ed.sign secKey pubKey (digest x)
 
-signer :: Signature -> a -> PublicKey
-signer = undefined
+unsign :: (Digestible a) => Signature -> a -> Maybe PublicKey
+unsign (Signature pubKey sig) msg
+  | Ed.verify pubKey (digest msg) sig = Just $ PublicKey pubKey
+  | otherwise = Nothing
 
-nullDigest :: Digest
-nullDigest = Hash.hash (BA.empty :: BA.Bytes)
