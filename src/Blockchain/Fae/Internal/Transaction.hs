@@ -57,8 +57,8 @@ runTransaction txID txKey isReward inputArgs f = handleAll placeException $
       _getStorage . at txID ?=
         TransactionEntry
         {
-          inputOutputs = Map.empty,
-          outputs = IntMap.empty,
+          inputOutputs = throw e,
+          outputs = throw e,
           result = throw e
         }
       return $ throw e
