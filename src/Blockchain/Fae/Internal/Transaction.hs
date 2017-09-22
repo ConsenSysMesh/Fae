@@ -19,6 +19,7 @@ import Data.Maybe
 import Data.Sequence (Seq)
 import Data.Typeable
 
+import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 
@@ -47,9 +48,20 @@ runTransaction ::
   TransactionID -> PublicKey -> Bool ->
   Seq (ContractID, InputArg) -> 
   Transaction a -> FaeStorage a
-runTransaction txID txKey isReward inputArgs f = state $ 
-  runFaeContract txID txKey . 
-  transaction txID isReward inputArgs f 
+runTransaction txID txKey isReward inputArgs f = handleAll placeException $
+  state $ 
+    runFaeContract txID txKey .
+    transaction txID isReward inputArgs f 
+  where
+    placeException e = do
+      _getStorage . at txID ?=
+        TransactionEntry
+        {
+          inputOutputs = Map.empty,
+          outputs = IntMap.empty,
+          result = throw e
+        }
+      return $ throw e
 
 runFaeContract :: TransactionID -> PublicKey -> FaeContract Naught a -> a
 runFaeContract txID txKey =
