@@ -1,7 +1,8 @@
 module Blockchain.Fae
   (
     -- * Contract authors' API
-    MonadContract(..), MonadTX(..), sender, bearer, 
+    MonadContract(..), MonadTX(..), 
+    release, spend, useEscrow, newEscrow, newContract, sender, bearer, 
     -- * Contract types
     Contract, ContractT, Transaction, Fae, FaeTX, BearsValue, HasEscrowIDs(..),
     -- * Identifier types
