@@ -1,3 +1,13 @@
+{-|
+Module: Blockchain.Fae.Currency
+Description: A typeclass for currency escrows in Fae
+Copyright: (c) Ryan Reich, 2017
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+The primary motivating example of a smart contract is a currency such as Bitcoin.  This module provides a typeclass for such contracts as well as a sample currency.
+-}
 module Blockchain.Fae.Currency 
   (
     Currency(..),
@@ -71,9 +81,10 @@ class (Typeable tok, Typeable coin) => Currency tok coin where
 
 {- The basic example -}
 
+-- | This opaque type is the value of our sample currency.
 newtype Coin = Coin Natural
 
--- | @Spend@ exists so that we can get close the escrow and get its
+-- @Spend@ exists so that we can get close the escrow and get its
 -- contents.  @UnsafePeek@ skips the closing part, and is therefore
 -- economically dangerous, since it breaks conservation of value.  We must
 -- use it carefully.
@@ -85,6 +96,10 @@ newtype Coin = Coin Natural
 -- In general, we use refutable, partial patterns when @close@ing an escrow
 -- so that the pattern matching errors turn into exceptions in the
 -- contract.
+-- 
+-- | The opaque token for using this currency.  Only the 'Currency'
+-- functions are given access to its constructors, since otherwise,
+-- a malicious user could create their own coins.
 data Token = Spend | UnsafePeek deriving (Typeable)
 
 instance Currency Token Coin where
@@ -128,7 +143,16 @@ instance Currency Token Coin where
     remID <- mint Spend r
     return (partIDs, remID)
 
--- This value is of course just an example.  It's not much of an incentive.
+-- | A contract to claim system rewards in exchange for Coin values.  The
+-- one-to-one exchange rate is of course an example and probably not
+-- actually desirable.
+--
+-- Note that there is no Currency instance for rewards: thus, rewards are
+-- a unary counting value and can only be collected individually; in
+-- addition, 'claimReward' is the only means of spending them, and it
+-- destroys the reward token.  So this function can be seen as reifying
+-- rewards as a true currency, albeit one that cannot necessarily be used
+-- to claim rewards from anywhere else.
 reward :: (MonadTX m) => RewardEscrowID -> m (EscrowID Token Coin)
 reward eID = do
   claimReward eID 

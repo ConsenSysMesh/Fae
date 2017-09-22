@@ -107,7 +107,11 @@ useEscrow (EscrowID eID) x = liftTX $ Fae $ do
   at eID .= gAbsM
   return y
 
--- | Registers a contract as a new escrow, returning its ID.
+-- | Registers a contract as a new escrow, returning its ID.  The first
+-- argument is a list of Haskell values marked as "bearers" of
+-- escrow-backed Fae value; their backing escrows are transferred into the new
+-- escrow, so that the bearer is no longer valuable in the contract that
+-- calls this function.
 newEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
@@ -124,7 +128,14 @@ newEscrow eIDs f = liftTX $ Fae $ do
   modify $ Map.insert eID cAbs
   return $ EscrowID eID
 
--- | Registers a contract publicly.
+-- | Registers a contract publicly.  The first argument is the same as for
+-- 'newEscrow'.  The second argument is a list of short contract IDs for
+-- contracts that are "trusted" by the new one.  These contracts must
+-- already exist and the decision to trust them is entirely on the author
+-- of the new contract, most likely by manual scrutiny.  The new contract
+-- may be called in a transaction with an argument that is the return value
+-- of one of its trusted contracts; otherwise, its argument must be
+-- literal.
 newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
