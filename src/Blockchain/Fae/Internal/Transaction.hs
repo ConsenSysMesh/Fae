@@ -94,20 +94,33 @@ runInputContracts inputArgs storage =
   (\x s f -> foldl f x s) (return (Seq.empty, storage, Map.empty)) inputArgs $
   \accM (cID, arg) -> do
     (results, storage, inputOutputs) <- accM
-    let 
-      realArg = case arg of
-        LiteralArg xDyn -> xDyn
-        TrustedArg i -> 
-          fromMaybe (throw $ BadChainedInput cID i) (results Seq.!? i) 
-      ConcreteContract fAbs = 
-        storage ^. 
-        at cID . defaultLens (throw $ BadInput cID) . 
-        _abstractContract
-    ((gAbsM, result), outputsL) <- listen $ fAbs realArg
+    let results' = Seq.zip (fst <$> inputArgs) results
+    ((gAbsM, result), outputsL) <- listen $ callContract results' storage cID arg
     censor (const []) $ return
       (
         results |> result,
         storage & at cID %~ liftM2 (_abstractContract .~) gAbsM,
         inputOutputs & at (shorten cID) ?~ intMapList outputsL
       )
+
+callContract :: 
+  (Functor s) =>
+  Seq (ContractID, Dynamic) -> Storage -> ContractID -> InputArg ->
+  FaeContract s (Maybe AbstractContract, Dynamic)
+callContract results storage cID arg = fAbs realArg
+  where
+    Trusted (ConcreteContract fAbs) trusts = 
+      storage ^. at cID . defaultLens (throw $ BadInput cID)
+    realArg = case arg of
+      LiteralArg xDyn -> xDyn
+      TrustedArg i -> getRealArg cID trusts results i
+
+getRealArg :: 
+  ContractID -> [ShortContractID] -> Seq (ContractID, Dynamic) -> Int -> Dynamic
+getRealArg cID trusts results i
+  | shorten chainID `elem` trusts = chainVal
+  | otherwise = throw $ UntrustedInput cID chainID
+  where 
+    (chainID, chainVal) = 
+      fromMaybe (throw $ BadChainedInput cID i) (results Seq.!? i)
 

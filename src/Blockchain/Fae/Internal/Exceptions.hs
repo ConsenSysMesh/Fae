@@ -21,6 +21,7 @@ data FaeException =
   BadInputID ShortContractID |
   BadInput ContractID |
   BadChainedInput ContractID Int |
+  UntrustedInput ContractID ContractID |
   MissingInput Int |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
