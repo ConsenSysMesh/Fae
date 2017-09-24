@@ -60,6 +60,11 @@ data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 -- suitable general instances are given below.
 class HasEscrowIDs a where
   getEscrowIDs :: a -> [AnEscrowID]
+  default getEscrowIDs :: (Generic a, GHasEscrowIDs (Rep a)) => a -> [AnEscrowID]
+  getEscrowIDs = gGetEscrowIDs . from
+
+class GHasEscrowIDs f where
+  gGetEscrowIDs :: f p -> [AnEscrowID]
 
 {- Instances -}
 
@@ -67,19 +72,41 @@ instance Serialize ContractID
 instance Digestible ContractID
 instance Digestible ShortContractID
 
+-- Base case
+
+instance {-# OVERLAPPING #-} HasEscrowIDs (EscrowID argType valType) where
+  getEscrowIDs eID = [AnEscrowID eID]
+
+-- Covering non-Generic types that may or may not have escrow IDs
+
 instance {-# OVERLAPPABLE #-} HasEscrowIDs a where
   getEscrowIDs _ = []
 
-instance HasEscrowIDs (EscrowID argType valType) where
-  getEscrowIDs = (:[]) . anEscrowID
-
-instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b) where
-  getEscrowIDs (x, y) = getEscrowIDs x ++ getEscrowIDs y
-
 instance {-# OVERLAPPABLE #-} 
-  (HasEscrowIDs a, Foldable t) => HasEscrowIDs (t a) where
+  (Foldable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
 
   getEscrowIDs = concatMap getEscrowIDs . toList
+
+-- Boring Generic boilerplate
+
+instance GHasEscrowIDs V1 where
+  gGetEscrowIDs _ = undefined
+
+instance GHasEscrowIDs U1 where
+  gGetEscrowIDs U1 = []
+
+instance (GHasEscrowIDs f, GHasEscrowIDs g) => GHasEscrowIDs (f :+: g) where
+  gGetEscrowIDs (L1 x) = gGetEscrowIDs x
+  gGetEscrowIDs (R1 x) = gGetEscrowIDs x
+
+instance (GHasEscrowIDs f, GHasEscrowIDs g) => GHasEscrowIDs (f :*: g) where
+  gGetEscrowIDs (x :*: y) = gGetEscrowIDs x ++ gGetEscrowIDs y
+
+instance (HasEscrowIDs c) => GHasEscrowIDs (K1 i c) where
+  gGetEscrowIDs (K1 x) = getEscrowIDs x
+
+instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i t f) where
+  gGetEscrowIDs (M1 x) = gGetEscrowIDs x
 
 {- Functions -}
 

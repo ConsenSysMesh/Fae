@@ -66,6 +66,7 @@ library
     StandaloneDeriving
     TypeApplications
     TypeFamilies
+    TypeOperators
 
 -- executable fae-exe
 --   hs-source-dirs:      app
