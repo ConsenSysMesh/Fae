@@ -39,6 +39,8 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Typeable
 
+import GHC.Generics
+
 import Numeric.Natural
 
 -- $twopartyswap
@@ -49,9 +51,12 @@ import Numeric.Natural
 -- offering.  If both agree, the swap occurs; otherwise, the deal is off.
 
 -- | Abstract tokens denoting the two parties.
-data TwoParties = A | B deriving (Eq)
+data TwoParties = A | B deriving (Eq, Generic)
 -- | An opaque token indicating whose offering the bearer is entitled to.
-newtype TwoPartyToken = TwoPartyToken TwoParties
+newtype TwoPartyToken = TwoPartyToken TwoParties deriving (Generic)
+
+instance HasEscrowIDs TwoParties
+instance HasEscrowIDs TwoPartyToken    
 
 -- | The first argument is the party claimed by the caller; the second
 -- argument is the escrow-backed value they offer; the third argument is

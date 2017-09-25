@@ -64,7 +64,10 @@ instance {-# OVERLAPPABLE #-}
 
   liftTX = lift . liftTX
 
-instance MonadContract argType valType (Fae argType valType) where
+instance 
+  (HasEscrowIDs argType, HasEscrowIDs valType) => 
+  MonadContract argType valType (Fae argType valType) where
+
   liftFae = id
 
 instance (Functor s) => MonadTX (FaeContract s) where

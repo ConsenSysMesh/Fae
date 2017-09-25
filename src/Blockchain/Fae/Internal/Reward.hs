@@ -5,12 +5,17 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.MonadFae
 import Blockchain.Fae.Internal.Storage
 
+import GHC.Generics
+
 {- Types -}
 
-data Reward = Reward
-data RewardToken = Token
+data Reward = Reward deriving (Generic)
+data RewardToken = Token deriving (Generic)
 -- | The escrow ID of a reward token provided by the system.
 type RewardEscrowID = EscrowID RewardToken Reward 
+
+instance HasEscrowIDs RewardToken
+instance HasEscrowIDs Reward
 
 {- Functions -}
 

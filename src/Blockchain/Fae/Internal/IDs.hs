@@ -7,6 +7,8 @@ import Data.Foldable
 
 import GHC.Generics
 
+import Numeric.Natural
+
 {- Types -}
 
 -- | This identifier locates a contract in storage.  It is not intended to
@@ -72,13 +74,6 @@ instance Serialize ContractID
 instance Digestible ContractID
 instance Digestible ShortContractID
 
--- Base case
-
-instance {-# OVERLAPPING #-} HasEscrowIDs (EscrowID argType valType) where
-  getEscrowIDs eID = [AnEscrowID eID]
-
--- Covering non-Generic types that may or may not have escrow IDs
-
 instance {-# OVERLAPPABLE #-} HasEscrowIDs a where
   getEscrowIDs _ = []
 
@@ -86,6 +81,16 @@ instance {-# OVERLAPPABLE #-}
   (Foldable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
 
   getEscrowIDs = concatMap getEscrowIDs . toList
+
+instance (HasEscrowIDs a) => HasEscrowIDs (Maybe a)
+instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (Either a b)
+instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b)
+
+instance 
+  (HasEscrowIDs argType, HasEscrowIDs valType) => 
+  HasEscrowIDs (EscrowID argType valType) where
+
+  getEscrowIDs eID = [AnEscrowID eID]
 
 -- Boring Generic boilerplate
 
@@ -102,7 +107,8 @@ instance (GHasEscrowIDs f, GHasEscrowIDs g) => GHasEscrowIDs (f :+: g) where
 instance (GHasEscrowIDs f, GHasEscrowIDs g) => GHasEscrowIDs (f :*: g) where
   gGetEscrowIDs (x :*: y) = gGetEscrowIDs x ++ gGetEscrowIDs y
 
-instance (HasEscrowIDs c) => GHasEscrowIDs (K1 i c) where
+-- Recurse into sub-structures
+instance {-# OVERLAPPABLE #-} (HasEscrowIDs c) => GHasEscrowIDs (K1 i c) where
   gGetEscrowIDs (K1 x) = getEscrowIDs x
 
 instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i t f) where

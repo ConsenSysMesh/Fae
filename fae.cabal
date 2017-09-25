@@ -115,7 +115,7 @@ executable contract2TX
     FlexibleInstances
 
 executable escrow1TX
-  buildable: True
+  buildable: False
   hs-source-dirs:      test
   main-is:             Escrow1.hs
 --  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
@@ -130,6 +130,21 @@ executable escrow1TX
     DeriveGeneric
     FlexibleInstances
 
+executable escrow2TX
+  buildable: True
+  hs-source-dirs:      test
+  main-is:             Escrow2.hs
+--  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       
+    base, 
+    containers,
+    fae,
+    mtl,
+    transformers
+  default-language:    Haskell2010
+  default-extensions:
+    DeriveGeneric
+    FlexibleInstances
 
 -- test-suite fae-test
 --   type:                exitcode-stdio-1.0

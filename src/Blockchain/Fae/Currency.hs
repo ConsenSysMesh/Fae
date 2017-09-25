@@ -26,13 +26,21 @@ import Data.Maybe
 import Data.Ord
 import Data.Typeable
 
+import GHC.Generics
+
 import Numeric.Natural
 
 -- | Interface for a currency type.  The token type needs to be specified
 -- because, possibly, not all "encryptions" support all the below
 -- "homomorphic" operations.  Note that no actual encryption needs to be
 -- involved.
-class (Typeable tok, Typeable coin) => Currency tok coin where
+class 
+  (
+    Typeable tok, Typeable coin,
+    HasEscrowIDs tok, HasEscrowIDs coin
+  ) => 
+  Currency tok coin where
+
   -- | Almost an @Ord@ instance; for comparing coin values.  
   balance :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Ordering
   -- | Create a new value.  It is important that this function be strict in
@@ -82,7 +90,9 @@ class (Typeable tok, Typeable coin) => Currency tok coin where
 {- The basic example -}
 
 -- | This opaque type is the value of our sample currency.
-newtype Coin = Coin Natural
+newtype Coin = Coin Natural deriving (Generic)
+
+instance HasEscrowIDs Coin
 
 -- @Spend@ exists so that we can get close the escrow and get its
 -- contents.  @UnsafePeek@ skips the closing part, and is therefore
@@ -100,7 +110,9 @@ newtype Coin = Coin Natural
 -- | The opaque token for using this currency.  Only the 'Currency'
 -- functions are given access to its constructors, since otherwise,
 -- a malicious user could create their own coins.
-data Token = Spend | UnsafePeek deriving (Typeable)
+data Token = Spend | UnsafePeek deriving (Generic)
+
+instance HasEscrowIDs Token
 
 instance Currency Token Coin where
   balance eID1 eID2 = do
