@@ -23,6 +23,8 @@ data FaeException =
   BadChainedInput ContractID Int |
   UntrustedInput ContractID ContractID |
   MissingInput Int |
+  NotEnoughInputs |
+  TooManyInputs |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
   BadEscrowID EntryID |

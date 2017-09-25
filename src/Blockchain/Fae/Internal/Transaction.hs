@@ -15,6 +15,7 @@ import Control.Monad.RWS
 import Control.Monad.State
 
 import Data.Dynamic
+import Data.Foldable
 import Data.Maybe
 import Data.Sequence (Seq)
 import Data.Typeable
@@ -23,31 +24,68 @@ import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 
+import GHC.Generics hiding (to)
+import qualified GHC.Generics as Gen (to)
+
 {- Types -}
 
 data InputArg =
   LiteralArg Dynamic |
   TrustedArg Int
 
-newtype Inputs = Inputs (Seq Dynamic)
 -- | Similar to the 'Contract' type but disallows 'release' and 'spend'.
 -- Unlike contracts, the return values of transactions are not used in
 -- contract code, but stored for external reference.  Thus, they need not
 -- (and cannot) bear value.
-type Transaction a = Inputs -> FaeTX a
+type Transaction inputs a = inputs -> FaeTX a
 
 type Storage = StorageT AbstractContract
 type InputOutputs = InputOutputsT AbstractContract
 type FaeStorage = FaeStorageT AbstractContract
 
+{- Typeclasses -}
+
+class GetInputValues a where
+  getInputValues :: [Dynamic] -> a
+  default getInputValues :: 
+    (Generic a, GGetInputValues (Rep a)) => [Dynamic] -> a
+  getInputValues s
+    | null s' = Gen.to x
+    | otherwise = throw TooManyInputs
+    where (x, s') = runState gGetInputValues s
+
+class GGetInputValues f where
+  gGetInputValues :: State [Dynamic] (f p)
+
+{- Instances -}
+
+instance (GGetInputValues f, GGetInputValues g) => GGetInputValues (f :*: g) where
+  gGetInputValues = do
+    l <- gGetInputValues
+    r <- gGetInputValues
+    return $ l :*: r
+
+instance (GetInputValues c, Typeable c) => GGetInputValues (K1 i c) where
+  gGetInputValues = do
+    s <- get
+    case s of
+      [] -> throw NotEnoughInputs
+      xDyn : s' -> do
+        put s'
+        return $ K1 $ fromDyn xDyn $
+          throw $ BadArgType (typeRep (Proxy @c)) (dynTypeRep xDyn)
+
+instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
+  gGetInputValues = M1 <$> gGetInputValues
+
 {- Functions -}
 
 runTransaction :: 
-  forall a result.
-  (Typeable a) =>
+  forall inputs a result.
+  (GetInputValues inputs, Typeable a) =>
   TransactionID -> PublicKey -> Bool ->
   Seq (ContractID, InputArg) -> 
-  Transaction a -> FaeStorage a
+  Transaction inputs a -> FaeStorage a
 runTransaction txID txKey isReward inputArgs f = handleAll placeException $
   state $ 
     runFaeContract txID txKey .
@@ -72,16 +110,16 @@ runFaeContract txID txKey =
   runCoroutine
 
 transaction :: 
-  (Typeable a) =>
+  (GetInputValues inputs, Typeable a) =>
   TransactionID ->
   Bool -> 
   Seq (ContractID, InputArg) -> 
-  Transaction a -> 
+  Transaction inputs a -> 
   Storage -> FaeContract Naught (a, Storage)
 transaction txID isReward inputArgs f storage = do
   (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
   inputs <- withReward inputs0
-  (result0, outputsL) <- listen $ getFae $ f (Inputs inputs)
+  (result0, outputsL) <- listen $ getFae $ f $ getInputValues $ toList inputs
   let 
     result = toDyn result0
     outputs = intMapList outputsL
