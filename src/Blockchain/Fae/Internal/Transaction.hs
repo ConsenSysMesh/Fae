@@ -59,6 +59,9 @@ class GGetInputValues f where
 
 {- Instances -}
 
+instance GGetInputValues U1 where
+  gGetInputValues = return U1
+
 instance (GGetInputValues f, GGetInputValues g) => GGetInputValues (f :*: g) where
   gGetInputValues = do
     l <- gGetInputValues
