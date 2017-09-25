@@ -20,6 +20,8 @@ import Data.Typeable
 
 import qualified Data.Map as Map
 
+import Debug.Trace
+
 {- Typeclasses -}
 
 -- |
@@ -145,8 +147,7 @@ newContract ::
   [BearsValue] -> [ShortContractID] -> Contract argType valType -> m ()
 newContract eIDs trusts f = liftTX $ Fae $ do
   cAbs <- makeContract eIDs f
-  lift $ lift $ Wrapped $ 
-    tell [Trusted cAbs trusts]
+  lift $ tell [Trusted cAbs trusts]
 
 -- | Gives the public key that signed the current transaction.
 sender :: (MonadTX m) => m PublicKey

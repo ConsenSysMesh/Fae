@@ -27,6 +27,8 @@ import qualified Data.Sequence as Seq
 import GHC.Generics hiding (to)
 import qualified GHC.Generics as Gen (to)
 
+import Debug.Trace
+
 {- Types -}
 
 data InputArg =
@@ -68,7 +70,7 @@ instance (GGetInputValues f, GGetInputValues g) => GGetInputValues (f :*: g) whe
     r <- gGetInputValues
     return $ l :*: r
 
-instance (GetInputValues c, Typeable c) => GGetInputValues (K1 i c) where
+instance (Typeable c) => GGetInputValues (K1 i c) where
   gGetInputValues = do
     s <- get
     case s of
