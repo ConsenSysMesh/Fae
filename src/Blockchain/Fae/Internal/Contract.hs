@@ -25,9 +25,8 @@ type FaeRequest argType valType =
 
 newtype Wrapped m a = Wrapped { unWrapped :: m a }
   deriving (Functor, Applicative, Monad)
-type Trusted = TrustedT AbstractContract
 
-type FaeRWS = RWS PublicKey [Trusted] EntryID 
+type FaeRWS = RWS PublicKey [AbstractContract] EntryID 
 type FaeContract s = Coroutine s (StateT Escrows (Wrapped FaeRWS))
 newtype FaeM s a = Fae { getFae :: FaeContract s a }
   deriving (Functor, Applicative, Monad)
@@ -46,7 +45,7 @@ newtype ConcreteContract argType valType =
   ConcreteContract
   (
     forall s. (Functor s) => 
-      argType -> FaeContract s (Maybe AbstractContract, valType)
+      argType -> FaeContract s (Maybe (ConcreteContract argType valType), valType)
   )
 
 type AbstractContract = ConcreteContract Dynamic Dynamic
@@ -105,8 +104,8 @@ makeConcrete f = ConcreteContract $ \x -> do
         Left (Request y g) -> (Just g, y)
         Right y -> (Nothing, y)
   modify $ Map.union outputEscrows
-  let gAbsM = makeAbstract . makeConcrete <$> gM
-  return (gAbsM, z)
+  let gConcM = makeConcrete <$> gM
+  return (gConcM, z)
 
 makeAbstract ::
   forall argType valType.
@@ -145,5 +144,4 @@ internalSpend ::
 internalSpend x = do
   outputEscrows <- takeEscrows [bearer x]
   return $ WithEscrows outputEscrows x
-
 

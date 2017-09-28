@@ -4,6 +4,8 @@ module Blockchain.Fae.Internal.Crypto
     module Blockchain.Fae.Internal.Crypto
   ) where
 
+import Control.Monad
+
 import qualified Crypto.Hash as Hash
 import qualified Crypto.PubKey.Ed25519 as Ed
 
@@ -14,6 +16,8 @@ import Data.Serialize (Serialize)
 import qualified Data.Serialize as Ser
 import qualified Data.Serialize.Put as Ser
 import qualified Data.Serialize.Get as Ser
+
+import System.IO.Unsafe
 
 newtype PublicKey = PublicKey Ed.PublicKey deriving (Eq, Show)
 data PrivateKey = PrivateKey Ed.PublicKey Ed.SecretKey
@@ -41,5 +45,20 @@ sign x (PrivateKey pubKey secKey) =
 unsign :: (Digestible a) => Signature -> a -> Maybe PublicKey
 unsign (Signature pubKey sig) msg
   | Ed.verify pubKey (digest msg) sig = Just $ PublicKey pubKey
+  | otherwise = Nothing
+
+newPrivateKey :: IO PrivateKey
+newPrivateKey = do
+  secKey <- Ed.generateSecretKey
+  let pubKey = Ed.toPublic secKey
+  return $ PrivateKey pubKey secKey
+
+{-# NOINLINE unsafeNewPrivateKey #-}
+unsafeNewPrivateKey :: PrivateKey
+unsafeNewPrivateKey = unsafePerformIO newPrivateKey
+
+public :: PrivateKey -> Maybe PublicKey
+public (PrivateKey pubKey privKey) 
+  | Ed.toPublic privKey == pubKey = Just $ PublicKey pubKey
   | otherwise = Nothing
 

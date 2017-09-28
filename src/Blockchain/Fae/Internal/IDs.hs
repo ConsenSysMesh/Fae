@@ -4,6 +4,7 @@ import Blockchain.Fae.Internal.Coroutine
 import Blockchain.Fae.Internal.Crypto
 
 import Data.Foldable
+import Data.Void
 
 import GHC.Generics
 
@@ -45,6 +46,11 @@ data EscrowID argType valType = EscrowID EntryID
 -- Instead, it is used to allow heterogeneous escrow IDs in the return type
 -- of 'getEscrowIDs'.
 data AnEscrowID = forall argType valType. AnEscrowID (EscrowID argType valType)
+-- | A wrapper that does /not/ officially contain an escrow ID.  Thus,
+-- a private escrow ID does not allow its escrow to be transferred to new
+-- contracts or escrows; it must be used in the place it was returned.
+newtype PrivateEscrowID argType valType = 
+  PrivateEscrowID (EscrowID argType valType)
 
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
 -- this type is, abstractly, something within a contract that has economic
@@ -91,6 +97,14 @@ instance
   HasEscrowIDs (EscrowID argType valType) where
 
   getEscrowIDs eID = [AnEscrowID eID]
+
+-- | This instance enforces the default that a type contains no escrows to
+-- a law for private escrows.  
+instance HasEscrowIDs (PrivateEscrowID argType valType) where
+  getEscrowIDs _ = []
+
+instance HasEscrowIDs Void where
+  getEscrowIDs _ = []
 
 -- Boring Generic boilerplate
 

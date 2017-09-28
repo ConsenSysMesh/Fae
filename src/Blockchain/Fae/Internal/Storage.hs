@@ -31,27 +31,18 @@ data TransactionEntryT c =
   }
 
 type InputOutputsT c = Map ShortContractID (OutputsT c)
-type OutputsT c = IntMap (TrustedT c)
-
-data TrustedT c = 
-  Trusted
-  {
-    abstractContract :: c,
-    trusted :: [ShortContractID]
-  }
-
+type OutputsT c = IntMap c
 type FaeStorageT c = StateT (StorageT c) IO
 
 {- TH -}
 
 makeLenses ''StorageT
 makeLenses ''TransactionEntryT
-makeLenses ''TrustedT
 
 {- Instances -}
 
 type instance Index (StorageT c) = ContractID
-type instance IxValue (StorageT c) = TrustedT c
+type instance IxValue (StorageT c) = c
 instance Ixed (StorageT c)
 instance At (StorageT c) where
   at cID@(JustTransaction txID) = throw (BadContractID cID)

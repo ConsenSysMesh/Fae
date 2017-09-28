@@ -89,14 +89,26 @@ release x = liftFae $ Fae $ do
     return y
 
 -- | This function is like 'return' but also ensures that the returned
--- value is passed with its backing escrows, maintaining its value.  The
--- last line of any contract (but not transaction) /must/ be of the form
--- @spend finalValue@.  This is enforced by the type system at compile
--- time.  Once a contract terminates with a 'spend', it is removed from
--- storage.
+-- value is passed with its backing escrows, maintaining its value.  Once
+-- a contract terminates with a 'spend', it is removed from storage.
 spend :: (MonadContract argType valType m) => valType -> m (WithEscrows valType)
 spend = liftFae . Fae . internalSpend 
 
+-- | Make an escrow ID private.  Since private escrows can't be
+-- transferred, we have to take special measures to allow them to be
+-- returned the first time.  This function and 'spend' are the only ones
+-- that can end a contract.
+private :: 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    MonadContract argType' (PrivateEscrowID argType valType) m
+  ) =>
+  EscrowID argType valType -> 
+  m (WithEscrows (PrivateEscrowID argType valType))
+private eID = do
+  WithEscrows escrows eID <- liftFae $ Fae $ internalSpend eID
+  return $ WithEscrows escrows (PrivateEscrowID eID)
+  
 -- | Calls the given escrow by ID as a function.
 useEscrow :: 
   (
@@ -108,9 +120,20 @@ useEscrow ::
 useEscrow (EscrowID eID) x = liftTX $ Fae $ do
   fAbs <- use $ at eID . defaultLens (throw $ BadEscrowID eID)
   let ConcreteContract f = unmakeAbstract fAbs
-  (gAbsM, y) <- f x
-  at eID .= gAbsM
+  (gConcM, y) <- f x
+  at eID .= fmap makeAbstract gConcM
   return y
+
+-- | A pass-through 'useEscrow' for private escrows, allowing them to be
+-- interacted with normally while still hiding the real escrow ID.
+usePrivateEscrow :: 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType,
+    MonadTX m
+  ) =>
+  PrivateEscrowID argType valType -> argType -> m valType
+usePrivateEscrow (PrivateEscrowID eID) = useEscrow eID
 
 -- | Registers a contract as a new escrow, returning its ID.  The first
 -- argument is a list of Haskell values marked as "bearers" of
@@ -147,10 +170,10 @@ newContract ::
     Typeable argType, Typeable valType,
     MonadTX m
   ) =>
-  [BearsValue] -> [ShortContractID] -> Contract argType valType -> m ()
-newContract eIDs trusts f = liftTX $ Fae $ do
+  [BearsValue] -> Contract argType valType -> m ()
+newContract eIDs f = liftTX $ Fae $ do
   cAbs <- makeContract eIDs f
-  lift $ tell [Trusted cAbs trusts]
+  lift $ tell [cAbs]
 
 -- | Gives the public key that signed the current transaction.
 sender :: (MonadTX m) => m PublicKey

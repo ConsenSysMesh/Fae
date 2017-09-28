@@ -4,15 +4,13 @@ import Blockchain.Fae.Internal
 import Control.Monad.State
 
 import Data.Dynamic
-import Data.Functor.Identity
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
+import Data.Void
 
 import GHC.Generics (Generic)
 
 instance Digestible Int
-instance GetInputValues ()
-instance GetInputValues (Identity String)
 
 main :: IO ()
 main = do
@@ -23,13 +21,13 @@ main = do
 
   where
     runArgs = Seq.singleton $
-      (TransactionOutput txID1 0, LiteralArg $ toDyn "Hello, world!")
+      (TransactionOutput txID1 0, toDyn "Hello, world!")
     txID1 = ShortContractID $ digest (1 :: Int)
     txID2 = ShortContractID $ digest (2 :: Int)
     pubKey = undefined
 
-createContractTX :: Transaction () ()
-createContractTX = \() -> newContract [] [] c
+createContractTX :: Transaction Void ()
+createContractTX = \_ -> newContract [] c
   where
     c :: Contract String String
     c s = do
@@ -37,6 +35,6 @@ createContractTX = \() -> newContract [] [] c
       result <- useEscrow eID ()
       spend result
 
-runContractTX :: Transaction (Identity String) String
-runContractTX = return . runIdentity
+runContractTX :: Transaction String String
+runContractTX = return 
 

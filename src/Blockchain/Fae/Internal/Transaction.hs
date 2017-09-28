@@ -19,6 +19,7 @@ import Data.Foldable
 import Data.Maybe
 import Data.Sequence (Seq)
 import Data.Typeable
+import Data.Void
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -30,10 +31,6 @@ import qualified GHC.Generics as Gen (to)
 import Debug.Trace
 
 {- Types -}
-
-data InputArg =
-  LiteralArg Dynamic |
-  TrustedArg Int
 
 -- | Similar to the 'Contract' type but disallows 'release' and 'spend'.
 -- Unlike contracts, the return values of transactions are not used in
@@ -60,6 +57,18 @@ class GGetInputValues f where
   gGetInputValues :: State [Dynamic] (f p)
 
 {- Instances -}
+
+instance GetInputValues Void where
+  getInputValues [] = undefined
+  getInputValues _ = throw TooManyInputs
+
+instance (Typeable a, Typeable b) => GetInputValues (a, b)
+
+instance {-# OVERLAPPABLE #-} (Typeable a) => GetInputValues a where
+  getInputValues [xDyn] = fromDyn xDyn $
+    throw $ BadArgType (typeRep (Proxy @a)) (dynTypeRep xDyn)
+  getInputValues [] = throw NotEnoughInputs
+  getInputValues _ = throw TooManyInputs
 
 instance GGetInputValues U1 where
   gGetInputValues = return U1
@@ -89,7 +98,7 @@ runTransaction ::
   forall inputs a result.
   (GetInputValues inputs, Typeable a) =>
   TransactionID -> PublicKey -> Bool ->
-  Seq (ContractID, InputArg) -> 
+  Seq (ContractID, Dynamic) -> 
   Transaction inputs a -> FaeStorage a
 runTransaction txID txKey isReward inputArgs f = handleAll placeException $
   state $ 
@@ -118,7 +127,7 @@ transaction ::
   (GetInputValues inputs, Typeable a) =>
   TransactionID ->
   Bool -> 
-  Seq (ContractID, InputArg) -> 
+  Seq (ContractID, Dynamic) -> 
   Transaction inputs a -> 
   Storage -> FaeContract Naught (a, Storage)
 transaction txID isReward inputArgs f storage = do
@@ -142,40 +151,22 @@ transaction txID isReward inputArgs f storage = do
 
 runInputContracts ::
   (Functor s) =>
-  Seq (ContractID, InputArg) ->
+  Seq (ContractID, Dynamic) ->
   Storage ->
   FaeContract s (Seq Dynamic, Storage, InputOutputs)
 runInputContracts inputArgs storage = 
   (\x s f -> foldl f x s) (return (Seq.empty, storage, Map.empty)) inputArgs $
   \accM (cID, arg) -> do
     (results, storage, inputOutputs) <- accM
-    let results' = Seq.zip (fst <$> inputArgs) results
-    ((gAbsM, result), outputsL) <- listen $ callContract results' storage cID arg
+    let 
+      results' = Seq.zip (fst <$> inputArgs) results
+      ConcreteContract fAbs = 
+        storage ^. at cID . defaultLens (throw $ BadInput cID)
+    ((gAbsM, result), outputsL) <- listen $ fAbs arg
     censor (const []) $ return
       (
         results |> result,
-        storage & at cID %~ liftM2 (_abstractContract .~) gAbsM,
+        storage & at cID .~ gAbsM,
         inputOutputs & at (shorten cID) ?~ intMapList outputsL
       )
-
-callContract :: 
-  (Functor s) =>
-  Seq (ContractID, Dynamic) -> Storage -> ContractID -> InputArg ->
-  FaeContract s (Maybe AbstractContract, Dynamic)
-callContract results storage cID arg = fAbs realArg
-  where
-    Trusted (ConcreteContract fAbs) trusts = 
-      storage ^. at cID . defaultLens (throw $ BadInput cID)
-    realArg = case arg of
-      LiteralArg xDyn -> xDyn
-      TrustedArg i -> getRealArg cID trusts results i
-
-getRealArg :: 
-  ContractID -> [ShortContractID] -> Seq (ContractID, Dynamic) -> Int -> Dynamic
-getRealArg cID trusts results i
-  | shorten chainID `elem` trusts = chainVal
-  | otherwise = throw $ UntrustedInput cID chainID
-  where 
-    (chainID, chainVal) = 
-      fromMaybe (throw $ BadChainedInput cID i) (results Seq.!? i)
 

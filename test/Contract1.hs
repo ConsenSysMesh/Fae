@@ -7,14 +7,11 @@ import Control.Monad.State
 import Data.Dynamic
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
+import Data.Void
 
 import GHC.Generics (Generic)
 
-newtype StringArg = StringArg { getStringArg :: String } deriving (Generic)
-
 instance Digestible Int
-instance GetInputValues ()
-instance GetInputValues StringArg
 
 main :: IO ()
 main = 
@@ -31,17 +28,17 @@ main =
 
   where
     runArgs = Seq.singleton $
-      (TransactionOutput txID1 0, LiteralArg $ toDyn "Hello, world!")
+      (TransactionOutput txID1 0, toDyn "Hello, world!")
     txID1 = ShortContractID $ digest (1 :: Int)
     txID2 = ShortContractID $ digest (2 :: Int)
     pubKey = undefined
 
-createContractTX :: Transaction () ()
-createContractTX = \() -> newContract [] [] c
+createContractTX :: Transaction Void ()
+createContractTX = \_ -> newContract [] c
   where
     c :: Contract String String
     c = spend
 
-runContractTX :: Transaction StringArg String
-runContractTX = return . getStringArg
+runContractTX :: Transaction String String
+runContractTX = return
 
