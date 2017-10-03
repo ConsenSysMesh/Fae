@@ -81,10 +81,28 @@ deriving instance (Functor s) => MonadTX (FaeM s)
 -- currentValue@ to suspend the current contract, simultaneously
 -- releasing an intermediate value, and awaiting its next call to
 -- continue with the arg that was passed.
-release :: (MonadContract argType valType m) => valType -> m argType
+release :: 
+  (HasEscrowIDs valType, MonadContract argType valType m) => 
+  valType -> m argType
 release x = liftFae $ Fae $ do
   req <- internalSpend x
   suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
+    lift $ modify $ Map.union inputEscrows
+    return y
+
+-- | Like 'release', but makes its argument, which must be an escrow ID,
+-- transactional.
+releaseTX :: 
+  (
+    HasEscrowIDs argType', HasEscrowIDs valType',
+    MonadContract argType (TXEscrowID argType' valType') m
+  ) =>
+  EscrowID argType' valType' -> 
+  m argType
+releaseTX x = liftFae $ Fae $ do
+  WithEscrows escrows req <- internalSpend x
+  let req' = WithEscrows escrows $ TXEscrowID req
+  suspend $ Request req' $ \(WithEscrows inputEscrows y) -> do
     lift $ modify $ Map.union inputEscrows
     return y
 
@@ -94,20 +112,18 @@ release x = liftFae $ Fae $ do
 spend :: (MonadContract argType valType m) => valType -> m (WithEscrows valType)
 spend = liftFae . Fae . internalSpend 
 
--- | Make an escrow ID private.  Since private escrows can't be
--- transferred, we have to take special measures to allow them to be
--- returned the first time.  This function and 'spend' are the only ones
--- that can end a contract.
-private :: 
+-- | Like 'spend', but makes its argument, which must be an escrow ID,
+-- transactional.
+spendTX :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    MonadContract argType' (PrivateEscrowID argType valType) m
+    MonadContract argType' (TXEscrowID argType valType) m
   ) =>
   EscrowID argType valType -> 
-  m (WithEscrows (PrivateEscrowID argType valType))
-private eID = do
+  m (WithEscrows (TXEscrowID argType valType))
+spendTX eID = do
   WithEscrows escrows eID <- liftFae $ Fae $ internalSpend eID
-  return $ WithEscrows escrows (PrivateEscrowID eID)
+  return $ WithEscrows escrows (TXEscrowID eID)
   
 -- | Calls the given escrow by ID as a function.
 useEscrow :: 
@@ -126,14 +142,14 @@ useEscrow (EscrowID eID) x = liftTX $ Fae $ do
 
 -- | A pass-through 'useEscrow' for private escrows, allowing them to be
 -- interacted with normally while still hiding the real escrow ID.
-usePrivateEscrow :: 
+useTXEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
     Typeable argType, Typeable valType,
     MonadTX m
   ) =>
-  PrivateEscrowID argType valType -> argType -> m valType
-usePrivateEscrow (PrivateEscrowID eID) = useEscrow eID
+  TXEscrowID argType valType -> argType -> m valType
+useTXEscrow (TXEscrowID eID) = useEscrow eID
 
 -- | Registers a contract as a new escrow, returning its ID.  The first
 -- argument is a list of Haskell values marked as "bearers" of

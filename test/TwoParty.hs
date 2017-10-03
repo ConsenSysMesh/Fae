@@ -63,6 +63,6 @@ voteTX :: Transaction Bool ()
 voteTX _ = return ()
 
 claimTX :: 
-  Transaction (Maybe TwoPartyToken, PrivateEscrowID TwoPartyToken String) String
-claimTX (tokenM, pID) = usePrivateEscrow pID $ fromJust tokenM
+  Transaction (Maybe TwoPartyToken, TXEscrowID TwoPartyToken String) String
+claimTX (tokenM, pID) = useTXEscrow pID $ fromJust tokenM
 

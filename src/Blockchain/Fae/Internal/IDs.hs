@@ -47,10 +47,9 @@ data EscrowID argType valType = EscrowID EntryID
 -- of 'getEscrowIDs'.
 data AnEscrowID = forall argType valType. AnEscrowID (EscrowID argType valType)
 -- | A wrapper that does /not/ officially contain an escrow ID.  Thus,
--- a private escrow ID does not allow its escrow to be transferred to new
--- contracts or escrows; it must be used in the place it was returned.
-newtype PrivateEscrowID argType valType = 
-  PrivateEscrowID (EscrowID argType valType)
+-- a transactional escrow ID does not allow its escrow to be transferred to
+-- new contracts or escrows; it must be used in the place it was returned.
+newtype TXEscrowID argType valType = TXEscrowID (EscrowID argType valType)
 
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
 -- this type is, abstractly, something within a contract that has economic
@@ -99,8 +98,8 @@ instance
   getEscrowIDs eID = [AnEscrowID eID]
 
 -- | This instance enforces the default that a type contains no escrows to
--- a law for private escrows.  
-instance HasEscrowIDs (PrivateEscrowID argType valType) where
+-- a law for transactional escrows.  
+instance HasEscrowIDs (TXEscrowID argType valType) where
   getEscrowIDs _ = []
 
 instance HasEscrowIDs Void where

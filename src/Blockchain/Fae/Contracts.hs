@@ -70,7 +70,7 @@ offer2 ::
   forall a m. (HasEscrowIDs a, Typeable a, MonadTX m) => 
   TwoParties -> a -> ShortContractID -> m ()
 offer2 party x dealID = newContract [bearer x] c where
-  c :: Contract () (PrivateEscrowID TwoPartyToken a)
+  c :: Contract () (TXEscrowID TwoPartyToken a)
   c _ = redeem x $ \(TwoPartyToken party') -> party == party'
 
 data TwoPartyState =
@@ -123,8 +123,7 @@ twoPartySwap partyA partyB
 -- stores.
 
 -- | An essential type synonym for keeping things neat
-type VendorT tok coin a = 
-  PrivateEscrowID (EscrowID tok coin) (a, EscrowID tok coin)
+type VendorT tok coin a = TXEscrowID (EscrowID tok coin) (a, EscrowID tok coin)
 
 -- | The first argument is an escrow-backed value to sell; the second is
 -- its price; the third is the seller's public key.  A new escrow is
@@ -145,7 +144,7 @@ vendor x price seller = do
     let (cost, remit) = fromMaybe (throw NotEnough) changeM
     signOver cost seller
     spend (x, remit)
-  private eID
+  spendTX eID
 
 -- | The first argument is the product to sell; the second is a validation
 -- function for the token type that this contract accepts.  A new escrow is
@@ -153,12 +152,12 @@ vendor x price seller = do
 redeem ::
   (
     HasEscrowIDs a, HasEscrowIDs b, Typeable a, Typeable b,
-    MonadContract argType (PrivateEscrowID b a) m
+    MonadContract argType (TXEscrowID b a) m
   ) =>
-  a -> (b -> Bool) -> m (WithEscrows (PrivateEscrowID b a))
+  a -> (b -> Bool) -> m (WithEscrows (TXEscrowID b a))
 redeem x f = do
   eID <- newEscrow [bearer x] $ bool (throw BadToken) (spend x) . f
-  private eID
+  spendTX eID
 
 -- $possession
 -- A possession contract is simply one that marks a value as being owned by

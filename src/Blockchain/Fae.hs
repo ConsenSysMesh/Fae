@@ -22,13 +22,13 @@ module Blockchain.Fae
   (
     -- * Contract authors' API
     MonadContract(..), MonadTX(..), 
-    release, spend, useEscrow, usePrivateEscrow, 
-    newEscrow, newContract, sender, bearer, private, shorten, claimReward,
+    release, releaseTX, spend, spendTX, useEscrow, useTXEscrow, 
+    newEscrow, newContract, sender, bearer, shorten, claimReward,
     -- * Contract types
     Contract, ContractT, Transaction, Fae, FaeTX, BearsValue, HasEscrowIDs(..),
     -- * Identifier types
     PublicKey, ContractID, ShortContractID, 
-    EscrowID, AnEscrowID, PrivateEscrowID, WithEscrows,
+    EscrowID, AnEscrowID, TXEscrowID, WithEscrows,
     RewardEscrowID, anEscrowID
   ) where
 
