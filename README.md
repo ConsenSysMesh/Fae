@@ -3,12 +3,8 @@
 Fae is a smart contract system and blockchain definition with equivalent power
 to Ethereum but with the following additional benefits:
 
-  - It is inherently scalable in that a participant's storage requirements need
-    not grow at the same speed as the blockchain.
-
-  - Smart contracts are immutable and stateless, preventing errors of reentrancy.
-
-  - Immutability and statelessness equate to a UTXO-based blockchain.
+  - Transaction execution is parallelizable and each network node need only
+    execute transactions it wants.
 
   - There is no virtual machine, but rather a minimal execution environment that
     can run an existing, general-purpose programming language.
@@ -18,5 +14,8 @@ to Ethereum but with the following additional benefits:
 
   - Scarcity policy is left to the discretion of each smart contract.
 
-We provide a [formal specification](docs/Specification.md) of the system and
-an [implementation](src/) in Haskell.
+We provide an [implementation](src/) of this system in Haskell; if you have
+permission, you can also read [the white
+paper](https://consensys.quip.com/QsIxAHHGHz6W/Functional-principles-of-contract-design),
+which explains the rationale for the design from legal, algorithmic, and
+security perspectives.
