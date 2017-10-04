@@ -97,33 +97,32 @@ releaseTX ::
     HasEscrowIDs argType', HasEscrowIDs valType',
     MonadContract argType (TXEscrowID argType' valType') m
   ) =>
-  EscrowID argType' valType' -> 
+  TXEscrowID argType' valType' -> 
   m argType
-releaseTX x = liftFae $ Fae $ do
-  WithEscrows escrows req <- internalSpend x
-  let req' = WithEscrows escrows $ TXEscrowID req
-  suspend $ Request req' $ \(WithEscrows inputEscrows y) -> do
+releaseTX x@(TXEscrowID x') = liftFae $ Fae $ do
+  WithEscrows escrows _ <- internalSpend x'
+  let req = WithEscrows escrows x
+  suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
     lift $ modify $ Map.union inputEscrows
     return y
 
 -- | This function is like 'return' but also ensures that the returned
 -- value is passed with its backing escrows, maintaining its value.  Once
 -- a contract terminates with a 'spend', it is removed from storage.
-spend :: (MonadContract argType valType m) => valType -> m (WithEscrows valType)
-spend = liftFae . Fae . internalSpend 
+spend :: 
+  (HasEscrowIDs valType, MonadTX m) => 
+  valType -> m (WithEscrows valType)
+spend = liftTX . Fae . internalSpend 
 
 -- | Like 'spend', but makes its argument, which must be an escrow ID,
 -- transactional.
 spendTX :: 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    MonadContract argType' (TXEscrowID argType valType) m
-  ) =>
-  EscrowID argType valType -> 
+  (HasEscrowIDs argType, HasEscrowIDs valType, MonadTX m) =>
+  TXEscrowID argType valType -> 
   m (WithEscrows (TXEscrowID argType valType))
-spendTX eID = do
-  WithEscrows escrows eID <- liftFae $ Fae $ internalSpend eID
-  return $ WithEscrows escrows (TXEscrowID eID)
+spendTX x@(TXEscrowID eID) = do
+  WithEscrows escrows _ <- liftTX $ Fae $ internalSpend eID
+  return $ WithEscrows escrows x
   
 -- | Calls the given escrow by ID as a function.
 useEscrow :: 
@@ -135,9 +134,9 @@ useEscrow ::
   EscrowID argType valType -> argType -> m valType
 useEscrow (EscrowID eID) x = liftTX $ Fae $ do
   fAbs <- use $ at eID . defaultLens (throw $ BadEscrowID eID)
-  let ConcreteContract f = unmakeAbstract fAbs
+  let ConcreteContract f = unmakeAbstractEscrow fAbs
   (gConcM, y) <- f x
-  at eID .= fmap makeAbstract gConcM
+  at eID .= fmap makeEscrowAbstract gConcM
   return y
 
 -- | A pass-through 'useEscrow' for private escrows, allowing them to be
@@ -164,12 +163,35 @@ newEscrow ::
   ) =>
   [BearsValue] -> Contract argType valType -> m (EscrowID argType valType)
 newEscrow eIDs f = liftTX $ Fae $ do
-  cAbs <- makeContract eIDs f
-  eID <- lift $ lift $ Wrapped $ do
-    eID <- get
-    _2 += 1
-    return eID
-  modify $ Map.insert eID cAbs
+  cAbs <- makeEscrow eIDs f
+  newE cAbs
+
+newTXEscrow :: 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType,
+    MonadTX m
+  ) =>
+  [BearsValue] -> TXEscrow argType valType -> m (TXEscrowID argType valType)
+newTXEscrow eIDs f = liftTX $ Fae $ do
+  cAbs <- makeTXEscrow eIDs f
+  TXEscrowID <$> newE cAbs
+
+newE :: 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType, Functor s
+  ) =>
+  AbstractEscrow -> FaeContract s (EscrowID argType valType)
+newE cAbs = do
+  eID@(EscrowID entID) <- nextEscrowID
+  modify $ Map.insert entID cAbs
+  return eID
+
+nextEscrowID :: (Functor s) => FaeContract s (EscrowID argType valType)
+nextEscrowID = lift $ lift $ Wrapped $ do
+  eID <- get
+  _2 += 1
   return $ EscrowID eID
 
 -- | Registers a contract publicly.  The first argument is the same as for
@@ -181,11 +203,7 @@ newEscrow eIDs f = liftTX $ Fae $ do
 -- of one of its trusted contracts; otherwise, its argument must be
 -- literal.
 newContract ::
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    MonadTX m
-  ) =>
+  (Read argType, HasEscrowIDs valType, Typeable valType, MonadTX m) =>
   [BearsValue] -> Contract argType valType -> m ()
 newContract eIDs f = liftTX $ Fae $ do
   cAbs <- makeContract eIDs f

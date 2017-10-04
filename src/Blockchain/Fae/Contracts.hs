@@ -139,7 +139,7 @@ vendor ::
   a -> Natural -> PublicKey -> 
   m (WithEscrows (VendorT tok coin a))
 vendor x price seller = do
-  eID <- newEscrow [bearer x] $ \payment -> do
+  eID <- newTXEscrow [bearer x] $ \payment -> do
     changeM <- change payment price
     let (cost, remit) = fromMaybe (throw NotEnough) changeM
     signOver cost seller
@@ -156,7 +156,7 @@ redeem ::
   ) =>
   a -> (b -> Bool) -> m (WithEscrows (TXEscrowID b a))
 redeem x f = do
-  eID <- newEscrow [bearer x] $ bool (throw BadToken) (spend x) . f
+  eID <- newTXEscrow [bearer x] $ bool (throw BadToken) (spend x) . f
   spendTX eID
 
 -- $possession

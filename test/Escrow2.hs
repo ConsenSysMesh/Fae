@@ -22,13 +22,13 @@ main = do
 
   where
     runArgs = Seq.singleton $
-      (TransactionOutput txID1 0, toDyn "Hello, world!")
+      (TransactionOutput txID1 0, "\"Hello, world!\"")
     txID1 = ShortContractID $ digest (1 :: Int)
     txID2 = ShortContractID $ digest (2 :: Int)
     pubKey = undefined
 
 createContractTX :: Transaction Void ()
-createContractTX = \_ -> newContract [] c
+createContractTX _ = newContract [] c
   where
     c :: Contract String (EscrowID () String)
     c s = do

@@ -34,13 +34,13 @@ main = do
   putStrLn $ "B got: " ++ resultB
 
   where
-    args = Seq.singleton (cID, toDyn True)
+    args = Seq.singleton (cID, "True")
     claimArgsA = claimArgs cIDA
     claimArgsB = claimArgs cIDB
     claimArgs cIDX = Seq.fromList
       [
-        (cID, toDyn True),
-        (cIDX, toDyn ())
+        (cID, "True"),
+        (cIDX, "()")
       ]
     cID = TransactionOutput txID1 0
     cIDA = TransactionOutput txID2 0

@@ -26,5 +26,5 @@ main = do
     pubKey = undefined
 
 helloWorldTX :: Transaction () String
-helloWorldTX = \() -> return "Hello, world!"
+helloWorldTX () = return "Hello, world!"
 

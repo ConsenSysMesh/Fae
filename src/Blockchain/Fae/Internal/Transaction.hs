@@ -32,15 +32,11 @@ import Debug.Trace
 
 {- Types -}
 
--- | Similar to the 'Contract' type but disallows 'release' and 'spend'.
--- Unlike contracts, the return values of transactions are not used in
--- contract code, but stored for external reference.  Thus, they need not
--- (and cannot) bear value.
-type Transaction inputs a = inputs -> FaeTX a
-
 type Storage = StorageT AbstractContract
 type InputOutputs = InputOutputsT AbstractContract
 type FaeStorage = FaeStorageT AbstractContract
+
+type Transaction a b = a -> FaeTX b
 
 {- Typeclasses -}
 
@@ -98,7 +94,7 @@ runTransaction ::
   forall inputs a result.
   (GetInputValues inputs, Typeable a) =>
   TransactionID -> PublicKey -> Bool ->
-  Seq (ContractID, Dynamic) -> 
+  Seq (ContractID, String) -> 
   Transaction inputs a -> FaeStorage a
 runTransaction txID txKey isReward inputArgs f = handleAll placeException $
   state $ 
@@ -127,13 +123,14 @@ transaction ::
   (GetInputValues inputs, Typeable a) =>
   TransactionID ->
   Bool -> 
-  Seq (ContractID, Dynamic) -> 
+  Seq (ContractID, String) -> 
   Transaction inputs a -> 
   Storage -> FaeContract Naught (a, Storage)
 transaction txID isReward inputArgs f storage = do
   (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
   inputs <- withReward inputs0
-  (result0, outputsL) <- listen $ getFae $ f $ getInputValues $ toList inputs
+  (result0, outputsL) <- 
+    listen $ getFae $ f $ getInputValues $ toList inputs
   let 
     result = toDyn result0
     outputs = intMapList outputsL
@@ -151,7 +148,7 @@ transaction txID isReward inputArgs f storage = do
 
 runInputContracts ::
   (Functor s) =>
-  Seq (ContractID, Dynamic) ->
+  Seq (ContractID, String) ->
   Storage ->
   FaeContract s (Seq Dynamic, Storage, InputOutputs)
 runInputContracts inputArgs storage = 
