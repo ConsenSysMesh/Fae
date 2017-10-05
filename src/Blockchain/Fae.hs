@@ -28,7 +28,7 @@ module Blockchain.Fae
     sender, bearer, shorten, claimReward,
     -- * Contract types
     Contract, ContractT, Transaction, TXEscrow, 
-    Fae, FaeTX, BearsValue, HasEscrowIDs(..),
+    Fae, FaeTX, BearsValue, HasEscrowIDs(..), GetInputValues(..),
     -- * Identifier types
     PublicKey, ContractID, ShortContractID, 
     EscrowID, AnEscrowID, TXEscrowID, WithEscrows,

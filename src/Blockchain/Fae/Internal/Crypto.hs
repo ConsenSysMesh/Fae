@@ -19,6 +19,8 @@ import qualified Data.Serialize.Get as Ser
 
 import System.IO.Unsafe
 
+-- | It's what it looks like.  We don't implement our own crypto because we
+-- aren't crazy; this is taken from 'cryptonite'.
 newtype PublicKey = PublicKey Ed.PublicKey deriving (Eq, Show)
 data PrivateKey = PrivateKey Ed.PublicKey Ed.SecretKey
 data Signature = Signature Ed.PublicKey Ed.Signature

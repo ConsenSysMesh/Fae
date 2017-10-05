@@ -19,6 +19,10 @@ import qualified Data.Map as Map
 {- Types -}
 
 type Escrows = Map EntryID AbstractEscrow
+-- | This type encodes a value together with its backing escrows.  It is
+-- constructed automatically, and you can't construct it manually, so it is
+-- only useful in type signatures; it forces the last line of a contract or
+-- escrow to be 'spend'.
 data WithEscrows a = WithEscrows Escrows a
 type FaeRequest argType valType = 
   Request (WithEscrows valType) (WithEscrows argType)

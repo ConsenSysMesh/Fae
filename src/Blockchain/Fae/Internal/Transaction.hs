@@ -36,10 +36,23 @@ type Storage = StorageT AbstractContract
 type InputOutputs = InputOutputsT AbstractContract
 type FaeStorage = FaeStorageT AbstractContract
 
+-- | A more semantically-meaningful type synonym.  Transactions, though
+-- similar to contracts in many internal ways, differ greatly in their
+-- inputs and outputs.  The argument of type 'a' is constructed from the
+-- return values of the input contracts according to its 'GetInputValues'
+-- instance.  The return value need not and can not contain escrows (or
+-- rather, the escrow IDs it contains will not be transferred anywhere).
 type Transaction a b = a -> FaeTX b
 
 {- Typeclasses -}
 
+-- | This class controls how a type is constructed from
+-- a heterogeneously-type list of input return values.  Its default
+-- instance, for any 'Generic' type, simply assigns each field of a product
+-- type from successive values in the list, failing if they don't all match
+-- or there are extras on one side.  Therefore it is unlikely you will have
+-- to write an instance yourself; however, you do need to @instance
+-- GetInputValues <your type>@ for any 'a' you choose to use.
 class GetInputValues a where
   getInputValues :: [Dynamic] -> a
   default getInputValues :: 

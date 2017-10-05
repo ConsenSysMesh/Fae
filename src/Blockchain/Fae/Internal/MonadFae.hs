@@ -166,6 +166,10 @@ newEscrow eIDs f = liftTX $ Fae $ do
   cAbs <- makeEscrow eIDs f
   newE cAbs
 
+-- | Makes a new transactional escrow, as 'newEscrow'.  Transactional
+-- escrow IDs are forced to have a trivial 'HasEscrowIDs' instance, so you
+-- can't transfer transactional escrows.  In other words, they must be
+-- executed in-place when they appear in a transaction.
 newTXEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
