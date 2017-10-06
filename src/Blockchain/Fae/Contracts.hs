@@ -71,7 +71,9 @@ offer2 ::
   TwoParties -> a -> ShortContractID -> m ()
 offer2 party x dealID = newContract [bearer x] c where
   c :: Contract () (TXEscrowID TwoPartyToken a)
-  c _ = redeem x $ \(TwoPartyToken party') -> party == party'
+  c _ = do
+    eID <- redeem x $ \(TwoPartyToken party') -> party == party'
+    spendTX eID
 
 data TwoPartyState =
   Undecided Tristate |
@@ -122,9 +124,6 @@ twoPartySwap partyA partyB
 -- the seller delivers the product automatically, allowing Fae-powered
 -- stores.
 
--- | An essential type synonym for keeping things neat
-type VendorT tok coin a = TXEscrowID (EscrowID tok coin) (a, EscrowID tok coin)
-
 -- | The first argument is an escrow-backed value to sell; the second is
 -- its price; the third is the seller's public key.  A new escrow is
 -- created containing the value, which accepts a specific currency's value
@@ -132,32 +131,22 @@ type VendorT tok coin a = TXEscrowID (EscrowID tok coin) (a, EscrowID tok coin)
 -- change.  The price of the value is signed over to the seller as a new
 -- contract.
 vendor :: 
-  (
-    HasEscrowIDs a, Typeable a, Currency tok coin, 
-    MonadContract argType (VendorT tok coin a) m
-  ) =>
+  (HasEscrowIDs a, Typeable a, Currency tok coin, MonadTX m) =>
   a -> Natural -> PublicKey -> 
-  m (WithEscrows (VendorT tok coin a))
-vendor x price seller = do
-  eID <- newTXEscrow [bearer x] $ \payment -> do
-    changeM <- change payment price
-    let (cost, remit) = fromMaybe (throw NotEnough) changeM
-    signOver cost seller
-    spend (x, remit)
-  spendTX eID
+  m (TXEscrowID (EscrowID tok coin) (a, EscrowID tok coin))
+vendor x price seller = newTXEscrow [bearer x] $ \payment -> do
+  changeM <- change payment price
+  let (cost, remit) = fromMaybe (throw NotEnough) changeM
+  signOver cost seller
+  spend (x, remit)
 
 -- | The first argument is the product to sell; the second is a validation
 -- function for the token type that this contract accepts.  A new escrow is
 -- created that accepts the token and, if it is valid, returns the product.
 redeem ::
-  (
-    HasEscrowIDs a, HasEscrowIDs b, Typeable a, Typeable b,
-    MonadContract argType (TXEscrowID b a) m
-  ) =>
-  a -> (b -> Bool) -> m (WithEscrows (TXEscrowID b a))
-redeem x f = do
-  eID <- newTXEscrow [bearer x] $ bool (throw BadToken) (spend x) . f
-  spendTX eID
+  (HasEscrowIDs a, HasEscrowIDs b, Typeable a, Typeable b, MonadTX m) =>
+  a -> (b -> Bool) -> m (TXEscrowID b a)
+redeem x f = newTXEscrow [bearer x] $ bool (throw BadToken) (spend x) . f
 
 -- $possession
 -- A possession contract is simply one that marks a value as being owned by
