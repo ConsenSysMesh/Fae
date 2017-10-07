@@ -14,7 +14,7 @@ to Ethereum but with the following additional benefits:
 
   - Scarcity policy is left to the discretion of each smart contract.
 
-We provide an [implementation](src/) of this system in Haskell; if you have
+We provide an [implementation](src/) of this system in Haskell, for which we have included the [haddocks](https://consensys.github.io/Fae/); if you have
 permission, you can also read [the white
 paper](https://consensys.quip.com/QsIxAHHGHz6W/Functional-principles-of-contract-design),
 which explains the rationale for the design from legal, algorithmic, and
