@@ -5,6 +5,7 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 
+import Control.Monad.IO.Class
 import Control.Monad.State
 
 import Data.Dynamic
@@ -23,16 +24,25 @@ newtype StorageT c =
   }
 
 data TransactionEntryT c =
+  forall a. (Show a) =>
   TransactionEntry 
   {
     inputOutputs :: InputOutputsT c,
     outputs :: OutputsT c,
-    result :: Dynamic
+    result :: a
   }
 
 type InputOutputsT c = Map ShortContractID (OutputsT c)
 type OutputsT c = IntMap c
-type FaeStorageT c = StateT (StorageT c) IO
+newtype FaeStorageT c a = FaeStorage {getFaeStorage :: StateT (StorageT c) IO a}
+  deriving 
+  (
+    Functor, Applicative, Monad, 
+    MonadThrow, MonadCatch, MonadMask,
+    MonadIO
+  )
+
+deriving instance MonadState (StorageT c) (FaeStorageT c)
 
 {- TH -}
 

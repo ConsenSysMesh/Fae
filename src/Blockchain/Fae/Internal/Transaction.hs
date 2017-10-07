@@ -28,8 +28,6 @@ import qualified Data.Sequence as Seq
 import GHC.Generics hiding (to)
 import qualified GHC.Generics as Gen (to)
 
-import Debug.Trace
-
 {- Types -}
 
 type Storage = StorageT AbstractContract
@@ -104,25 +102,23 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 {- Functions -}
 
 runTransaction :: 
-  forall inputs a result.
-  (GetInputValues inputs, Typeable a) =>
+  (GetInputValues inputs, Typeable a, Show a) =>
   TransactionID -> PublicKey -> Bool ->
   Seq (ContractID, String) -> 
-  Transaction inputs a -> FaeStorage a
+  Transaction inputs a -> FaeStorage ()
 runTransaction txID txKey isReward inputArgs f = handleAll placeException $
-  state $ 
+  modify $ 
     runFaeContract txID txKey .
     transaction txID isReward inputArgs f 
   where
-    placeException e = do
+    placeException e = 
       _getStorage . at txID ?=
         TransactionEntry
         {
           inputOutputs = throw e,
           outputs = throw e,
-          result = throw e
+          result = throw e :: Void
         }
-      return $ throw e
 
 runFaeContract :: TransactionID -> PublicKey -> FaeContract Naught a -> a
 runFaeContract txID txKey =
@@ -133,24 +129,21 @@ runFaeContract txID txKey =
   runCoroutine
 
 transaction :: 
-  (GetInputValues inputs, Typeable a) =>
+  (GetInputValues inputs, Typeable a, Show a) =>
   TransactionID ->
   Bool -> 
   Seq (ContractID, String) -> 
   Transaction inputs a -> 
-  Storage -> FaeContract Naught (a, Storage)
+  Storage -> FaeContract Naught Storage
 transaction txID isReward inputArgs f storage = do
   (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
   inputs <- withReward inputs0
-  (result0, outputsL) <- 
+  (result, outputsL) <- 
     listen $ getFae $ f $ getInputValues $ toList inputs
-  let 
-    result = toDyn result0
-    outputs = intMapList outputsL
+  let outputs = intMapList outputsL
   escrows <- get
   unless (Map.null escrows) $ throw OpenEscrows
-  let newStorage = storage' & _getStorage . at txID ?~ TransactionEntry{..}
-  return (result0, newStorage)
+  return $ storage' & _getStorage . at txID ?~ TransactionEntry{..}
 
   where
     withReward inputs

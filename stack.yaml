@@ -43,6 +43,9 @@ extra-deps:
   - containers-0.5.8.1
   - cryptonite-0.24
 
+ghc-options:
+  cryptonite: -opta-Wa,-mrelax-relocations=no
+
 # Override default flag values for local packages and extra-deps
 flags: {}
 
