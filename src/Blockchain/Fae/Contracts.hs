@@ -103,6 +103,7 @@ type TwoPartyM argType valType = StateT TwoPartyState (Fae argType valType)
 twoPartySwap :: (MonadTX m) => PublicKey -> PublicKey -> m ()
 twoPartySwap partyA partyB 
   | partyA /= partyB = newContract [] $ flip evalStateT (Undecided Neither) . c
+  | otherwise = throw OnlyOneParty
   where
     c :: ContractT (TwoPartyM Bool (Maybe TwoPartyToken)) Bool (Maybe TwoPartyToken)
     c choice = do
@@ -165,7 +166,7 @@ signOver x owner = newContract [bearer x] $ \() -> do
   spend x
 
 data ContractsError =
-  WrongParty | NotAParty |
+  WrongParty | NotAParty | OnlyOneParty |
   NotEnough | NotOwner |
   BadToken
   deriving (Typeable, Show)

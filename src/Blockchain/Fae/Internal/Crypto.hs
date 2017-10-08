@@ -8,6 +8,7 @@ import Control.Monad
 
 import qualified Crypto.Hash as Hash
 import qualified Crypto.PubKey.Ed25519 as Ed
+import Crypto.Random.Types
 
 import qualified Data.ByteArray as BA
 import Data.Dynamic
@@ -49,7 +50,7 @@ unsign (Signature pubKey sig) msg
   | Ed.verify pubKey (digest msg) sig = Just $ PublicKey pubKey
   | otherwise = Nothing
 
-newPrivateKey :: IO PrivateKey
+newPrivateKey :: (MonadRandom m) => m PrivateKey
 newPrivateKey = do
   secKey <- Ed.generateSecretKey
   let pubKey = Ed.toPublic secKey
