@@ -4,6 +4,7 @@ module Blockchain.Fae.Internal.Crypto
     module Blockchain.Fae.Internal.Crypto
   ) where
 
+import Control.DeepSeq
 import Control.Monad
 
 import Crypto.Error
@@ -31,7 +32,7 @@ import System.IO.Unsafe
 
 -- These are only here to avoid an UndecidableInstance in the Serialize
 -- instance.
-newtype Crypto a = Crypto a deriving (Eq, Ord)
+newtype Crypto a = Crypto a deriving (Eq, Ord, NFData)
 type EdPublicKey = Crypto Ed.PublicKey
 type EdSecretKey = Crypto Ed.SecretKey
 type EdSignature = Crypto Ed.Signature

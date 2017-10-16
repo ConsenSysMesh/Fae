@@ -30,7 +30,9 @@ module Blockchain.Fae
     -- * Identifier types
     PublicKey, ContractID, ShortContractID, 
     EscrowID, WithEscrows, RewardEscrowID, 
-    escrowTX, escrowTXResult
+    escrowTX, escrowTXResult,
+    module Control.DeepSeq,
+    module GHC.Generics
   ) where
 
 import Blockchain.Fae.Internal.Contract
@@ -39,4 +41,7 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.MonadFae
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Transaction
+
+import Control.DeepSeq (NFData(..))
+import GHC.Generics (Generic)
 

@@ -9,8 +9,6 @@ import Blockchain.Fae.Internal
 
 import Data.Void
 
-instance Digestible Int
-
 txID :: TransactionID
 txID = ShortContractID $ digest (1 :: Int)
 

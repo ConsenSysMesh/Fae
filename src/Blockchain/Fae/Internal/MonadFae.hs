@@ -9,6 +9,7 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Storage
 
+import Control.DeepSeq
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class
@@ -80,7 +81,7 @@ deriving instance (Functor s) => MonadTX (FaeM s)
 -- releasing an intermediate value, and awaiting its next call to
 -- continue with the arg that was passed.
 release :: 
-  (HasEscrowIDs valType, MonadContract argType valType m) => 
+  (HasEscrowIDs valType, NFData valType, MonadContract argType valType m) => 
   valType -> m argType
 release x = liftFae $ Fae $ do
   req <- internalSpend x
@@ -92,7 +93,7 @@ release x = liftFae $ Fae $ do
 -- value is passed with its backing escrows, maintaining its value.  Once
 -- a contract terminates with a 'spend', it is removed from storage.
 spend :: 
-  (HasEscrowIDs valType, MonadTX m) => 
+  (HasEscrowIDs valType, NFData valType, MonadTX m) => 
   valType -> m (WithEscrows valType)
 spend = liftTX . Fae . internalSpend 
 
@@ -116,7 +117,8 @@ useEscrow eID arg = liftTX $ Fae $ do
 newEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
+    Typeable argType, Typeable valType, 
+    NFData argType, NFData valType,
     MonadTX m
   ) =>
   [BearsValue] -> Contract argType valType -> m (EscrowID argType valType)
@@ -144,6 +146,7 @@ newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 
     Read argType, Typeable valType, 
+    NFData argType, NFData valType,
     MonadTX m
   ) =>
   [BearsValue] -> Contract argType valType -> m ()

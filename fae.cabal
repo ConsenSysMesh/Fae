@@ -39,6 +39,7 @@ library
     cereal,
     containers,
     cryptonite,
+    deepseq,
     exceptions,
     hint,
     lens,

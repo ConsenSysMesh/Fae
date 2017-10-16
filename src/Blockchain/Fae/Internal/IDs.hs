@@ -5,6 +5,7 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens hiding (from, to)
 
 import Control.Applicative
+import Control.DeepSeq
 
 import qualified Data.Serialize as Ser
 import Data.Traversable
@@ -61,6 +62,7 @@ data EscrowID argType valType =
   EscrowID { entID :: EntryID } |
   TXEscrowIn { entID :: EntryID, eArg :: argType } |
   TXEscrowOut { entID :: EntryID, eVal :: valType }
+  deriving (Generic)
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
 -- this type is, abstractly, something within a contract that has economic
 -- value, in the sense that it is backed by a scarce resource contained in
@@ -97,6 +99,8 @@ class GHasEscrowIDs f where
   gTraverseEscrowIDs :: EscrowIDTraversal (f p)
 
 {- Instances -}
+
+instance (NFData argType, NFData valType) => NFData (EscrowID argType valType)
 
 instance Serialize ContractID
 instance Digestible ContractID

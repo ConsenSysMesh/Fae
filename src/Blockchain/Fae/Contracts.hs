@@ -57,11 +57,16 @@ import Numeric.Natural
 data TwoParties = A | B deriving (Eq, Generic, Show)
 -- | An opaque token indicating whose offering the bearer is entitled to.
 newtype TwoPartyToken = TwoPartyToken TwoParties deriving (Generic)
-data Token = Token
+data Token = Token deriving (Generic)
 type TwoPartyEscrow = EscrowID Token TwoPartyToken
+
+instance NFData TwoParties
+instance NFData TwoPartyToken
 
 instance HasEscrowIDs TwoParties
 instance HasEscrowIDs TwoPartyToken    
+
+instance NFData Token
 
 -- | The first argument is the party claimed by the caller; the second
 -- argument is the escrow-backed value they offer; the third argument is
@@ -70,7 +75,7 @@ instance HasEscrowIDs TwoPartyToken
 -- into a new contract accepting a 'TwoPartyToken' matching the caller's
 -- party as argument, and spending the contained value when successful.
 offer2 :: 
-  (HasEscrowIDs a, Typeable a, MonadTX m) => 
+  (HasEscrowIDs a, Typeable a, MonadTX m, NFData a) => 
   TwoParties -> a -> m ()
 offer2 party x = newContract [bearer x] $ \tokID -> do
   eID <- newEscrow [bearer x] $ \tokID -> do
@@ -83,7 +88,9 @@ data TwoPartyState =
   Undecided Tristate |
   Decided (TwoParties -> TwoPartyToken)
 data Tristate = One TwoParties | Neither
-data TwoPartyVote = Yes | No | Get deriving (Read, Show)
+data TwoPartyVote = Yes | No | Get deriving (Read, Show, Generic)
+
+instance NFData TwoPartyVote
 
 switchParty :: TwoParties -> TwoParties
 switchParty A = B
@@ -144,7 +151,11 @@ twoPartySwap partyA partyB
 -- change.  The price of the value is signed over to the seller as a new
 -- contract.
 sell :: 
-  (HasEscrowIDs a, Typeable a, Currency tok coin, MonadTX m) =>
+  (
+    HasEscrowIDs a, Typeable a, 
+    NFData tok, NFData coin, NFData a, 
+    Currency tok coin, MonadTX m
+  ) =>
   a -> Valuation tok coin -> PublicKey -> m ()
 sell x price seller = newContract [] $ \payID -> do
   eID <- newEscrow [bearer x] $ \payment -> do
@@ -161,6 +172,7 @@ redeem ::
   (
     HasEscrowIDs a, HasEscrowIDs b, 
     Typeable a, Typeable b, Read b,
+    NFData a, NFData b,
     MonadTX m
   ) =>
   a -> (b -> Fae b a Bool) -> m ()
@@ -179,7 +191,7 @@ redeem x f = newContract [] $ \tok -> do
 -- arguments (that is, takes '()') and checks that the sender is the owner,
 -- in which case it returns the value.
 signOver ::
-  (HasEscrowIDs a, Typeable a, MonadTX m) =>
+  (HasEscrowIDs a, Typeable a, NFData a, MonadTX m) =>
   a -> PublicKey -> m ()
 signOver x owner = newContract [bearer x] $ \() -> do
   who <- sender

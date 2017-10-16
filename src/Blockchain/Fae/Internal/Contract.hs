@@ -8,6 +8,7 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Storage
 
+import Control.DeepSeq
 import Control.Monad.RWS
 import Control.Monad.State
 
@@ -69,16 +70,19 @@ newtype ConcreteContract argType valType =
 type AbstractEscrow = ConcreteContract Dynamic Dynamic
 type AbstractContract = ConcreteContract String Dynamic
 
-{- Orphan instances -}
+{- Instances -}
 
 deriving instance (Monoid w, MonadWriter w m) => MonadWriter w (Wrapped m)
+
+instance NFData (ConcreteContract argType valType) where
+  rnf (ConcreteContract !f) = ()
 
 {- Functions -}
 
 makeEscrow ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
+    Typeable argType, Typeable valType, NFData argType,
     Functor s
   ) =>
   [BearsValue] ->
@@ -110,7 +114,7 @@ makeInternalT eIDs f = do
     mapMonad (unWrapped . flip evalStateT totalEscrows) $ f x
 
 makeEscrowConcrete ::
-  (HasEscrowIDs argType, HasEscrowIDs valType) =>
+  (HasEscrowIDs argType, HasEscrowIDs valType, NFData argType) =>
   InternalContract argType valType ->
   ConcreteContract argType valType
 makeEscrowConcrete = makeConcrete internalSpend
@@ -193,11 +197,14 @@ runTXEscrows x = traverseEscrowIDs f x where
   f eID = return eID
 
 internalSpend :: 
-  (HasEscrowIDs valType, MonadState Escrows m) => 
+  (HasEscrowIDs valType, MonadState Escrows m, NFData valType) => 
   valType -> m (WithEscrows valType)
 internalSpend x = do
   outputEscrows <- takeEscrows [bearer x]
-  return $ WithEscrows outputEscrows x
+  -- We need to force both the escrows and the value because they may have
+  -- nonterminating computations in them, which we want to be suffered by
+  -- the originating contract and not by its victims.
+  return $ WithEscrows (force outputEscrows) (force x)
 
 internalUseEscrow :: 
   (
