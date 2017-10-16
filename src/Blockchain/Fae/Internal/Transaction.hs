@@ -33,12 +33,12 @@ type Storage = StorageT AbstractContract
 type InputOutputs = InputOutputsT AbstractContract
 type FaeStorage = FaeStorageT AbstractContract
 
--- | A more semantically-meaningful type synonym.  Transactions, though
--- similar to contracts in many internal ways, differ greatly in their
--- inputs and outputs.  The argument of type 'a' is constructed from the
--- return values of the input contracts according to its 'GetInputValues'
--- instance.  The return value need not and can not contain escrows (or
--- rather, the escrow IDs it contains will not be transferred anywhere).
+-- | Transactions, though similar to contracts in many internal ways,
+-- differ greatly in their inputs and outputs.  The argument of type 'a' is
+-- constructed from the return values of the input contracts according to
+-- its 'GetInputValues' instance.  The return value need not and can not
+-- contain escrows (or rather, the escrow IDs it contains will not be
+-- transferred anywhere).
 type Transaction a b = a -> FaeTX b
 
 {- Typeclasses -}

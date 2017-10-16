@@ -24,8 +24,8 @@ import qualified Data.Map as Map
 type Escrows = Map EntryID AbstractEscrow
 -- | This type encodes a value together with its backing escrows.  It is
 -- constructed automatically, and you can't construct it manually, so it is
--- only useful in type signatures; it forces the last line of a contract or
--- escrow to be 'spend'.
+-- only useful in type signatures; it forces contracts to return values
+-- only via `spend` and `release`.
 data WithEscrows a = WithEscrows Escrows a
 type FaeRequest argType valType = 
   Request (WithEscrows valType) (WithEscrows argType)
@@ -49,9 +49,7 @@ type FaeTX = FaeM Naught
 type ContractT m argType valType = argType -> m (WithEscrows valType)
 -- | This is the type to use when defining a new contract.  Its argument is
 -- the argument given in the first call to this contract; all subsequent
--- calls pass in their arguments via 'release'.  Because a 'ContractT' must
--- return a 'WithEscrows', the contract code must ultimately terminate with
--- a 'spend', being the only API function returning this type.
+-- calls pass in their arguments via 'release'.
 type Contract argType valType = ContractT (Fae argType valType) argType valType
 
 type InternalT s argType valType = 

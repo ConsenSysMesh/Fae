@@ -76,9 +76,17 @@ deriving instance (Functor s) => MonadTX (FaeM s)
 
 {- Functions -}
 
+-- | This function is like 'return' but also ensures that the returned
+-- value is passed with its backing escrows, maintaining its value.  Once
+-- a contract terminates with a 'spend', it is removed from storage.
+spend :: 
+  (HasEscrowIDs valType, NFData valType, MonadTX m) => 
+  valType -> m (WithEscrows valType)
+spend = liftTX . Fae . internalSpend 
+
 -- | This function is used in an expression like @nextArg <- release
 -- currentValue@ to suspend the current contract, simultaneously
--- releasing an intermediate value, and awaiting its next call to
+-- `spend`ing an intermediate value, and awaiting its next call to
 -- continue with the arg that was passed.
 release :: 
   (HasEscrowIDs valType, NFData valType, MonadContract argType valType m) => 
@@ -89,15 +97,8 @@ release x = liftFae $ Fae $ do
     lift $ modify $ Map.union inputEscrows
     runTXEscrows y
 
--- | This function is like 'return' but also ensures that the returned
--- value is passed with its backing escrows, maintaining its value.  Once
--- a contract terminates with a 'spend', it is removed from storage.
-spend :: 
-  (HasEscrowIDs valType, NFData valType, MonadTX m) => 
-  valType -> m (WithEscrows valType)
-spend = liftTX . Fae . internalSpend 
-
--- | Calls the given escrow by ID as a function.
+-- | Calls the given escrow by ID as a function.  This causes the escrow to
+-- be updated, and possibly deleted if it terminated with a `spend`.
 useEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
@@ -109,11 +110,15 @@ useEscrow eID arg = liftTX $ Fae $ do
   val <- internalUseEscrow (entID eID) arg
   runTXEscrows val
 
--- | Registers a contract as a new escrow, returning its ID.  The first
--- argument is a list of Haskell values marked as "bearers" of
--- escrow-backed Fae value; their backing escrows are transferred into the new
--- escrow, so that the bearer is no longer valuable in the contract that
--- calls this function.
+-- | Registers a contract as a new escrow, returning its ID.  The argument
+-- is a list of Haskell values marked as "bearers" of escrow-backed Fae
+-- value; their backing escrows are transferred into the new escrow, so
+-- that the bearer is no longer valuable in the contract that calls this
+-- function.  The returned ID is completely determined by the transaction
+-- during whose execution the escrow is created, along with where in the
+-- order of its inputs the contract that creates the escrow is placed.  It
+-- can therefore be used as a literal argument to a contract; see
+-- 'newContract'.
 newEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
@@ -134,14 +139,10 @@ nextEscrowID = lift $ lift $ Wrapped $ do
   modify digest
   return $ EscrowID eID
 
--- | Registers a contract publicly.  The first argument is the same as for
--- 'newEscrow'.  The second argument is a list of short contract IDs for
--- contracts that are "trusted" by the new one.  These contracts must
--- already exist and the decision to trust them is entirely on the author
--- of the new contract, most likely by manual scrutiny.  The new contract
--- may be called in a transaction with an argument that is the return value
--- of one of its trusted contracts; otherwise, its argument must be
--- literal.
+-- | Registers a contract publicly, with the same interface as 'newEscrow'.
+-- Public contracts may only be called as transaction inputs with string
+-- literal arguments, which are parsed into the actual 'argType' by the
+-- provided 'Read' instance.
 newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 

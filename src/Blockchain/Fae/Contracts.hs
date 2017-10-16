@@ -57,7 +57,11 @@ import Numeric.Natural
 data TwoParties = A | B deriving (Eq, Generic, Show)
 -- | An opaque token indicating whose offering the bearer is entitled to.
 newtype TwoPartyToken = TwoPartyToken TwoParties deriving (Generic)
+-- | A private type controlling the escrow containing
+-- a `TwoPartyToken`.                        
 data Token = Token deriving (Generic)
+-- | The actual "payout" from a two-party swap.  It can be used to collect
+-- one of the offerings.
 type TwoPartyEscrow = EscrowID Token TwoPartyToken
 
 instance NFData TwoParties
@@ -69,11 +73,10 @@ instance HasEscrowIDs TwoPartyToken
 instance NFData Token
 
 -- | The first argument is the party claimed by the caller; the second
--- argument is the escrow-backed value they offer; the third argument is
--- the contract ID of the two-party swap contract mediating this deal,
--- which must of course already have been created.  The value is placed
--- into a new contract accepting a 'TwoPartyToken' matching the caller's
--- party as argument, and spending the contained value when successful.
+-- argument is the escrow-backed value they offer.  The value is placed
+-- into a new contract accepting a 'TwoPartyEscrow' containing
+-- a 'TwoPartyToken' matching the caller's party as argument, and spending
+-- the contained value as an escrow transaction.
 offer2 :: 
   (HasEscrowIDs a, Typeable a, MonadTX m, NFData a) => 
   TwoParties -> a -> m ()
@@ -88,6 +91,8 @@ data TwoPartyState =
   Undecided Tristate |
   Decided (TwoParties -> TwoPartyToken)
 data Tristate = One TwoParties | Neither
+-- | Argument to the two-party swap.  'Yes' and 'No' are actual votes on
+-- the swap; 'Get' requests the token if the swap is complete.
 data TwoPartyVote = Yes | No | Get deriving (Read, Show, Generic)
 
 instance NFData TwoPartyVote
@@ -108,11 +113,11 @@ type TwoPartyC a v = ContractT (TwoPartyM a (Maybe v)) a (Maybe v)
 
 -- | The two arguments are the public keys (as in the 'sender' function) of
 -- parties A and B respectively.  A new contract is created that accepts
--- a Bool argument, which marks the choice of the party that calls it
--- (other senders are rejected).  Once both parties agree or either one
--- disagrees, a subsequent call will return the 'TwoPartyToken' unlocking
--- either the opposite party's offering (if the former) or one's own
--- offering (if the latter, to reclaim the property).
+-- a 'TwoPartyVote' argument, which marks the choice of the party that
+-- calls it (other senders are rejected).  Once both parties agree or
+-- either one disagrees, a subsequent call will return the 'TwoPartyEscrow'
+-- unlocking either the opposite party's offering (if the former) or one's
+-- own offering (if the latter, to reclaim the property).
 twoPartySwap :: (MonadTX m) => PublicKey -> PublicKey -> m ()
 twoPartySwap partyA partyB 
   | partyA /= partyB = newContract [] $ flip evalStateT (Undecided Neither) . c

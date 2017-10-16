@@ -16,22 +16,30 @@ Contract storage is /lazy/, in that no entries are evaluated unless strictly req
 
 Unlike Ethereum, Fae has no computational fees ("gas").  The reason for this is that, because of the lazy design, one is never forced to execute untrusted code.  This is facilitated by the requirement that non-escrow contracts only be called in advance of transaction execution; in addition, the arguments to these contracts are limited to literals or outputs of trusted other contracts.  Therefore no untrusted code, either in the surrounding transaction or in the argument, intervenes in contract execution.
 
-Fae is not a completely pure functional system: it has exceptions.  This is both because contract code, being Haskell, may throw exceptions for syntactic reasons, and because the system itself may raise exceptions.  Importantly, a transaction may not complete execution while any escrows remain open in it.  If an exception occurs anywhere within transaction execution, the transaction is voided and no updates to storage occur from it.  This facility is crucial for designing automatic trades within Fae, for which one should scrutinize "Blockchain.Fae.Contracts" as an example.
+Fae is not a completely pure functional system: it has exceptions.  This is both because contract code, being Haskell, may throw exceptions for syntactic reasons, and because the system itself may raise exceptions.  Although contracts may throw exceptions, they may never catch them, lest they hide an error that shouldn't be recoverable.
 -}
 module Blockchain.Fae
   (
     -- * Contract authors' API
+    -- ** Contract classes
     MonadContract(..), MonadTX(..), 
+    -- ** Contract methods
     release, spend, useEscrow, newEscrow, newContract, 
-    sender, bearer, shorten, claimReward,
+    escrowTX, escrowTXResult,
+    sender, bearer, claimReward,
     -- * Contract types
     Contract, ContractT, Transaction, 
-    Fae, FaeTX, BearsValue, HasEscrowIDs(..), GetInputValues(..),
+    Fae, FaeTX, BearsValue, HasEscrowIDs(..),
+    EscrowIDTraversal, EscrowIDMap, GetInputValues(..),
+    Reward, RewardToken,
     -- * Identifier types
-    PublicKey, ContractID, ShortContractID, 
-    EscrowID, WithEscrows, RewardEscrowID, 
-    escrowTX, escrowTXResult,
+    PublicKey, ContractID, EscrowID, WithEscrows, RewardEscrowID, 
+    -- * Re-exports
+    -- | Only 'NFData(..)':
     module Control.DeepSeq,
+    -- | Only 'throw':
+    module Control.Exception,
+    -- | Only 'Generic':
     module GHC.Generics
   ) where
 
@@ -43,5 +51,6 @@ import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Transaction
 
 import Control.DeepSeq (NFData(..))
+import Control.Exception (throw)
 import GHC.Generics (Generic)
 
