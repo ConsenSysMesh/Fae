@@ -13,6 +13,8 @@ import Crypto.Random.Types
 
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as C8
 import Data.Dynamic
 import Data.Proxy
 import Data.Serialize (Serialize)
@@ -106,6 +108,24 @@ instance (PartialDecode a) => Serialize (Crypto a) where
 instance Serialize PrivateKey
 instance Serialize Signature
 instance (Serialize a) => Serialize (Signed a)
+
+instance (PartialDecode a) => Digestible (Crypto a)
+
+instance Digestible ()
+instance Digestible Int
+instance Digestible Char
+instance Digestible Integer
+instance (Serialize a, Serialize b) => Digestible (a, b)
+instance (Serialize a) => Digestible [a]
+instance (Serialize a) => Digestible (Maybe a) 
+instance (Serialize a, Serialize b) => Digestible (Either a b)
+
+instance Read Digest where
+  readsPrec _ s = 
+    case Ser.decode bs of
+      Left _ -> []
+      Right dig -> [(dig, C8.unpack rest)]
+    where (bs, rest) = B16.decode $ C8.pack s
 
 {- Functions -}
 

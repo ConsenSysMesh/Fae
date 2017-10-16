@@ -9,8 +9,6 @@ import Data.Void
 
 import System.IO.Unsafe
 
-instance Digestible Int
-
 {-# NOINLINE pubKeys #-}
 pubKeys :: (PublicKey, PublicKey)
 pubKeys = fst $ withDRG drg $ do

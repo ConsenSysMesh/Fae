@@ -102,12 +102,12 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 
 runTransaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
-  TransactionID -> PublicKey -> Bool ->
+  Digest -> TransactionID -> PublicKey -> Bool ->
   [(ContractID, String)] -> 
   Transaction inputs a -> FaeStorage ()
-runTransaction txID txKey isReward inputArgs f = handleAll placeException $
+runTransaction dig txID txKey isReward inputArgs f = handleAll placeException $
   modify $ 
-    runFaeContract txID txKey .
+    runFaeContract dig txKey .
     transaction txID isReward inputArgs f 
   where
     placeException e = 
@@ -119,10 +119,10 @@ runTransaction txID txKey isReward inputArgs f = handleAll placeException $
           result = throw e :: Void
         }
 
-runFaeContract :: TransactionID -> PublicKey -> FaeContract Naught a -> a
-runFaeContract txID txKey =
+runFaeContract :: Digest -> PublicKey -> FaeContract Naught a -> a
+runFaeContract dig txKey =
   fst .
-  (\r s m -> evalRWS m r s) txKey (txID, 0) .
+  (\r s m -> evalRWS m r s) txKey dig .
   unWrapped . 
   flip evalStateT Map.empty .
   runCoroutine

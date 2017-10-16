@@ -6,8 +6,6 @@ import Blockchain.Fae.Internal.Lens hiding (from, to)
 
 import Control.Applicative
 
-import qualified Data.ByteString.Base16 as B16
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.Serialize as Ser
 import Data.Traversable
 import Data.Typeable
@@ -39,9 +37,10 @@ data ContractID =
 newtype ShortContractID = ShortContractID Digest
   deriving (Eq, Ord, Serialize)
 
-type TransactionID = ShortContractID -- For simplicity
+type TransactionID = ShortContractID -- ^ For simplicity
+type BlockID = Digest -- ^ For simplicity
 
-type EntryID = (TransactionID, Int)
+type EntryID = Digest
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
 -- immutable.  Each escrow ID is valid only within a contract that actually
@@ -104,17 +103,13 @@ instance Digestible ContractID
 instance Digestible ShortContractID
 
 instance Read ShortContractID where
-  readsPrec _ s = 
-    case Ser.decode bs of
-      Left _ -> []
-      Right dig -> [(ShortContractID dig, C8.unpack rest)]
-    where (bs, rest) = B16.decode $ C8.pack s
+  readsPrec _ = fmap (_1 %~ ShortContractID) . readsPrec 0
 
 instance Show ShortContractID where
   show (ShortContractID dig) = show dig
 
 instance Read (EscrowID argType valType) where
-  readsPrec _ = fmap (\(entID, s) -> (EscrowID entID, s)) . readsPrec 0
+  readsPrec _ = fmap (_1 %~ EscrowID) . readsPrec 0
 
 instance Show (EscrowID argType valType) where
   show = show . entID

@@ -21,7 +21,7 @@ inputs :: [(ContractID, String)]
 inputs = 
   [
     (TransactionOutput TX1.txID 0, "Get"),
-    (TransactionOutput TX3.txID 0, "(821888e817f3332d9704e7bb99773facd7245af001616a9b0c461aeb9e0bc743,0)")
+    (TransactionOutput TX3.txID 0, "14534c98fc4f74a5074fffd7c404bce53442034a2a9ff947ee882a10cf97f481")
   ]
 
 body :: Transaction (Maybe TwoPartyEscrow, EscrowID TwoPartyEscrow String) String

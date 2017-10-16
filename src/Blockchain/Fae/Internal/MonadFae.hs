@@ -129,7 +129,7 @@ newEscrow eIDs f = liftTX $ Fae $ do
 nextEscrowID :: (Functor s) => FaeContract s (EscrowID argType valType)
 nextEscrowID = lift $ lift $ Wrapped $ do
   eID <- get
-  _2 += 1
+  modify digest
   return $ EscrowID eID
 
 -- | Registers a contract publicly.  The first argument is the same as for

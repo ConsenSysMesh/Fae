@@ -9,5 +9,6 @@ main = do
   txNames <- getArgs
   (_, Storage storage) <- 
     flip runStateT (Storage Map.empty) $ 
-      getFaeStorage $ interpretTXs $ map (,False) txNames
+      getFaeStorage $ interpretTXs $ 
+        zipWith (\s n -> (s, digest n, False)) txNames [0 :: Int ..]
   print $ Map.map (\(TransactionEntry _ _ result) -> show result) storage

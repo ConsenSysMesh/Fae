@@ -1,6 +1,8 @@
 module Blockchain.Fae.Internal.Interpreter where
 
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 
@@ -10,28 +12,29 @@ import Data.List
 
 import Language.Haskell.Interpreter
 
-interpretTXs :: [(String, Bool)] -> FaeStorage ()
+interpretTXs :: [(String, Digest, Bool)] -> FaeStorage ()
 interpretTXs txSpecs = do
   result <- runInterpreter $ do
     loadModules txSrcs
     setImportsQ $ map (,Nothing) pkgModules ++ map (\s -> (s, Just s)) txSrcs
-    mapM (flip interpret (as :: FaeStorage ()) . uncurry runTX) txSpecs
+    mapM (flip interpret (as :: FaeStorage ()) . runTX) txSpecs  
   either reportErr sequence_ result
 
   where
     reportErr (WontCompile ghcErrors) = error $ errMsg $ head ghcErrors
     reportErr e = throw e
-    txSrcs = map fst txSpecs
+    txSrcs = map (\(x,_,_) -> x) txSpecs
     pkgModules = 
       [
         "Prelude",
         "Data.Dynamic",
         "Blockchain.Fae.Internal"
       ]
-    runTX s isReward =
+    runTX (s, dig, isReward) =
       intercalate " "
         [
           "runTransaction",
+          parens $ "read " ++ show (show dig),
           s ++ ".txID",
           s ++ ".pubKey",
           show isReward,
