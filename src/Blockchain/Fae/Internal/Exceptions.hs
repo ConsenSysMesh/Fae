@@ -11,8 +11,6 @@ import qualified Control.Exception as Ex
 
 import Control.Monad.Catch
 
-import Control.Monad.IO.Class
-
 import Data.Typeable
 
 data FaeException =

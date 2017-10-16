@@ -20,8 +20,6 @@ import Data.Typeable
 
 import qualified Data.Map as Map
 
-import Debug.Trace
-
 {- Typeclasses -}
 
 -- |
@@ -88,23 +86,7 @@ release x = liftFae $ Fae $ do
   req <- internalSpend x
   suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
     lift $ modify $ Map.union inputEscrows
-    return y
-
--- | Like 'release', but makes its argument, which must be an escrow ID,
--- transactional.
-releaseTX :: 
-  (
-    HasEscrowIDs argType', HasEscrowIDs valType',
-    MonadContract argType (TXEscrowID argType' valType') m
-  ) =>
-  TXEscrowID argType' valType' -> 
-  m argType
-releaseTX x@(TXEscrowID x') = liftFae $ Fae $ do
-  WithEscrows escrows _ <- internalSpend x'
-  let req = WithEscrows escrows x
-  suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
-    lift $ modify $ Map.union inputEscrows
-    return y
+    runTXEscrows y
 
 -- | This function is like 'return' but also ensures that the returned
 -- value is passed with its backing escrows, maintaining its value.  Once
@@ -114,16 +96,6 @@ spend ::
   valType -> m (WithEscrows valType)
 spend = liftTX . Fae . internalSpend 
 
--- | Like 'spend', but makes its argument, which must be an escrow ID,
--- transactional.
-spendTX :: 
-  (HasEscrowIDs argType, HasEscrowIDs valType, MonadTX m) =>
-  TXEscrowID argType valType -> 
-  m (WithEscrows (TXEscrowID argType valType))
-spendTX x@(TXEscrowID eID) = do
-  WithEscrows escrows _ <- liftTX $ Fae $ internalSpend eID
-  return $ WithEscrows escrows x
-  
 -- | Calls the given escrow by ID as a function.
 useEscrow :: 
   (
@@ -132,23 +104,9 @@ useEscrow ::
     MonadTX m
   ) =>
   EscrowID argType valType -> argType -> m valType
-useEscrow (EscrowID eID) x = liftTX $ Fae $ do
-  fAbs <- use $ at eID . defaultLens (throw $ BadEscrowID eID)
-  let ConcreteContract f = unmakeAbstractEscrow fAbs
-  (gConcM, y) <- f x
-  at eID .= fmap makeEscrowAbstract gConcM
-  return y
-
--- | A pass-through 'useEscrow' for private escrows, allowing them to be
--- interacted with normally while still hiding the real escrow ID.
-useTXEscrow :: 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    MonadTX m
-  ) =>
-  TXEscrowID argType valType -> argType -> m valType
-useTXEscrow (TXEscrowID eID) = useEscrow eID
+useEscrow eID arg = liftTX $ Fae $ do
+  val <- internalUseEscrow (entID eID) arg
+  runTXEscrows val
 
 -- | Registers a contract as a new escrow, returning its ID.  The first
 -- argument is a list of Haskell values marked as "bearers" of
@@ -164,30 +122,6 @@ newEscrow ::
   [BearsValue] -> Contract argType valType -> m (EscrowID argType valType)
 newEscrow eIDs f = liftTX $ Fae $ do
   cAbs <- makeEscrow eIDs f
-  newE cAbs
-
--- | Makes a new transactional escrow, as 'newEscrow'.  Transactional
--- escrow IDs are forced to have a trivial 'HasEscrowIDs' instance, so you
--- can't transfer transactional escrows.  In other words, they must be
--- executed in-place when they appear in a transaction.
-newTXEscrow :: 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    MonadTX m
-  ) =>
-  [BearsValue] -> TXEscrow argType valType -> m (TXEscrowID argType valType)
-newTXEscrow eIDs f = liftTX $ Fae $ do
-  cAbs <- makeTXEscrow eIDs f
-  TXEscrowID <$> newE cAbs
-
-newE :: 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType, Functor s
-  ) =>
-  AbstractEscrow -> FaeContract s (EscrowID argType valType)
-newE cAbs = do
   eID@(EscrowID entID) <- nextEscrowID
   modify $ Map.insert entID cAbs
   return eID
@@ -207,7 +141,11 @@ nextEscrowID = lift $ lift $ Wrapped $ do
 -- of one of its trusted contracts; otherwise, its argument must be
 -- literal.
 newContract ::
-  (Read argType, HasEscrowIDs valType, Typeable valType, MonadTX m) =>
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType, 
+    Read argType, Typeable valType, 
+    MonadTX m
+  ) =>
   [BearsValue] -> Contract argType valType -> m ()
 newContract eIDs f = liftTX $ Fae $ do
   cAbs <- makeContract eIDs f

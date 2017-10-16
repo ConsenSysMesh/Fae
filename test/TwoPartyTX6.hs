@@ -20,8 +20,9 @@ pubKey = pubKey1
 inputs :: [(ContractID, String)]
 inputs = 
   [
-    (TransactionOutput TX1.txID 0, "True"),
-    (TransactionOutput TX3.txID 0, "()")
+    (TransactionOutput TX1.txID 0, "Get"),
+    (TransactionOutput TX3.txID 0, "(821888e817f3332d9704e7bb99773facd7245af001616a9b0c461aeb9e0bc743,0)")
   ]
 
-body = claimTX
+body :: Transaction (Maybe TwoPartyEscrow, EscrowID TwoPartyEscrow String) String
+body = return . escrowTXResult . snd

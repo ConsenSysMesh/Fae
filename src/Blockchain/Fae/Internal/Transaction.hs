@@ -17,7 +17,6 @@ import Control.Monad.State
 import Data.Dynamic
 import Data.Foldable
 import Data.Maybe
-import Data.Sequence (Seq)
 import Data.Typeable
 import Data.Void
 
@@ -102,9 +101,9 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 {- Functions -}
 
 runTransaction :: 
-  (GetInputValues inputs, Typeable a, Show a) =>
+  (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
   TransactionID -> PublicKey -> Bool ->
-  Seq (ContractID, String) -> 
+  [(ContractID, String)] -> 
   Transaction inputs a -> FaeStorage ()
 runTransaction txID txKey isReward inputArgs f = handleAll placeException $
   modify $ 
@@ -129,17 +128,17 @@ runFaeContract txID txKey =
   runCoroutine
 
 transaction :: 
-  (GetInputValues inputs, Typeable a, Show a) =>
+  (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
   TransactionID ->
   Bool -> 
-  Seq (ContractID, String) -> 
+  [(ContractID, String)] -> 
   Transaction inputs a -> 
   Storage -> FaeContract Naught Storage
 transaction txID isReward inputArgs f storage = do
   (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
   inputs <- withReward inputs0
-  (result, outputsL) <- 
-    listen $ getFae $ f $ getInputValues $ toList inputs
+  input <- runTXEscrows $ getInputValues $ toList inputs
+  (result, outputsL) <- listen $ getFae $ f input
   let outputs = intMapList outputsL
   escrows <- get
   unless (Map.null escrows) $ throw OpenEscrows
@@ -154,15 +153,15 @@ transaction txID isReward inputArgs f storage = do
 
 runInputContracts ::
   (Functor s) =>
-  Seq (ContractID, String) ->
+  [(ContractID, String)] ->
   Storage ->
-  FaeContract s (Seq Dynamic, Storage, InputOutputs)
+  FaeContract s ([Dynamic], Storage, InputOutputs)
 runInputContracts inputArgs storage = 
-  (\x s f -> foldl f x s) (return (Seq.empty, storage, Map.empty)) inputArgs $
+  (\x s f -> foldl f x s) (return ([], storage, Map.empty)) inputArgs $
   \accM (cID, arg) -> do
     (results, storage, inputOutputs) <- accM
     let 
-      results' = Seq.zip (fst <$> inputArgs) results
+      results' = zip (fst <$> inputArgs) results
       ConcreteContract fAbs = 
         storage ^. at cID . defaultLens (throw $ BadInput cID)
     ((gAbsM, result), outputsL) <- listen $ fAbs arg

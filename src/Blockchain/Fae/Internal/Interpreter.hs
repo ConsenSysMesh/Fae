@@ -16,15 +16,16 @@ interpretTXs txSpecs = do
     loadModules txSrcs
     setImportsQ $ map (,Nothing) pkgModules ++ map (\s -> (s, Just s)) txSrcs
     mapM (flip interpret (as :: FaeStorage ()) . uncurry runTX) txSpecs
-  either throw sequence_ result
+  either reportErr sequence_ result
 
   where
+    reportErr (WontCompile ghcErrors) = error $ errMsg $ head ghcErrors
+    reportErr e = throw e
     txSrcs = map fst txSpecs
     pkgModules = 
       [
         "Prelude",
         "Data.Dynamic",
-        "Data.Sequence",
         "Blockchain.Fae.Internal"
       ]
     runTX s isReward =
@@ -34,6 +35,6 @@ interpretTXs txSpecs = do
           s ++ ".txID",
           s ++ ".pubKey",
           show isReward,
-          parens $ "fromList " ++ s ++ ".inputs",
+          s ++ ".inputs",
           s ++ ".body"
         ]

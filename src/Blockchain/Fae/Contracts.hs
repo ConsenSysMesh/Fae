@@ -12,10 +12,11 @@ module Blockchain.Fae.Contracts
   (
     -- * Two-party swap
     -- $twopartyswap
-    TwoParties(..), TwoPartyToken, offer2, twoPartySwap,
+    TwoParties(..), TwoPartyToken, Token, TwoPartyEscrow, TwoPartyVote(..), 
+    offer2, twoPartySwap,
     -- * Direct selling
     -- $vendor
-    vendor, redeem,
+    sell, redeem,
     -- * Possession
     -- $possession
     signOver
@@ -25,7 +26,7 @@ module Blockchain.Fae.Contracts
 import Debug.Trace
 
 import Blockchain.Fae
-import Blockchain.Fae.Currency
+import Blockchain.Fae.Currency hiding (Token)
 
 import Control.Exception
 import Control.Monad
@@ -56,6 +57,8 @@ import Numeric.Natural
 data TwoParties = A | B deriving (Eq, Generic, Show)
 -- | An opaque token indicating whose offering the bearer is entitled to.
 newtype TwoPartyToken = TwoPartyToken TwoParties deriving (Generic)
+data Token = Token
+type TwoPartyEscrow = EscrowID Token TwoPartyToken
 
 instance HasEscrowIDs TwoParties
 instance HasEscrowIDs TwoPartyToken    
@@ -67,31 +70,34 @@ instance HasEscrowIDs TwoPartyToken
 -- into a new contract accepting a 'TwoPartyToken' matching the caller's
 -- party as argument, and spending the contained value when successful.
 offer2 :: 
-  forall a m. (HasEscrowIDs a, Typeable a, MonadTX m) => 
-  TwoParties -> a -> ShortContractID -> m ()
-offer2 party x dealID = newContract [bearer x] c where
-  c :: Contract () (TXEscrowID TwoPartyToken a)
-  c _ = do
-    eID <- redeem x $ \(TwoPartyToken party') -> party == party'
-    spendTX eID
+  (HasEscrowIDs a, Typeable a, MonadTX m) => 
+  TwoParties -> a -> m ()
+offer2 party x = newContract [bearer x] $ \tokID -> do
+  eID <- newEscrow [bearer x] $ \tokID -> do
+    TwoPartyToken party' <- useEscrow tokID Token
+    when (party /= party') $ throw WrongParty
+    spend x
+  spend $ escrowTX eID tokID
 
 data TwoPartyState =
   Undecided Tristate |
   Decided (TwoParties -> TwoPartyToken)
 data Tristate = One TwoParties | Neither
+data TwoPartyVote = Yes | No | Get deriving (Read, Show)
 
 switchParty :: TwoParties -> TwoParties
 switchParty A = B
 switchParty B = A
 
-twoPartyChoice :: Bool -> TwoParties -> TwoPartyState -> TwoPartyState
-twoPartyChoice False _ _ = Decided $ TwoPartyToken
-twoPartyChoice _ party (Undecided Neither) = Undecided (One party)
-twoPartyChoice _ party (Undecided (One oldParty))
+twoPartyChoice :: TwoPartyVote -> TwoParties -> TwoPartyState -> TwoPartyState
+twoPartyChoice No _ _ = Decided $ TwoPartyToken
+twoPartyChoice Yes party (Undecided Neither) = Undecided (One party)
+twoPartyChoice Yes party (Undecided (One oldParty))
   | party /= oldParty = Decided $ TwoPartyToken . switchParty
 twoPartyChoice _ _ s = s
 
 type TwoPartyM argType valType = StateT TwoPartyState (Fae argType valType)
+type TwoPartyC a v = ContractT (TwoPartyM a (Maybe v)) a (Maybe v)
 
 -- | The two arguments are the public keys (as in the 'sender' function) of
 -- parties A and B respectively.  A new contract is created that accepts
@@ -105,7 +111,7 @@ twoPartySwap partyA partyB
   | partyA /= partyB = newContract [] $ flip evalStateT (Undecided Neither) . c
   | otherwise = throw OnlyOneParty
   where
-    c :: ContractT (TwoPartyM Bool (Maybe TwoPartyToken)) Bool (Maybe TwoPartyToken)
+    c :: TwoPartyC TwoPartyVote TwoPartyEscrow
     c choice = do
       partyKey <- sender
       let
@@ -115,9 +121,15 @@ twoPartySwap partyA partyB
       unless (isA || isB) $ throw NotAParty
       modify $ twoPartyChoice choice party
       dealState <- get
-      nextChoice <- release $ case dealState of
-        Undecided _ -> Nothing
-        Decided f -> Just $ f party
+      ret <- case dealState of
+        Undecided _ -> return Nothing
+        Decided f -> 
+          case choice of
+            Get -> 
+              let tok = f party in
+              Just <$> newEscrow [] (\Token -> spend tok)
+            _ -> return Nothing
+      nextChoice <- release ret
       c nextChoice
 
 -- $vendor
@@ -131,23 +143,32 @@ twoPartySwap partyA partyB
 -- as an argument and, if it meets the price, returns the value and also
 -- change.  The price of the value is signed over to the seller as a new
 -- contract.
-vendor :: 
+sell :: 
   (HasEscrowIDs a, Typeable a, Currency tok coin, MonadTX m) =>
-  a -> Natural -> PublicKey -> 
-  m (TXEscrowID (EscrowID tok coin) (a, EscrowID tok coin))
-vendor x price seller = newTXEscrow [bearer x] $ \payment -> do
-  changeM <- change payment price
-  let (cost, remit) = fromMaybe (throw NotEnough) changeM
-  signOver cost seller
-  spend (x, remit)
+  a -> Valuation tok coin -> PublicKey -> m ()
+sell x price seller = newContract [] $ \payID -> do
+  eID <- newEscrow [bearer x] $ \payment -> do
+    changeM <- change payment price
+    let (cost, remit) = fromMaybe (throw NotEnough) changeM
+    signOver cost seller
+    spend (x, remit)
+  spend $ escrowTX eID payID
 
 -- | The first argument is the product to sell; the second is a validation
 -- function for the token type that this contract accepts.  A new escrow is
 -- created that accepts the token and, if it is valid, returns the product.
 redeem ::
-  (HasEscrowIDs a, HasEscrowIDs b, Typeable a, Typeable b, MonadTX m) =>
-  a -> (b -> Bool) -> m (TXEscrowID b a)
-redeem x f = newTXEscrow [bearer x] $ bool (throw BadToken) (spend x) . f
+  (
+    HasEscrowIDs a, HasEscrowIDs b, 
+    Typeable a, Typeable b, Read b,
+    MonadTX m
+  ) =>
+  a -> (b -> Fae b a Bool) -> m ()
+redeem x f = newContract [] $ \tok -> do
+  eID <- newEscrow [bearer x] $ \token -> do
+    val <- f tok
+    bool (throw BadToken) (spend x) val
+  spend $ escrowTX eID tok
 
 -- $possession
 -- A possession contract is simply one that marks a value as being owned by

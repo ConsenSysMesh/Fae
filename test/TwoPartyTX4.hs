@@ -17,7 +17,7 @@ pubKey :: PublicKey
 pubKey = pubKey1
 
 inputs :: [(ContractID, String)]
-inputs = [(TransactionOutput TX1.txID 0, "True")]
+inputs = [(TransactionOutput TX1.txID 0, "Yes")]
 
-body :: Transaction Bool ()
-body = voteTX
+body :: Transaction (Maybe TwoPartyEscrow) ()
+body _ = return ()

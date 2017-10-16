@@ -20,4 +20,4 @@ inputs :: [(ContractID, String)]
 inputs = []
 
 body :: Transaction Void ()
-body = offer2TX B (TransactionOutput TX1.txID 0)
+body = offer2TX B 

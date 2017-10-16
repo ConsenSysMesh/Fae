@@ -26,13 +26,6 @@ pubKey1 = fst pubKeys
 pubKey2 :: PublicKey
 pubKey2 = snd pubKeys
 
-offer2TX :: TwoParties -> ContractID -> Transaction Void ()
-offer2TX p cID _ = offer2 p ("Hello from " ++ show p) (shorten cID)
-
-voteTX :: Transaction Bool ()
-voteTX _ = return ()
-
-claimTX :: 
-  Transaction (Maybe TwoPartyToken, TXEscrowID TwoPartyToken String) String
-claimTX (tokenM, pID) = useTXEscrow pID $ fromJust tokenM
+offer2TX :: TwoParties -> Transaction Void ()
+offer2TX p _ = offer2 p ("Hello from " ++ show p) 
 

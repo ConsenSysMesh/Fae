@@ -37,9 +37,12 @@ import Numeric.Natural
 class 
   (
     Typeable tok, Typeable coin,
-    HasEscrowIDs tok, HasEscrowIDs coin
+    HasEscrowIDs tok, HasEscrowIDs coin,
+    Integral (Valuation tok coin)
   ) => 
   Currency tok coin where
+
+  data Valuation tok coin
 
   -- | Almost an @Ord@ instance; for comparing coin values.  
   balance :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Ordering
@@ -47,18 +50,18 @@ class
   -- its first argument, so that we know that the caller actually has
   -- a token and not just @undefined@.  This means that the correct way to
   -- handle bad permissions is to throw an exception.
-  mint :: (MonadTX m) => tok -> Natural -> m (EscrowID tok coin)
+  mint :: (MonadTX m) => tok -> Valuation tok coin -> m (EscrowID tok coin)
   -- | Peek at the value inside.  The ID remains valid.  Careful!  For
   -- semantic correctness, this function must also validate the escrow to
   -- prove that it actually has value.
-  value :: (MonadTX m) => EscrowID tok coin -> m Natural
+  value :: (MonadTX m) => EscrowID tok coin -> m (Valuation tok coin)
   -- | Close the given accounts and make a new one with their sum.
   add :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m (EscrowID tok coin)
   -- | Take off the given amount and return it and the change if both are
   -- nonnegative, otherwise @empty@.
   change :: 
     (Alternative f, MonadTX m) =>
-    EscrowID tok coin -> Natural -> 
+    EscrowID tok coin -> Valuation tok coin -> 
     m (f (EscrowID tok coin, EscrowID tok coin))
   -- | Partition the value into the given proportions and the remainder.
   split :: 
@@ -115,12 +118,15 @@ data Token = Spend | UnsafePeek deriving (Generic)
 instance HasEscrowIDs Token
 
 instance Currency Token Coin where
+  newtype Valuation Token Coin = CoinValuation Natural
+    deriving (Eq, Ord, Num, Real, Enum, Integral)
+
   balance eID1 eID2 = do
     Coin n1 <- useEscrow eID1 UnsafePeek
     Coin n2 <- useEscrow eID2 UnsafePeek
     return $ compare n1 n2
 
-  mint !_ !n = newEscrow [] f where
+  mint !_ (CoinValuation n) = newEscrow [] f where
     f :: Contract Token Coin
     f UnsafePeek = release coin >>= f
     f Spend = spend coin
@@ -128,12 +134,12 @@ instance Currency Token Coin where
 
   value eID = do
     Coin n <- useEscrow eID UnsafePeek
-    return n
+    return $ CoinValuation n
 
   add eID1 eID2 = do
     Coin n1 <- useEscrow eID1 Spend
     Coin n2 <- useEscrow eID2 Spend
-    eID <- mint Spend $ n1 + n2
+    eID <- mint Spend $ CoinValuation $ n1 + n2
     return eID
 
   change eID n = do
@@ -142,7 +148,7 @@ instance Currency Token Coin where
       True -> do
         Coin m <- useEscrow eID Spend
         amtID <- mint Spend n
-        remID <- mint Spend $ m - n
+        remID <- mint Spend $ CoinValuation m - n
         return $ pure (amtID, remID)
       False -> return empty
 
@@ -151,8 +157,8 @@ instance Currency Token Coin where
     let 
       s = sum weights
       (q, r) = n `quotRem` s
-    partIDs <- traverse (mint Spend . (q *)) weights
-    remID <- mint Spend r
+    partIDs <- traverse (mint Spend . CoinValuation . (q *)) weights
+    remID <- mint Spend $ CoinValuation r
     return (partIDs, remID)
 
 -- | A contract to claim system rewards in exchange for Coin values.  The
