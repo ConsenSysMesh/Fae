@@ -80,7 +80,7 @@ deriving instance (Functor s) => MonadTX (FaeM s)
 -- value is passed with its backing escrows, maintaining its value.  Once
 -- a contract terminates with a 'spend', it is removed from storage.
 spend :: 
-  (HasEscrowIDs valType, NFData valType, MonadTX m) => 
+  (HasEscrowIDs valType, NFData valType, MonadContract argType' valType' m) => 
   valType -> m (WithEscrows valType)
 spend = liftTX . Fae . internalSpend 
 
