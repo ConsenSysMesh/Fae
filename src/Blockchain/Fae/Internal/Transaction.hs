@@ -108,7 +108,7 @@ runTransaction ::
 runTransaction dig txID txKey isReward inputArgs f = handleAll placeException $
   modify $ 
     runFaeContract dig txKey .
-    transaction txID isReward inputArgs f 
+    transaction dig txID isReward inputArgs f 
   where
     placeException e = 
       _getStorage . at txID ?=
@@ -129,13 +129,15 @@ runFaeContract dig txKey =
 
 transaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
+  Digest ->
   TransactionID ->
   Bool -> 
   [(ContractID, String)] -> 
   Transaction inputs a -> 
   Storage -> FaeContract Naught Storage
-transaction txID isReward inputArgs f storage = do
-  (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
+transaction dig txID isReward inputArgs f storage = do
+  (inputs0, storage', inputOutputs) <- runInputContracts dig inputArgs storage
+  newEscrowSeries dig 0
   inputs <- withReward inputs0
   input <- runTXEscrows $ getInputValues $ toList inputs
   (result, outputsL) <- listen $ getFae $ f input
@@ -153,17 +155,20 @@ transaction txID isReward inputArgs f storage = do
 
 runInputContracts ::
   (Functor s) =>
+  Digest ->
   [(ContractID, String)] ->
   Storage ->
   FaeContract s ([Dynamic], Storage, InputOutputs)
-runInputContracts inputArgs storage = 
-  (\x s f -> foldl f x s) (return ([], storage, Map.empty)) inputArgs $
-  \accM (cID, arg) -> do
+runInputContracts dig inputArgs storage = 
+  (\x s f -> foldl f x s) 
+    (return ([], storage, Map.empty)) (zip inputArgs [1 ..]) $
+  \accM ((cID, arg), n) -> do
     (results, storage, inputOutputs) <- accM
     let 
       results' = zip (fst <$> inputArgs) results
       ConcreteContract fAbs = 
         storage ^. at cID . defaultLens (throw $ BadInput cID)
+    newEscrowSeries dig n
     ((gAbsM, result), outputsL) <- listen $ fAbs arg
     censor (const []) $ return
       (
@@ -172,3 +177,5 @@ runInputContracts inputArgs storage =
         inputOutputs & at (shorten cID) ?~ intMapList outputsL
       )
 
+newEscrowSeries :: (Functor s) => Digest -> Int -> FaeContract s ()
+newEscrowSeries dig n = lift $ lift $ Wrapped $ put $ digest (dig, n)
