@@ -33,12 +33,14 @@ module Blockchain.Fae
     EscrowIDTraversal, EscrowIDMap, GetInputValues(..),
     Reward, RewardToken,
     -- * Identifier types
-    PublicKey, ContractID, EscrowID, WithEscrows, RewardEscrowID, 
+    PublicKey, ContractID, TransactionID, EscrowID, WithEscrows, RewardEscrowID, 
     -- * Re-exports
     -- | Only 'NFData(..)':
     module Control.DeepSeq,
     -- | Only 'throw':
     module Control.Exception,
+    -- | Only 'Void':
+    module Data.Void,
     -- | Only 'Generic':
     module GHC.Generics
   ) where
@@ -52,5 +54,6 @@ import Blockchain.Fae.Internal.Transaction
 
 import Control.DeepSeq (NFData(..))
 import Control.Exception (throw)
+import Data.Void (Void)
 import GHC.Generics (Generic)
 
