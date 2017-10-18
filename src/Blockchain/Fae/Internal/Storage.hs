@@ -10,17 +10,20 @@ import Control.Monad.State
 
 import Data.Dynamic
 import Data.IntMap (IntMap)
+import Data.List
 import Data.Map (Map)
 import Data.Serialize
 
 import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 
 {- Types -}
 
-newtype StorageT c =
+data StorageT c =
   Storage 
   { 
-    getStorage :: Map TransactionID (TransactionEntryT c)
+    getStorage :: Map TransactionID (TransactionEntryT c),
+    txLog :: [TransactionID] -- In reverse!
   }
 
 data TransactionEntryT c =
@@ -87,3 +90,19 @@ instance At (StorageT c) where
 intMapList :: [a] -> IntMap a
 intMapList = IntMap.fromList . zip [0 ..]
 
+showTransaction :: TransactionID -> FaeStorageT c String
+showTransaction txID = do
+  TransactionEntry ios os x <- use $
+    _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
+  return $ 
+    intercalate "\n  " $
+      ("Transaction " ++ show txID ++ ": " ++ showOutputs os) :
+      ("result: " ++ show x) :
+      (flip map (Map.toList ios) $ \(cID, os) ->
+        "input " ++ show cID ++ ": " ++ showOutputs os)
+  where showOutputs os = show (IntMap.size os) ++ " outputs"
+
+showTransactions :: FaeStorageT c [String]
+showTransactions = do
+  txIDs <- gets $ reverse . txLog
+  mapM showTransaction txIDs

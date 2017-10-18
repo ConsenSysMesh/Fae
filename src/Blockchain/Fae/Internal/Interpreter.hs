@@ -14,11 +14,11 @@ import Language.Haskell.Interpreter
 
 interpretTXs :: [(String, Digest, Bool)] -> FaeStorage ()
 interpretTXs txSpecs = do
-  result <- runInterpreter $ do
+  actions <- runInterpreter $ do
     loadModules txSrcs
     setImportsQ $ map (,Nothing) pkgModules ++ map (\s -> (s, Just s)) txSrcs
     mapM (flip interpret (as :: FaeStorage ()) . runTX) txSpecs  
-  either reportErr sequence_ result
+  either reportErr sequence_ actions
 
   where
     reportErr (WontCompile ghcErrors) = error $ errMsg $ head ghcErrors

@@ -154,7 +154,9 @@ transaction dig txID isReward inputArgs f storage = do
   let outputs = intMapList outputsL
   escrows <- get
   unless (Map.null escrows) $ throw OpenEscrows
-  return $ storage' & _getStorage . at txID ?~ TransactionEntry{..}
+  return $ storage' 
+    & _getStorage . at txID ?~ TransactionEntry{..}
+    & _txLog %~ cons txID
 
   where
     withReward inputs
