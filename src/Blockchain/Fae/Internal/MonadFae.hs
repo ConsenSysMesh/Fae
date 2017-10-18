@@ -146,7 +146,7 @@ nextEscrowID = lift $ lift $ Wrapped $ do
 newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 
-    Read argType, Typeable valType, 
+    Read argType, Typeable argType, Typeable valType, 
     NFData argType, NFData valType,
     MonadTX m
   ) =>

@@ -20,6 +20,7 @@ data FaeException =
   BadInput ContractID |
   NotEnoughInputs |
   TooManyInputs |
+  BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
   BadEscrowID EntryID |

@@ -92,7 +92,8 @@ makeEscrow eIDs f =
 makeContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 
-    Read argType, Typeable valType, Functor s
+    Read argType, Typeable argType, Typeable valType, 
+    Functor s
   ) =>
   [BearsValue] ->
   Contract argType valType ->
@@ -154,10 +155,14 @@ makeEscrowAbstract (ConcreteContract f) = ConcreteContract $ \xDyn -> do
 
 makeContractAbstract ::
   forall argType valType.
-  (Read argType, Typeable valType) =>
+  (Read argType, Typeable argType, Typeable valType) =>
   ConcreteContract argType valType -> AbstractContract
 makeContractAbstract (ConcreteContract f) = ConcreteContract $ \str -> do
-  let x = read str
+  let 
+    x =
+      case [y | (y, "") <- reads str] of
+        [y] -> y
+        _ -> throw $ BadInputParse str $ typeRep (Proxy @argType)
   (gM, y) <- f x
   return (makeContractAbstract <$> gM, toDyn y)
 
