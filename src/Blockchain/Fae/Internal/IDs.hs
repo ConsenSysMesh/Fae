@@ -2,6 +2,7 @@ module Blockchain.Fae.Internal.IDs where
 
 import Blockchain.Fae.Internal.Coroutine
 import Blockchain.Fae.Internal.Crypto
+import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.Lens hiding (from, to)
 
 import Control.Applicative
@@ -71,6 +72,11 @@ data EscrowID argType valType =
 -- an escrow.
 data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 
+-- Exception type
+data IDException =
+  NotEscrowOut EntryID
+  deriving (Typeable, Show)
+
 {- Typeclasses -}
 
 -- | A map of escrow IDs that preserves input and output types, regardless
@@ -104,6 +110,8 @@ class GHasEscrowIDs f where
   gTraverseEscrowIDs :: EscrowIDTraversal (f p)
 
 {- Instances -}
+
+instance Exception IDException
 
 instance (NFData argType, NFData valType) => NFData (EscrowID argType valType)
 
@@ -207,7 +215,7 @@ escrowTXResult :: EscrowID argType valType -> valType
 escrowTXResult (TXEscrowOut _ x) = x
 -- This is to avoid having to import Exceptions, which would be a cyclical
 -- dependency
-escrowTXResult _ = error "NotTXEscrowOut"
+escrowTXResult eID = throw $ NotEscrowOut $ entID eID
 
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue

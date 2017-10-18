@@ -41,6 +41,14 @@ type FaeStorage = FaeStorageT AbstractContract
 -- transferred anywhere).
 type Transaction a b = a -> FaeTX b
 
+-- Exception type
+data TransactionException =
+  NotEnoughInputs |
+  TooManyInputs |
+  BadInput ContractID |
+  OpenEscrows 
+  deriving (Typeable, Show)
+
 {- Typeclasses -}
 
 -- | This class controls how a type is constructed from
@@ -63,6 +71,8 @@ class GGetInputValues f where
   gGetInputValues :: State [Dynamic] (f p)
 
 {- Instances -}
+
+instance Exception TransactionException
 
 instance GetInputValues Void where
   getInputValues [] = undefined

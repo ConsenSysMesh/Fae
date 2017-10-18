@@ -68,7 +68,17 @@ newtype ConcreteContract argType valType =
 type AbstractEscrow = ConcreteContract Dynamic Dynamic
 type AbstractContract = ConcreteContract String Dynamic
 
+-- Exception type
+data ContractException =
+  BadInputParse String TypeRep |
+  BadArgType TypeRep TypeRep | 
+  BadValType TypeRep TypeRep |
+  BadEscrowID EntryID
+  deriving (Typeable, Show)
+
 {- Instances -}
+
+instance Exception ContractException
 
 deriving instance (Monoid w, MonadWriter w m) => MonadWriter w (Wrapped m)
 

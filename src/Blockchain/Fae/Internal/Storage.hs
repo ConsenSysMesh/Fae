@@ -44,12 +44,21 @@ newtype FaeStorageT c a = FaeStorage {getFaeStorage :: StateT (StorageT c) IO a}
 
 deriving instance MonadState (StorageT c) (FaeStorageT c)
 
+-- Exception type
+data StorageException =
+  BadTransactionID TransactionID |
+  BadContractID ContractID |
+  BadInputID ShortContractID
+  deriving (Typeable, Show)
+
 {- TH -}
 
 makeLenses ''StorageT
 makeLenses ''TransactionEntryT
 
 {- Instances -}
+
+instance Exception StorageException
 
 type instance Index (StorageT c) = ContractID
 type instance IxValue (StorageT c) = c
