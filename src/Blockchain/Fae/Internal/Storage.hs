@@ -96,11 +96,17 @@ showTransaction txID = do
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   return $ 
     intercalate "\n  " $
-      ("Transaction " ++ show txID ++ ": " ++ showOutputs os) :
+      ("Transaction " ++ show txID) :
+      (showOutputs os) :
       ("result: " ++ show x) :
       (flip map (Map.toList ios) $ \(cID, os) ->
-        "input " ++ show cID ++ ": " ++ showOutputs os)
-  where showOutputs os = show (IntMap.size os) ++ " outputs"
+        intercalate "\n    "
+        [
+          "input " ++ show cID,
+          showOutputs os
+        ]
+      )
+  where showOutputs os = "outputs " ++ show (IntMap.keys os)
 
 showTransactions :: FaeStorageT c [String]
 showTransactions = do
