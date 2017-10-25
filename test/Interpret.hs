@@ -9,6 +9,6 @@ main :: IO ()
 main = do
   txNames <- getArgs
   txs <- flip evalStateT (Storage Map.empty []) $ getFaeStorage $ do
-    interpretTXs $ zipWith (\s n -> (s, digest n, False)) txNames [0 :: Int ..]
+    interpretTXs $ map (,False) txNames
     showTransactions   
   putStrLn $ intercalate "\n\n" txs

@@ -23,8 +23,6 @@ module Blockchain.Fae.Contracts
   )
   where
 
-import Debug.Trace
-
 import Blockchain.Fae
 import Blockchain.Fae.Currency hiding (Token)
 
@@ -137,9 +135,7 @@ twoPartySwap partyA partyB
         Undecided _ -> return Nothing
         Decided f -> 
           case choice of
-            Get -> 
-              let tok = f party in
-              Just <$> newEscrow [] (\Token -> spend tok)
+            Get -> Just <$> newEscrow [] (\Token -> spend $ f party)
             _ -> return Nothing
       nextChoice <- release ret
       c nextChoice

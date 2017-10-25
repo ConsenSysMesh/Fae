@@ -1,7 +1,7 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, TemplateHaskell #-}
 module Blockchain.Fae.Internal.Contract where
 
-import Blockchain.Fae.Internal.Coroutine
+import Blockchain.Fae.Internal.Coroutine hiding (Reader)
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
@@ -9,8 +9,9 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Storage
 
 import Control.DeepSeq
-import Control.Monad.RWS
+import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Writer
 
 import Data.Dynamic
 import Data.Functor.Const
@@ -19,22 +20,28 @@ import Data.Typeable
 
 import qualified Data.Map as Map
 
+import GHC.Generics
+
 {- Types -}
 
-type Escrows = Map EntryID AbstractEscrow
+data Escrows =
+  Escrows
+  {
+    escrowMap :: EscrowMap,
+    nextID :: EntryID
+  } deriving (Generic)
+type EscrowMap = Map EntryID AbstractEscrow
 -- | This type encodes a value together with its backing escrows.  It is
 -- constructed automatically, and you can't construct it manually, so it is
 -- only useful in type signatures; it forces contracts to return values
 -- only via `spend` and `release`.
-data WithEscrows a = WithEscrows Escrows a
+data WithEscrows a = WithEscrows EscrowMap a
 type FaeRequest argType valType = 
   Request (WithEscrows valType) (WithEscrows argType)
 
-newtype Wrapped m a = Wrapped { unWrapped :: m a }
-  deriving (Functor, Applicative, Monad)
+type FaeRW = WriterT [AbstractContract] (Reader PublicKey) 
 
-type FaeRWS = RWS PublicKey [AbstractContract] EntryID 
-type FaeContract s = Coroutine s (StateT Escrows (Wrapped FaeRWS))
+type FaeContract s = Coroutine s (StateT Escrows FaeRW)
 newtype FaeM s a = Fae { getFae :: FaeContract s a }
   deriving (Functor, Applicative, Monad)
 
@@ -53,7 +60,7 @@ type ContractT m argType valType = argType -> m (WithEscrows valType)
 type Contract argType valType = ContractT (Fae argType valType) argType valType
 
 type InternalT s argType valType = 
-  ContractT (Coroutine s FaeRWS) argType valType
+  ContractT (Coroutine s FaeRW) argType valType
 
 type InternalContract argType valType = 
   InternalT (FaeRequest argType valType) (WithEscrows argType) valType
@@ -80,10 +87,13 @@ data ContractException =
 
 instance Exception ContractException
 
-deriving instance (Monoid w, MonadWriter w m) => MonadWriter w (Wrapped m)
-
+instance NFData Escrows
 instance NFData (ConcreteContract argType valType) where
   rnf (ConcreteContract !f) = ()
+
+{- TH -}
+
+makeLenses ''Escrows
 
 {- Functions -}
 
@@ -117,10 +127,14 @@ makeInternalT ::
   ContractT (FaeContract s') argType valType ->
   FaeContract s (InternalT s' (WithEscrows argType) valType)
 makeInternalT eIDs f = do
-  escrows <- takeEscrows eIDs
+  Escrows{..} <- takeEscrows eIDs
+  let seedID = digest (nextID, nextID)
+  _nextID %= digest
+  entID <- use _nextID
   return $ \(WithEscrows inputEscrows x) ->
-    let totalEscrows = escrows `Map.union` inputEscrows in 
-    mapMonad (unWrapped . flip evalStateT totalEscrows) $ f x
+    mapMonad (flip evalStateT Escrows{nextID = seedID, ..}) $ do
+      _escrowMap %= Map.union inputEscrows
+      f x
 
 makeEscrowConcrete ::
   (HasEscrowIDs argType, HasEscrowIDs valType, NFData argType) =>
@@ -142,14 +156,14 @@ makeConcrete ::
 makeConcrete mkE f = ConcreteContract $ \x -> do
   x' <- runTXEscrows x
   xE <- mkE x'
-  result <- lift $ lift $ Wrapped $ resume $ f xE
+  result <- lift $ lift $ resume $ f xE
   let 
     (gM, WithEscrows outputEscrows z) =
       case result of
         Left (Request y g) -> (Just g, y)
         Right y -> (Nothing, y)
-  modify $ Map.union outputEscrows
-  let gConcM = makeContractConcrete <$> gM
+  _escrowMap %= Map.union outputEscrows
+  let gConcM = makeConcrete mkE <$> gM
   return (gConcM, z)
 
 makeEscrowAbstract ::
@@ -187,21 +201,31 @@ unmakeAbstractEscrow (ConcreteContract f) = ConcreteContract $ \x -> do
       throw $ BadValType (typeRep (Proxy @valType)) (dynTypeRep yDyn)
   return (unmakeAbstractEscrow <$> gAbsM, y)
 
-takeEscrows :: forall m. (MonadState Escrows m) => [BearsValue] -> m Escrows
-takeEscrows xs = 
+takeEscrows :: (MonadState Escrows m) => [BearsValue] -> m Escrows
+takeEscrows xs = do
+  escrowMap <- getEscrowMap xs
+  nextID <- use _nextID
+  return Escrows{..}
+
+getEscrowMap :: forall m. (MonadState Escrows m) => [BearsValue] -> m EscrowMap
+getEscrowMap xs =
   fmap (Map.fromList . join) $ 
   forM xs $ \(BearsValue x) -> do
     let
       f :: EscrowIDMap (Const [m (EntryID, AbstractEscrow)])
-      f eID = 
-        Const 
-        [do
-          let k = entID eID
-          m <- get
-          modify $ Map.delete k
-          return (k, m Map.! k)
-        ]
+      f eID = Const [takeEscrow eID]
     sequence $ getConst $ traverseEscrowIDs f x
+
+takeEscrow :: (MonadState Escrows m) => 
+  EscrowID argType valType -> m (EntryID, AbstractEscrow)
+takeEscrow eID = do
+  let k = entID eID
+  xM <- use $ _escrowMap . at k
+  case xM of
+    Just x -> do
+      _escrowMap . at k .= Nothing
+      return (k, x)
+    Nothing -> throw $ BadEscrowID $ entID eID
 
 runTXEscrows :: forall a s. (HasEscrowIDs a, Functor s) => a -> FaeContract s a
 runTXEscrows x = traverseEscrowIDs f x where
@@ -213,11 +237,11 @@ internalSpend ::
   (HasEscrowIDs valType, MonadState Escrows m, NFData valType) => 
   valType -> m (WithEscrows valType)
 internalSpend x = do
-  outputEscrows <- takeEscrows [bearer x]
+  Escrows{..} <- takeEscrows [bearer x]
   -- We need to force both the escrows and the value because they may have
   -- nonterminating computations in them, which we want to be suffered by
   -- the originating contract and not by its victims.
-  return $ WithEscrows (force outputEscrows) (force x)
+  return $ WithEscrows (force escrowMap) (force x)
 
 internalUseEscrow :: 
   (
@@ -227,9 +251,9 @@ internalUseEscrow ::
   ) =>
   EntryID -> argType -> FaeContract s valType
 internalUseEscrow entID x = do
-  fAbs <- use $ at entID . defaultLens (throw $ BadEscrowID entID)
+  fAbs <- use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
   let ConcreteContract f = unmakeAbstractEscrow fAbs
   (gConcM, y) <- f x
-  at entID .= fmap makeEscrowAbstract gConcM
+  _escrowMap . at entID .= fmap makeEscrowAbstract gConcM
   return y
 

@@ -11,8 +11,9 @@ import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 
 import Control.Monad
-import Control.Monad.RWS
+import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Writer
 
 import Data.Dynamic
 import Data.Foldable
@@ -112,13 +113,13 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 
 runTransaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
-  Digest -> TransactionID -> PublicKey -> Bool ->
+  TransactionID -> PublicKey -> Bool ->
   [(ContractID, String)] -> 
   Transaction inputs a -> FaeStorage ()
-runTransaction dig txID txKey isReward inputArgs f = handleAll placeException $
+runTransaction txID txKey isReward inputArgs f = handleAll placeException $
   modify $ 
-    runFaeContract dig txKey .
-    transaction dig txID isReward inputArgs f 
+    runFaeContract txID txKey .
+    transaction txID isReward inputArgs f 
   where
     placeException e = 
       _getStorage . at txID ?=
@@ -129,30 +130,27 @@ runTransaction dig txID txKey isReward inputArgs f = handleAll placeException $
           result = throw e :: Void
         }
 
-runFaeContract :: Digest -> PublicKey -> FaeContract Naught a -> a
-runFaeContract dig txKey =
-  fst .
-  (\r s m -> evalRWS m r s) txKey dig .
-  unWrapped . 
-  flip evalStateT Map.empty .
+runFaeContract :: TransactionID -> PublicKey -> FaeContract Naught a -> a
+runFaeContract (ShortContractID dig) txKey =
+  flip runReader txKey .
+  fmap fst . runWriterT .
+  flip evalStateT Escrows{escrowMap = Map.empty, nextID = dig} .
   runCoroutine
 
 transaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
-  Digest ->
   TransactionID ->
   Bool -> 
   [(ContractID, String)] -> 
   Transaction inputs a -> 
   Storage -> FaeContract Naught Storage
-transaction dig txID isReward inputArgs f storage = do
-  (inputs0, storage', inputOutputs) <- runInputContracts dig inputArgs storage
-  newEscrowSeries dig 0
+transaction txID isReward inputArgs f storage = do
+  (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
   inputs <- withReward inputs0
   input <- runTXEscrows $ getInputValues $ toList inputs
   (result, outputsL) <- listen $ getFae $ f input
   let outputs = intMapList outputsL
-  escrows <- get
+  escrows <- use _escrowMap
   unless (Map.null escrows) $ throw OpenEscrows
   return $ storage' 
     & _getStorage . at txID ?~ TransactionEntry{..}
@@ -167,11 +165,10 @@ transaction dig txID isReward inputArgs f storage = do
 
 runInputContracts ::
   (Functor s) =>
-  Digest ->
   [(ContractID, String)] ->
   Storage ->
   FaeContract s ([Dynamic], Storage, InputOutputs)
-runInputContracts dig inputArgs storage = 
+runInputContracts inputArgs storage = 
   (\x s f -> foldl f x s) 
     (return ([], storage, Map.empty)) (zip inputArgs [1 ..]) $
   \accM ((cID, arg), n) -> do
@@ -180,7 +177,6 @@ runInputContracts dig inputArgs storage =
       results' = zip (fst <$> inputArgs) results
       ConcreteContract fAbs = 
         storage ^. at cID . defaultLens (throw $ BadInput cID)
-    newEscrowSeries dig n
     ((gAbsM, result), outputsL) <- listen $ fAbs arg
     censor (const []) $ return
       (
@@ -189,5 +185,3 @@ runInputContracts dig inputArgs storage =
         inputOutputs & at (shorten cID) ?~ intMapList outputsL
       )
 
-newEscrowSeries :: (Functor s) => Digest -> Int -> FaeContract s ()
-newEscrowSeries dig n = lift $ lift $ Wrapped $ put $ digest (dig, n)

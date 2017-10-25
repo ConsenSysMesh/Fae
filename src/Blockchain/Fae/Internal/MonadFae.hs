@@ -93,8 +93,10 @@ release ::
   valType -> m argType
 release x = liftFae $ Fae $ do
   req <- internalSpend x
+  escrows <- get
   suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
-    lift $ modify $ Map.union inputEscrows
+    put escrows -- makeInternalT wipes out the ongoing escrows
+    _escrowMap %= Map.union inputEscrows
     runTXEscrows y
 
 -- | Calls the given escrow by ID as a function.  This causes the escrow to
@@ -128,16 +130,10 @@ newEscrow ::
   ) =>
   [BearsValue] -> Contract argType valType -> m (EscrowID argType valType)
 newEscrow eIDs f = liftTX $ Fae $ do
-  cAbs <- makeEscrow eIDs f
-  eID@(EscrowID entID) <- nextEscrowID
-  modify $ Map.insert entID cAbs
-  return eID
-
-nextEscrowID :: (Functor s) => FaeContract s (EscrowID argType valType)
-nextEscrowID = lift $ lift $ Wrapped $ do
-  eID <- get
-  modify digest
-  return $ EscrowID eID
+  entID <- use _nextID
+  cAbs <- makeEscrow eIDs f -- modifies nextID
+  _escrowMap %= Map.insert entID cAbs
+  return $ EscrowID entID
 
 -- | Registers a contract publicly, with the same interface as 'newEscrow'.
 -- Public contracts may only be called as transaction inputs with string
@@ -153,9 +149,9 @@ newContract ::
   [BearsValue] -> Contract argType valType -> m ()
 newContract eIDs f = liftTX $ Fae $ do
   cAbs <- makeContract eIDs f
-  lift $ tell [cAbs]
+  tell [cAbs]
 
 -- | Gives the public key that signed the current transaction.
 sender :: (MonadTX m) => m PublicKey
-sender = liftTX $ Fae $ lift $ lift $ Wrapped ask
+sender = liftTX $ Fae ask
 

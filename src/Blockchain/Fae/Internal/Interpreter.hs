@@ -12,7 +12,7 @@ import Data.List
 
 import Language.Haskell.Interpreter
 
-interpretTXs :: [(String, Digest, Bool)] -> FaeStorage ()
+interpretTXs :: [(String, Bool)] -> FaeStorage ()
 interpretTXs txSpecs = do
   actions <- runInterpreter $ do
     loadModules txSrcs
@@ -23,18 +23,17 @@ interpretTXs txSpecs = do
   where
     reportErr (WontCompile ghcErrors) = error $ errMsg $ head ghcErrors
     reportErr e = throw e
-    txSrcs = map (\(x,_,_) -> x) txSpecs
+    txSrcs = map (\(x,_) -> x) txSpecs
     pkgModules = 
       [
         "Prelude",
         "Data.Dynamic",
         "Blockchain.Fae.Internal"
       ]
-    runTX (s, dig, isReward) =
+    runTX (s, isReward) =
       intercalate " "
         [
           "runTransaction",
-          parens $ "read " ++ show (show dig),
           s ++ ".txID",
           s ++ ".pubKey",
           show isReward,
