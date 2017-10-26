@@ -113,10 +113,10 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 
 runTransaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
-  TransactionID -> PublicKey -> Bool ->
-  [(ContractID, String)] -> 
-  Transaction inputs a -> FaeStorage ()
-runTransaction txID txKey isReward inputArgs f = handleAll placeException $
+  Transaction inputs a -> [(ContractID, String)] -> 
+  TransactionID -> PublicKey -> Bool -> 
+  FaeStorage ()
+runTransaction f inputArgs txID txKey isReward = handleAll placeException $
   modify $ 
     runFaeContract txID txKey .
     transaction txID isReward inputArgs f 

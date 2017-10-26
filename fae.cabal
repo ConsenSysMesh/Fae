@@ -21,17 +21,18 @@ library
     Blockchain.Fae.Contracts
     Blockchain.Fae.Currency
   other-modules:
+    Blockchain.Fae.Internal.Block
     Blockchain.Fae.Internal.Contract
     Blockchain.Fae.Internal.Coroutine
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.IDs
-    Blockchain.Fae.Internal.Interpreter
     Blockchain.Fae.Internal.Lens
     Blockchain.Fae.Internal.MonadFae
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Transaction
+    Blockchain.Fae.Internal.TX
   build-depends:       
     base >= 4.7 && < 5,
     base16-bytestring,
@@ -75,15 +76,72 @@ library
     TypeFamilies
     TypeOperators
 
-executable interpret
+executable makePrivateKey
   buildable: True
-  hs-source-dirs:      test
-  main-is:             Interpret.hs
+  hs-source-dirs:      bin
+  main-is:             MakePrivateKey.hs
 --  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       
     base, 
-    containers,
+    bytestring,
+    cereal,
+    fae
+  default-language:    Haskell2010
+  
+executable getPublicKey
+  buildable: True
+  hs-source-dirs:      bin
+  main-is:             GetPublicKey.hs
+--  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       
+    base, 
+    bytestring,
+    cereal,
+    fae
+  default-language:    Haskell2010
+  
+executable makeTX
+  buildable: True
+  hs-source-dirs:      bin
+  main-is:             MakeTX.hs
+--  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       
+    base, 
+    bytestring,
+    cereal,
+    directory,
     fae,
+    filepath
+  default-language:    Haskell2010
+
+executable makeBlock
+  buildable: True
+  hs-source-dirs:      bin
+  main-is:             MakeBlock.hs
+--  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       
+    base, 
+    bytestring,
+    cereal,
+    directory,
+    fae,
+    filepath
+  default-language:    Haskell2010
+  default-extensions:
+    RecordWildCards
+
+executable runBlock
+  buildable: True
+  hs-source-dirs:      bin
+  main-is:             RunBlock.hs
+--  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       
+    base, 
+    bytestring,
+    cereal,
+    directory,
+    fae,
+    filepath,
     mtl
   default-language:    Haskell2010
 
@@ -98,3 +156,4 @@ executable interpret
 --source-repository head
 --  type:     git
 --  location: https://github.com/
+

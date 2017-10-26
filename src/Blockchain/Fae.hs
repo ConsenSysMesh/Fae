@@ -33,7 +33,7 @@ module Blockchain.Fae
     EscrowIDTraversal, EscrowIDMap, GetInputValues(..),
     Reward, RewardToken,
     -- * Identifier types
-    PublicKey, ContractID, TransactionID, EscrowID, WithEscrows, RewardEscrowID, 
+    PublicKey, ContractID(..), TransactionID, EscrowID, WithEscrows, RewardEscrowID, 
     -- * Re-exports
     -- | Only 'NFData(..)':
     module Control.DeepSeq,

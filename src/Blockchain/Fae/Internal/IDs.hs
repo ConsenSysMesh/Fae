@@ -9,6 +9,7 @@ import Control.Applicative
 import Control.DeepSeq
 
 import qualified Data.Serialize as Ser
+import Data.String
 import Data.Traversable
 import Data.Typeable
 import Data.Void
@@ -37,7 +38,7 @@ data ContractID =
 -- contracts that are outputs of ... that are outputs of some long-ago
 -- transaction.
 newtype ShortContractID = ShortContractID Digest
-  deriving (Eq, Ord, Serialize)
+  deriving (Eq, Ord, Serialize, IsString)
 
 type TransactionID = ShortContractID -- ^ For simplicity
 type BlockID = Digest -- ^ For simplicity
