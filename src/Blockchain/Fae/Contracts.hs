@@ -94,6 +94,7 @@ data Tristate = One TwoParties | Neither
 data TwoPartyVote = Yes | No | Get deriving (Read, Show, Generic)
 
 instance NFData TwoPartyVote
+instance ReadInput TwoPartyVote
 
 switchParty :: TwoParties -> TwoParties
 switchParty A = B
@@ -172,7 +173,7 @@ sell x price seller = newContract [] $ \payID -> do
 redeem ::
   (
     HasEscrowIDs a, HasEscrowIDs b, 
-    Typeable a, Typeable b, Read b,
+    Typeable a, Typeable b, ReadInput b,
     NFData a, NFData b,
     MonadTX m
   ) =>

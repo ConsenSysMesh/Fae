@@ -1,4 +1,4 @@
-{-# LANGUAGE UndecidableInstances, TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Contract where
 
 import Blockchain.Fae.Internal.Coroutine hiding (Reader)
@@ -17,6 +17,7 @@ import Data.Dynamic
 import Data.Functor.Const
 import Data.Map (Map)
 import Data.Typeable
+import Data.Void
 
 import qualified Data.Map as Map
 
@@ -73,7 +74,7 @@ newtype ConcreteContract argType valType =
   )
 
 type AbstractEscrow = ConcreteContract Dynamic Dynamic
-type AbstractContract = ConcreteContract String Dynamic
+type AbstractContract = ConcreteContract Input Dynamic
 
 -- Exception type
 data ContractException =
@@ -83,6 +84,19 @@ data ContractException =
   BadEscrowID EntryID
   deriving (Typeable, Show)
 
+data Input = forall a. (HasEscrowIDs a) => Input a String
+
+{- Typeclasses -}
+
+-- | For reading contract arguments as transaction inputs.
+class ReadInput a where
+  readInput :: Input -> a
+  default readInput :: (Read a, Typeable a) => Input -> a
+  readInput (Input x s) =
+    case filter (null . snd) $ reads s of
+      [(y, "")] -> resolveEscrowLocators x y
+      _ -> throw $ BadInputParse s (typeRep $ Proxy @a)
+
 {- Instances -}
 
 instance Exception ContractException
@@ -90,6 +104,22 @@ instance Exception ContractException
 instance NFData Escrows
 instance NFData (ConcreteContract argType valType) where
   rnf (ConcreteContract !f) = ()
+
+instance ReadInput Void
+instance ReadInput ()
+instance ReadInput Bool
+instance ReadInput Char
+instance ReadInput Int
+instance ReadInput Integer
+instance ReadInput Float
+instance ReadInput Double
+instance (Read a, Typeable a) => ReadInput [a]
+instance (Read a, Typeable a) => ReadInput (Maybe a)
+instance (Read a, Typeable a, Read b, Typeable b) => ReadInput (a, b)
+instance (Read a, Typeable a, Read b, Typeable b) => ReadInput (Either a b)
+instance 
+  (Typeable argType, Typeable valType) =>
+  ReadInput (EscrowID argType valType)
 
 {- TH -}
 
@@ -112,7 +142,7 @@ makeEscrow eIDs f =
 makeContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 
-    Read argType, Typeable argType, Typeable valType, 
+    ReadInput argType, Typeable argType, Typeable valType,
     Functor s
   ) =>
   [BearsValue] ->
@@ -179,15 +209,10 @@ makeEscrowAbstract (ConcreteContract f) = ConcreteContract $ \xDyn -> do
 
 makeContractAbstract ::
   forall argType valType.
-  (Read argType, Typeable argType, Typeable valType) =>
+  (ReadInput argType, Typeable argType, Typeable valType) =>
   ConcreteContract argType valType -> AbstractContract
-makeContractAbstract (ConcreteContract f) = ConcreteContract $ \str -> do
-  let 
-    x =
-      case [y | (y, "") <- reads str] of
-        [y] -> y
-        _ -> throw $ BadInputParse str $ typeRep (Proxy @argType)
-  (gM, y) <- f x
+makeContractAbstract (ConcreteContract f) = ConcreteContract $ \input -> do
+  (gM, y) <- f $ readInput input
   return (makeContractAbstract <$> gM, toDyn y)
 
 unmakeAbstractEscrow ::
@@ -212,12 +237,14 @@ getEscrowMap xs =
   fmap (Map.fromList . join) $ 
   forM xs $ \(BearsValue x) -> do
     let
-      f :: EscrowIDMap (Const [m (EntryID, AbstractEscrow)])
-      f eID = Const [takeEscrow eID]
-    sequence $ getConst $ traverseEscrowIDs f x
+      f :: EscrowIDMap (Writer [m (EntryID, AbstractEscrow)])
+      f eID@EscrowLocator{} = return eID
+      f eID = tell [takeEscrow eID] >> return eID
+    sequence $ execWriter $ traverseEscrowIDs f x
 
 takeEscrow :: (MonadState Escrows m) => 
   EscrowID argType valType -> m (EntryID, AbstractEscrow)
+takeEscrow EscrowLocator{..} = throw $ UnresolvedEscrowLocator path
 takeEscrow eID = do
   let k = entID eID
   xM <- use $ _escrowMap . at k
@@ -226,12 +253,6 @@ takeEscrow eID = do
       _escrowMap . at k .= Nothing
       return (k, x)
     Nothing -> throw $ BadEscrowID $ entID eID
-
-runTXEscrows :: forall a s. (HasEscrowIDs a, Functor s) => a -> FaeContract s a
-runTXEscrows x = traverseEscrowIDs f x where
-  f :: EscrowIDMap (FaeContract s)
-  f (TXEscrowIn eID arg) = TXEscrowOut eID <$> internalUseEscrow eID arg
-  f eID = return eID
 
 internalSpend :: 
   (HasEscrowIDs valType, MonadState Escrows m, NFData valType) => 
@@ -256,4 +277,10 @@ internalUseEscrow entID x = do
   (gConcM, y) <- f x
   _escrowMap . at entID .= fmap makeEscrowAbstract gConcM
   return y
+
+runTXEscrows :: forall a s. (HasEscrowIDs a, Functor s) => a -> FaeContract s a
+runTXEscrows = traverseEscrowIDs f where
+  f :: EscrowIDMap (FaeContract s)
+  f (TXEscrowIn eID arg) = TXEscrowOut eID <$> internalUseEscrow eID arg
+  f eID = return eID
 

@@ -106,7 +106,7 @@ showTransaction txID = do
           showOutputs os
         ]
       )
-  where showOutputs os = "outputs " ++ show (IntMap.keys os)
+  where showOutputs os = "outputs: " ++ show (IntMap.keys os)
 
 showTransactions :: FaeStorageT c [String]
 showTransactions = do

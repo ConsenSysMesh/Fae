@@ -15,6 +15,8 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
+import Control.Monad.Trans.Identity
+
 import Data.Dynamic
 import Data.Foldable
 import Data.Maybe
@@ -23,7 +25,6 @@ import Data.Void
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
-import qualified Data.Sequence as Seq
 
 import GHC.Generics hiding (to)
 import qualified GHC.Generics as Gen (to)
@@ -31,6 +32,7 @@ import qualified GHC.Generics as Gen (to)
 {- Types -}
 
 type Storage = StorageT AbstractContract
+type Outputs = OutputsT AbstractContract
 type InputOutputs = InputOutputsT AbstractContract
 type FaeStorage = FaeStorageT AbstractContract
 
@@ -60,13 +62,10 @@ data TransactionException =
 -- to write an instance yourself; however, you do need to @instance
 -- GetInputValues <your type>@ for any 'a' you choose to use.
 class GetInputValues a where
-  getInputValues :: [Dynamic] -> a
+  getInputValues :: [Dynamic] -> (a, [Dynamic])
   default getInputValues :: 
-    (Generic a, GGetInputValues (Rep a)) => [Dynamic] -> a
-  getInputValues s
-    | null s' = Gen.to x
-    | otherwise = throw TooManyInputs
-    where (x, s') = runState gGetInputValues s
+    (Generic a, GGetInputValues (Rep a)) => [Dynamic] -> (a, [Dynamic])
+  getInputValues = runState $ Gen.to <$> gGetInputValues
 
 class GGetInputValues f where
   gGetInputValues :: State [Dynamic] (f p)
@@ -76,16 +75,15 @@ class GGetInputValues f where
 instance Exception TransactionException
 
 instance GetInputValues Void where
-  getInputValues [] = undefined
-  getInputValues _ = throw TooManyInputs
+  getInputValues _ = (throw TooManyInputs, [])
 
 instance (Typeable a, Typeable b) => GetInputValues (a, b)
 
 instance {-# OVERLAPPABLE #-} (Typeable a) => GetInputValues a where
-  getInputValues [xDyn] = fromDyn xDyn $
-    throw $ BadArgType (typeRep (Proxy @a)) (dynTypeRep xDyn)
+  getInputValues (xDyn : rest) = (x, rest) where
+    x = fromDyn xDyn $
+      throw $ BadArgType (typeRep (Proxy @a)) (dynTypeRep xDyn)
   getInputValues [] = throw NotEnoughInputs
-  getInputValues _ = throw TooManyInputs
 
 instance GGetInputValues U1 where
   gGetInputValues = return U1
@@ -119,7 +117,7 @@ runTransaction ::
 runTransaction f inputArgs txID txKey isReward = handleAll placeException $
   modify $ 
     runFaeContract txID txKey .
-    transaction txID isReward inputArgs f 
+    transaction txID isReward inputArgs f
   where
     placeException e = 
       _getStorage . at txID ?=
@@ -138,50 +136,81 @@ runFaeContract (ShortContractID dig) txKey =
   runCoroutine
 
 transaction :: 
-  (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
+  (GetInputValues input, HasEscrowIDs input, Typeable a, Show a) =>
   TransactionID ->
   Bool -> 
   [(ContractID, String)] -> 
-  Transaction inputs a -> 
+  Transaction input a -> 
   Storage -> FaeContract Naught Storage
-transaction txID isReward inputArgs f storage = do
-  (inputs0, storage', inputOutputs) <- runInputContracts inputArgs storage
-  inputs <- withReward inputs0
-  input <- runTXEscrows $ getInputValues $ toList inputs
-  (result, outputsL) <- listen $ getFae $ f input
-  let outputs = intMapList outputsL
-  escrows <- use _escrowMap
-  unless (Map.null escrows) $ throw OpenEscrows
+transaction txID isReward args f storage = do
+  (input, storage', inputOutputs) <- runInputSpec args isReward storage
+  (result, outputs) <- doTX f input
   return $ storage' 
     & _getStorage . at txID ?~ TransactionEntry{..}
     & _txLog %~ cons txID
 
-  where
-    withReward inputs
-      | isReward = do
-          eID <- newEscrow [] rewardEscrow
-          return $ inputs |> toDyn eID
-      | otherwise = return inputs
+doTX :: Transaction input a -> input -> FaeContract Naught (a, Outputs)
+doTX f input = do
+  (result, outputsL) <- listen $ getFae $ f input
+  let outputs = intMapList outputsL
+  escrows <- use _escrowMap
+  unless (Map.null escrows) $ throw OpenEscrows
+  return (result, outputs)
 
+runInputSpec :: 
+  forall input.
+  (GetInputValues input, HasEscrowIDs input) =>
+  [(ContractID, String)] -> Bool -> Storage -> 
+  FaeContract Naught (input, Storage, InputOutputs)
+runInputSpec args isReward storage = do
+  triple <- runInputContracts (Proxy @input) isReward storage args
+  let (input0, unused) = getInputValues $ triple ^. _1
+  unless (null unused) $ throw TooManyInputs
+  -- We don't have to be careful about self-referencing here because we
+  -- already checked it in 'runInputContract'
+  input <- runTXEscrows $ resolveEscrowLocators input0 input0 
+  return (triple & _1 .~ input)
+ 
 runInputContracts ::
-  (Functor s) =>
-  [(ContractID, String)] ->
+  (GetInputValues input, HasEscrowIDs input) =>
+  Proxy input ->
+  Bool ->
   Storage ->
-  FaeContract s ([Dynamic], Storage, InputOutputs)
-runInputContracts inputArgs storage = 
-  (\x s f -> foldl f x s) 
-    (return ([], storage, Map.empty)) (zip inputArgs [1 ..]) $
-  \accM ((cID, arg), n) -> do
-    (results, storage, inputOutputs) <- accM
-    let 
-      results' = zip (fst <$> inputArgs) results
-      ConcreteContract fAbs = 
-        storage ^. at cID . defaultLens (throw $ BadInput cID)
-    ((gAbsM, result), outputsL) <- listen $ fAbs arg
-    censor (const []) $ return
-      (
-        results |> result,
-        storage & at cID .~ gAbsM,
-        inputOutputs & at (shorten cID) ?~ intMapList outputsL
-      )
+  [(ContractID, String)] ->
+  FaeContract Naught ([Dynamic], Storage, InputOutputs)
+runInputContracts p isReward storage args = do
+  runIdentityT $ flip execStateT ([], storage, Map.empty) $ 
+    forM_ args $ modifyM . uncurry (runInputContract p isReward)
+  where modifyM f = get >>= lift . IdentityT . f >>= put
+
+runInputContract ::
+  forall input.
+  (GetInputValues input, HasEscrowIDs input) =>
+  Proxy input ->
+  Bool ->
+  ContractID ->
+  String ->
+  ([Dynamic], Storage, InputOutputs) ->
+  FaeContract Naught ([Dynamic], Storage, InputOutputs)
+runInputContract _ isReward cID argS (results, storage, inputOutputs) = do
+  input <- withReward $ results ++ repeat (throw NotEnoughInputs)
+  let 
+    (argInput :: input, _) = getInputValues input
+    arg = Input argInput argS
+    ConcreteContract fAbs = 
+      storage ^. at cID . defaultLens (throw $ BadInput cID)
+  ((gAbsM, result), outputsL) <- listen $ fAbs arg
+  censor (const []) $ return $
+    (
+      results |> result,
+      storage & at cID .~ gAbsM,
+      inputOutputs & at (shorten cID) ?~ intMapList outputsL
+    )
+
+  where
+    withReward 
+      | isReward = \inputs -> do
+          eID <- newEscrow [] rewardEscrow
+          return $ toDyn eID : inputs
+      | otherwise = return 
 

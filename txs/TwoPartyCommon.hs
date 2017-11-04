@@ -6,8 +6,18 @@ import Blockchain.Fae.Internal (ContractID, Digestible, public, newPrivateKey)
 import Crypto.Random
 import Data.Maybe
 import Data.Void
-
+import GHC.Generics
 import System.IO.Unsafe
+
+data TwoPartyT = 
+  TwoPartyT 
+  {
+    tokenID :: Maybe TwoPartyEscrow,
+    result :: EscrowID TwoPartyEscrow String
+  } deriving (Generic, Show)
+
+instance GetInputValues TwoPartyT
+instance HasEscrowIDs TwoPartyT    
 
 {-# NOINLINE pubKeys #-}
 pubKeys :: (PublicKey, PublicKey)

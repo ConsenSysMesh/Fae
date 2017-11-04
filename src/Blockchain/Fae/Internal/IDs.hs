@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 module Blockchain.Fae.Internal.IDs where
 
 import Blockchain.Fae.Internal.Coroutine
@@ -8,18 +9,23 @@ import Blockchain.Fae.Internal.Lens hiding (from, to)
 import Control.Applicative
 import Control.DeepSeq
 
+import Control.Monad.Writer
+
+import Data.Char
+import Data.Functor.Identity
 import qualified Data.Serialize as Ser
+import Data.List
 import Data.String
 import Data.Traversable
 import Data.Typeable
 import Data.Void
 
 import GHC.Generics
+import GHC.TypeLits
 
 import Numeric.Natural
 
 import Text.ParserCombinators.ReadP
-import Text.ParserCombinators.ReadPrec
 
 {- Types -}
 
@@ -65,7 +71,8 @@ type EntryID = Digest
 data EscrowID argType valType = 
   EscrowID { entID :: EntryID } |
   TXEscrowIn { entID :: EntryID, eArg :: argType } |
-  TXEscrowOut { entID :: EntryID, eVal :: valType }
+  TXEscrowOut { entID :: EntryID, eVal :: valType } |
+  EscrowLocator { path :: [String] }
   deriving (Generic)
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
 -- this type is, abstractly, something within a contract that has economic
@@ -75,10 +82,10 @@ data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 
 -- Exception type
 data IDException =
-  NotEscrowOut EntryID
+  BadInputEscrow String |
+  NotEscrowOut EntryID |
+  UnresolvedEscrowLocator [String]
   deriving (Typeable, Show)
-
-{- Typeclasses -}
 
 -- | A map of escrow IDs that preserves input and output types, regardless
 -- of what they are.
@@ -90,8 +97,24 @@ type EscrowIDMap f =
   ) =>
   EscrowID argType valType -> f (EscrowID argType valType)
 
+-- | The same as 'EscrowIDMap', but also takes an escrow locator.
+type IndexedEscrowIDMap f =
+  forall argType valType. 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType
+  ) =>
+  [String] -> EscrowID argType valType -> f (EscrowID argType valType)
+
 -- | The type of a traversal by an 'EscrowIDMap', used in 'HasEscrowIDs'.
-type EscrowIDTraversal a = forall f. (Applicative f) => EscrowIDMap f -> a -> f a
+type EscrowIDTraversal a = 
+  forall f. (Monad f) => EscrowIDMap f -> a -> f a
+
+-- | The type of a traversal by an 'IndexedEscrowIDMap', used in 'HasEscrowIDs'.
+type IndexedEscrowIDTraversal a = 
+  forall f. (Monad f) => IndexedEscrowIDMap f -> a -> f a
+
+{- Typeclasses -}
 
 -- | Every contract must accept arguments and return values in this class.
 -- The returned traversal /must/ contain, in any order, the IDs of every
@@ -101,14 +124,17 @@ type EscrowIDTraversal a = forall f. (Applicative f) => EscrowIDMap f -> a -> f 
 -- explicitly, as suitable general instances are given.
 class HasEscrowIDs a where
   traverseEscrowIDs :: EscrowIDTraversal a
+  traverseEscrowIDs f = iTraverseEscrowIDs (const f)
+
+  iTraverseEscrowIDs :: IndexedEscrowIDTraversal a
   default 
-    traverseEscrowIDs :: 
+    iTraverseEscrowIDs :: 
       (Generic a, GHasEscrowIDs (Rep a)) => 
-      EscrowIDTraversal a
-  traverseEscrowIDs f x = to <$> gTraverseEscrowIDs f (from x)
+      IndexedEscrowIDTraversal a
+  iTraverseEscrowIDs f x = to <$> gTraverseEscrowIDs f (from x)
 
 class GHasEscrowIDs f where
-  gTraverseEscrowIDs :: EscrowIDTraversal (f p)
+  gTraverseEscrowIDs :: IndexedEscrowIDTraversal (f p)
 
 {- Instances -}
 
@@ -127,23 +153,25 @@ instance Show ShortContractID where
   show (ShortContractID dig) = show dig
 
 instance Read (EscrowID argType valType) where
-  readsPrec _ = fmap (_1 %~ EscrowID) . readsPrec 0
+  readsPrec s = readP_to_S $ EscrowLocator <$> sepBy1 pathStr pathSep  
+    where  
+      pathStr = munch1 (not . (\c -> c == '.' || isSpace c))
+      pathSep = skipSpaces >> char '.' >> skipSpaces
 
-instance Show (EscrowID argType valType) where
-  show = show . entID
+instance (Typeable argType, Typeable valType) => Show (EscrowID argType valType) where
+  show eID@EscrowLocator{..} = 
+    "EscrowLocator " ++ 
+    intercalate "." path ++
+    " :: " ++ show (typeOf eID)
+  show eID = show (entID eID) ++ " :: " ++ show (typeOf eID)
   
 instance {-# OVERLAPPABLE #-} HasEscrowIDs a where
-  traverseEscrowIDs _ = pure
+  iTraverseEscrowIDs _ = pure
 
 instance {-# OVERLAPPABLE #-} 
   (Traversable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
 
-  traverseEscrowIDs g = traverse (traverseEscrowIDs g)
-
-instance HasEscrowIDs Void 
-instance (HasEscrowIDs a) => HasEscrowIDs (Maybe a)
-instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (Either a b)
-instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b)
+  iTraverseEscrowIDs g = traverse (iTraverseEscrowIDs g)
 
 instance 
   (
@@ -152,8 +180,16 @@ instance
   ) =>
   HasEscrowIDs (EscrowID argType valType) where
 
-  -- Not 'id'; we need to specialize the forall.
-  traverseEscrowIDs f x = f x
+  iTraverseEscrowIDs f TXEscrowIn{..} = do
+    eArg' <- iTraverseEscrowIDs f eArg
+    f [] $ TXEscrowIn{entID, eArg = eArg'}
+  -- Not point-free; we need to specialize the forall.
+  iTraverseEscrowIDs f eID = f [] eID
+
+instance HasEscrowIDs Void 
+instance (HasEscrowIDs a, Typeable a) => HasEscrowIDs (Maybe a)
+instance (HasEscrowIDs a, Typeable a, HasEscrowIDs b, Typeable b) => HasEscrowIDs (Either a b)
+instance (HasEscrowIDs a, Typeable a, HasEscrowIDs b, Typeable b) => HasEscrowIDs (a, b)
 
 -- Boring Generic boilerplate
 
@@ -173,10 +209,36 @@ instance (GHasEscrowIDs f, GHasEscrowIDs g) => GHasEscrowIDs (f :*: g) where
     liftA2 (:*:) (gTraverseEscrowIDs h x) (gTraverseEscrowIDs h y)
 
 instance (HasEscrowIDs c) => GHasEscrowIDs (K1 i c) where
-  gTraverseEscrowIDs f (K1 x) = K1 <$> traverseEscrowIDs f x
+  gTraverseEscrowIDs f (K1 x) = K1 <$> iTraverseEscrowIDs f x
 
-instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i t f) where
-  gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs g x
+-- We count constructor and record names for the path, but nothing else.
+
+instance 
+  (GHasEscrowIDs f) => 
+  GHasEscrowIDs (M1 D (MetaData n m p nt) f) where
+
+  gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs g x 
+
+instance 
+  (GHasEscrowIDs f, KnownSymbol n) => 
+  GHasEscrowIDs (M1 C (MetaCons n x s) f) where
+
+  gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs (g . (name :)) x where
+    name = symbolVal (Proxy @n)
+
+instance 
+  (GHasEscrowIDs f, KnownSymbol n) => 
+  GHasEscrowIDs (M1 S (MetaSel (Just n) su ss ds) f) where
+
+  gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs (g . (name :)) x where
+    name = symbolVal (Proxy @n)
+
+-- Fields without record selectors are transparent to the path
+instance 
+  (GHasEscrowIDs f) => 
+  GHasEscrowIDs (M1 S (MetaSel Nothing su ss ds) f) where
+
+  gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs g x 
 
 {- Functions -}
 
@@ -205,7 +267,8 @@ shorten = ShortContractID . digest
 -- interject its own code between the input's return and the actual escrow
 -- call.
 escrowTX :: EscrowID argType valType -> argType -> EscrowID argType valType
-escrowTX = TXEscrowIn . entID
+escrowTX EscrowLocator{..} = throw $ UnresolvedEscrowLocator path
+escrowTX eID = TXEscrowIn $ entID eID
 
 -- | Get the result of an escrow transaction.  This function is intended to
 -- be used after the escrow ID is returned and the escrow transaction
@@ -213,12 +276,38 @@ escrowTX = TXEscrowIn . entID
 -- a return value, depending on how it was passed, and this function
 -- extracts the result of the transaction from that ID.
 escrowTXResult :: EscrowID argType valType -> valType
-escrowTXResult (TXEscrowOut _ x) = x
--- This is to avoid having to import Exceptions, which would be a cyclical
--- dependency
+escrowTXResult TXEscrowOut{..} = eVal
+escrowTXResult EscrowLocator{..} = throw $ UnresolvedEscrowLocator path
 escrowTXResult eID = throw $ NotEscrowOut $ entID eID
 
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue
+
+resolveEscrowLocators :: (HasEscrowIDs a, HasEscrowIDs b) => a -> b -> b
+resolveEscrowLocators input x = 
+  runIdentity $ traverseEscrowIDs (Identity . resolveEscrowLocator input) x
+
+resolveEscrowLocator :: 
+  (HasEscrowIDs a) => 
+  a -> EscrowID argType valType -> EscrowID argType valType
+resolveEscrowLocator input EscrowLocator{..} = locateEscrow input path
+resolveEscrowLocator _ eID = eID
+
+locateEscrow :: 
+  (HasEscrowIDs a) => 
+  a -> [String] -> EscrowID argType valType
+locateEscrow input path =
+  case execWriter $ iTraverseEscrowIDs (selectEscrowLocator path) input of
+    [eID] -> EscrowID eID
+    _ -> throw $ UnresolvedEscrowLocator path
+
+selectEscrowLocator :: 
+  [String] -> IndexedEscrowIDMap (Writer [EntryID])
+selectEscrowLocator path1 path2 EscrowLocator{..} 
+  | path1 == path2 = throw $ UnresolvedEscrowLocator path
+selectEscrowLocator _ _ eID@EscrowLocator{..} = return eID
+selectEscrowLocator path path' eID 
+  | path == path' = tell [entID eID] >> return eID
+  | otherwise = return eID
 

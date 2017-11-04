@@ -29,8 +29,8 @@ module Blockchain.Fae
     sender, bearer, claimReward,
     -- * Contract types
     Contract, ContractT, Transaction, 
-    Fae, FaeTX, BearsValue, HasEscrowIDs(..),
-    EscrowIDTraversal, EscrowIDMap, GetInputValues(..),
+    Fae, FaeTX, BearsValue, HasEscrowIDs,
+    EscrowIDTraversal, EscrowIDMap, GetInputValues, ReadInput,
     Reward, RewardToken,
     -- * Identifier types
     PublicKey, ContractID(..), TransactionID, EscrowID, WithEscrows, RewardEscrowID, 

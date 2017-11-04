@@ -142,7 +142,7 @@ newEscrow eIDs f = liftTX $ Fae $ do
 newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 
-    Read argType, Typeable argType, Typeable valType, 
+    ReadInput argType, Typeable argType, Typeable valType, 
     NFData argType, NFData valType,
     MonadTX m
   ) =>

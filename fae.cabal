@@ -65,6 +65,7 @@ library
     LambdaCase
     MultiParamTypeClasses
     MultiWayIf
+    NamedFieldPuns
     OverloadedStrings
     PatternGuards
     RankNTypes

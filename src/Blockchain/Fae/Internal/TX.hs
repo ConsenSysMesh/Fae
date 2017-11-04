@@ -14,7 +14,7 @@ import qualified Data.Map as Map
 
 import GHC.Generics
 
-import Language.Haskell.Interpreter as Int
+import Language.Haskell.Interpreter as Int 
 
 {- Types -}
 
@@ -37,20 +37,25 @@ instance Digestible TX
 
 interpretTX :: Bool -> TX -> FaeInterpret ()
 interpretTX isReward TX{..} = do
-  Int.set [languageExtensions := [OverloadedStrings]]
+  Int.set [languageExtensions := languageExts]
   loadModules [txSrc]
   setImportsQ $ (txSrc, Just txSrc) : map (,Nothing) pkgModules 
   run <- interpret 
     ("runTransaction  " ++ qualified "body" ++ " " ++ qualified "inputs")
     (as :: TransactionID -> PublicKey -> Bool -> FaeStorage ())
   lift $ run txID pubKey isReward 
-
   where
     txSrc = "Blockchain.Fae.Transactions.TX" ++ show txID
     pkgModules = 
       [
         "Blockchain.Fae.Internal",
         "Data.Dynamic"
+      ]
+    languageExts =
+      [
+        DeriveDataTypeable,
+        DeriveGeneric,
+        OverloadedStrings
       ]
     qualified varName = txSrc ++ "." ++ varName
 
