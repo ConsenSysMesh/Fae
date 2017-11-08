@@ -39,7 +39,7 @@ library
     bytestring,
     cereal,
     containers,
-    cryptonite,
+    cryptonite >= 0.24,
     deepseq,
     exceptions,
     filepath,

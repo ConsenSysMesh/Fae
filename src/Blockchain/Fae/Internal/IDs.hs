@@ -1,3 +1,13 @@
+{- |
+Module: Blockchain.Fae.Internal.IDs
+Description: Identifier types and associated functions
+Copyright: (c) Ryan Reich, 2017
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+There are several identifier types in Fae: two kinds of contract ID (one detailed, one convenient but lossy), transaction IDs, and escrow IDs.  In addition, the escrow IDs in particular have a lot of ritual surrounding them.
+-}
 {-# LANGUAGE DataKinds #-}
 module Blockchain.Fae.Internal.IDs where
 
@@ -27,15 +37,23 @@ import Numeric.Natural
 
 import Text.ParserCombinators.ReadP
 
-{- Types -}
+-- * Types
 
 -- | This identifier locates a contract in storage.  It is not intended to
 -- be used in contract code, as indeed, a contract can never be called
 -- explicitly but only as a transaction input, for which there is a special
 -- syntax outside Haskell.
 data ContractID =
+  -- | Technically, a transaction is a type of contract, but this kind of
+  -- contract ID is basically only for errors.
   JustTransaction TransactionID |
+  -- | One way contracts can be created is by being directly output by
+  -- a transaction.  The outputs are indexed from 0 in order of creation.
   TransactionOutput TransactionID Int |
+  -- | The other way contracts can be created is by being output during the
+  -- execution of one of its input contract calls.  The outputs are indexed
+  -- from 0 in order of creation, with the indexing specific to each input
+  -- contract.
   InputOutput TransactionID ShortContractID Int
   deriving (Read, Show, Generic)
 
@@ -46,9 +64,12 @@ data ContractID =
 newtype ShortContractID = ShortContractID Digest
   deriving (Eq, Ord, Serialize, IsString, NFData)
 
-type TransactionID = ShortContractID -- ^ For simplicity
-type BlockID = Digest -- ^ For simplicity
+-- | For simplicity
+type TransactionID = ShortContractID
+-- | For simplicity
+type BlockID = Digest
 
+-- | For simplicity
 type EntryID = Digest
 
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
@@ -61,7 +82,7 @@ type EntryID = Digest
 -- formally verify that the contract receives and returns a particular kind
 -- of opaque value, e.g. a currency.
 
--- The last two constructors identify an escrow that is called
+-- The second and third constructors identify an escrow that is called
 -- "transactionally".  Transactional escrow calls are supplied with their
 -- argument, then evaluated /in the context of the caller/ when they are
 -- returned from a contract.  So a transactional escrow call can be given
@@ -69,9 +90,14 @@ type EntryID = Digest
 -- in the contract to which it is returned.  This is how payments are
 -- accepted.
 data EscrowID argType valType = 
+  -- | A basic escrow ID, just referring to an entry in the Map of escrows.
   EscrowID { entID :: EntryID } |
+  -- | Describes a transactional escrow call with its argument.
   TXEscrowIn { entID :: EntryID, eArg :: argType } |
+  -- | Describes the result of a transactional escrow call.
   TXEscrowOut { entID :: EntryID, eVal :: valType } |
+  -- | Locates an escrow from within a contract's output, using syntax
+  -- similar to iterated record locators.
   EscrowLocator { path :: [String] }
   deriving (Generic)
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
@@ -80,7 +106,7 @@ data EscrowID argType valType =
 -- an escrow.
 data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 
--- Exception type
+-- | Exceptions for ID-related errors.
 data IDException =
   BadInputEscrow String |
   NotEscrowOut EntryID |
@@ -107,14 +133,20 @@ type IndexedEscrowIDMap f =
   [String] -> EscrowID argType valType -> f (EscrowID argType valType)
 
 -- | The type of a traversal by an 'EscrowIDMap', used in 'HasEscrowIDs'.
+-- Note that because the kind of traversal map that is allowed is subject
+-- to some Fae-specific constraints, this is a little different from
+-- a @lens@ 'Traversal'.
 type EscrowIDTraversal a = 
   forall f. (Monad f) => EscrowIDMap f -> a -> f a
 
 -- | The type of a traversal by an 'IndexedEscrowIDMap', used in 'HasEscrowIDs'.
+-- Note that because the kind of traversal map that is allowed is subject
+-- to some Fae-specific constraints, this is a little different from
+-- a @lens@ 'IndexedTraversal'.
 type IndexedEscrowIDTraversal a = 
   forall f. (Monad f) => IndexedEscrowIDMap f -> a -> f a
 
-{- Typeclasses -}
+-- * Typeclasses
 
 -- | Every contract must accept arguments and return values in this class.
 -- The returned traversal /must/ contain, in any order, the IDs of every
@@ -123,9 +155,13 @@ type IndexedEscrowIDTraversal a =
 -- returned from a contract.  One usually need not define this class
 -- explicitly, as suitable general instances are given.
 class HasEscrowIDs a where
+  -- | Like 'traverse' from 'Traversable', except that it only covers the
+  -- escrow IDs, which may be of heterogeneous types.
   traverseEscrowIDs :: EscrowIDTraversal a
   traverseEscrowIDs f = iTraverseEscrowIDs (const f)
 
+  -- | Traverses the escrow IDs, providing the traversal function with the
+  -- path of each one.
   iTraverseEscrowIDs :: IndexedEscrowIDTraversal a
   default 
     iTraverseEscrowIDs :: 
@@ -133,33 +169,51 @@ class HasEscrowIDs a where
       IndexedEscrowIDTraversal a
   iTraverseEscrowIDs f x = to <$> gTraverseEscrowIDs f (from x)
 
+-- | Generic backend for 'HasEscrowIDs'
 class GHasEscrowIDs f where
   gTraverseEscrowIDs :: IndexedEscrowIDTraversal (f p)
 
-{- Instances -}
+-- * Instances
 
+-- | Of course
 instance Exception IDException
 
+-- | We want to force escrow IDs before they leave a contract, so that any
+-- malicious values fall on the creator and not the recipient.
 instance (NFData argType, NFData valType) => NFData (EscrowID argType valType)
 
+-- | Just so we can get 'Digestible'
 instance Serialize ContractID
+-- | So we can get a 'ShortContractID' from a regular one.
 instance Digestible ContractID
+-- | For forcing parsed inputs before they go to the interpreter.
 instance NFData ContractID
 
-instance Digestible ShortContractID
+--instance Digestible ShortContractID
 
+-- | 'ShortContractID's and, by extension, 'TransactionIDs', are read as
+-- the digests they wrap.
 instance Read ShortContractID where
   readsPrec _ = fmap (_1 %~ ShortContractID) . readsPrec 0
 
+-- | 'ShortContractID's and, by extension, 'TransactionIDs', show as hex
+-- strings.  This should be inverse to the 'Read' instance.
 instance Show ShortContractID where
   show (ShortContractID dig) = show dig
 
+-- | Escrow IDs should only be read from input contract arguments.  Since
+-- the only escrow IDs that are valid in the input contract calls are the
+-- ones returned by previous calls in the same transaction, they can all be
+-- located by descending into those return values.  This is much more
+-- stable and convenient than describing the escrow IDs as hex strings.
 instance Read (EscrowID argType valType) where
   readsPrec s = readP_to_S $ EscrowLocator <$> sepBy1 pathStr pathSep  
     where  
       pathStr = munch1 (not . (\c -> c == '.' || isSpace c))
       pathSep = skipSpaces >> char '.' >> skipSpaces
 
+-- | In addition to displaying the contents of the escrow ID, 'show' should
+-- also display the _type_, which is potentially an important diagnostic.
 instance (Typeable argType, Typeable valType) => Show (EscrowID argType valType) where
   show eID@EscrowLocator{..} = 
     "EscrowLocator " ++ 
@@ -167,14 +221,21 @@ instance (Typeable argType, Typeable valType) => Show (EscrowID argType valType)
     " :: " ++ show (typeOf eID)
   show eID = show (entID eID) ++ " :: " ++ show (typeOf eID)
   
+-- | This default instance allows casual transaction authors to use basic,
+-- non-escrow-backed types without any hoopla.
 instance {-# OVERLAPPABLE #-} HasEscrowIDs a where
   iTraverseEscrowIDs _ = pure
 
+-- | This is just natural, though it can probably be covered in most
+-- practical cases by the 'Generic' instance, if probably slower.
 instance {-# OVERLAPPABLE #-} 
   (Traversable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
 
   iTraverseEscrowIDs g = traverse (iTraverseEscrowIDs g)
 
+-- | Escrow IDs, of course, contain themselves.  A tricky special case is
+-- that the transactional variants contain escrows in their argument or
+-- value as well.
 instance 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
@@ -185,42 +246,55 @@ instance
   iTraverseEscrowIDs f TXEscrowIn{..} = do
     eArg' <- iTraverseEscrowIDs f eArg
     f [] $ TXEscrowIn{entID, eArg = eArg'}
+  iTraverseEscrowIDs f TXEscrowOut{..} = do
+    eVal' <- iTraverseEscrowIDs f eVal
+    f [] $ TXEscrowOut{entID, eVal = eVal'}
   -- Not point-free; we need to specialize the forall.
   iTraverseEscrowIDs f eID = f [] eID
 
+-- | Default instance.
 instance HasEscrowIDs Void 
+-- | Default instance.
 instance (HasEscrowIDs a, Typeable a) => HasEscrowIDs (Maybe a)
+-- | Default instance.
 instance (HasEscrowIDs a, Typeable a, HasEscrowIDs b, Typeable b) => HasEscrowIDs (Either a b)
+-- | Default instance.
 instance (HasEscrowIDs a, Typeable a, HasEscrowIDs b, Typeable b) => HasEscrowIDs (a, b)
 
 -- Boring Generic boilerplate
 
+-- | Empty types have no escrow IDs to apply the traversal function to.
 instance GHasEscrowIDs V1 where
   gTraverseEscrowIDs _ = pure
 
+-- | Constructors with no records have no escrow IDs to traverse.
 instance GHasEscrowIDs U1 where
   gTraverseEscrowIDs _ = pure
 
+-- | In a sum type, you traverse each alternative.
 instance (GHasEscrowIDs f, GHasEscrowIDs g) => GHasEscrowIDs (f :+: g) where
   gTraverseEscrowIDs h = \case
     L1 x -> L1 <$> gTraverseEscrowIDs h x
     R1 x -> R1 <$> gTraverseEscrowIDs h x
 
+-- | In a product type, you traverse both halves.
 instance (GHasEscrowIDs f, GHasEscrowIDs g) => GHasEscrowIDs (f :*: g) where
   gTraverseEscrowIDs h (x :*: y) = 
     liftA2 (:*:) (gTraverseEscrowIDs h x) (gTraverseEscrowIDs h y)
 
+-- | Recurse into nested types.
 instance (HasEscrowIDs c) => GHasEscrowIDs (K1 i c) where
   gTraverseEscrowIDs f (K1 x) = K1 <$> iTraverseEscrowIDs f x
 
--- We count constructor and record names for the path, but nothing else.
-
+-- | Type names are ignored for the escrow path.
 instance 
   (GHasEscrowIDs f) => 
   GHasEscrowIDs (M1 D (MetaData n m p nt) f) where
 
   gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs g x 
 
+-- | Constructor names are part of the path, so the locator can select
+-- between different variants of a sum type.
 instance 
   (GHasEscrowIDs f, KnownSymbol n) => 
   GHasEscrowIDs (M1 C (MetaCons n x s) f) where
@@ -228,6 +302,7 @@ instance
   gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs (g . (name :)) x where
     name = symbolVal (Proxy @n)
 
+-- | Record selector names are part of the path.
 instance 
   (GHasEscrowIDs f, KnownSymbol n) => 
   GHasEscrowIDs (M1 S (MetaSel (Just n) su ss ds) f) where
@@ -235,14 +310,17 @@ instance
   gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs (g . (name :)) x where
     name = symbolVal (Proxy @n)
 
--- Fields without record selectors are transparent to the path
+-- | Fields without record selectors are transparent to the path.  This
+-- makes it easy to deal with single-field constructors, but creates an
+-- ambiguity for things like tuples.  This ambiguity shows up as an error
+-- in the lookup function.
 instance 
   (GHasEscrowIDs f) => 
   GHasEscrowIDs (M1 S (MetaSel Nothing su ss ds) f) where
 
   gTraverseEscrowIDs g (M1 x) = M1 <$> gTraverseEscrowIDs g x 
 
-{- Functions -}
+-- * Functions
 
 -- | Take the hash of a contract ID.
 shorten :: ContractID -> ShortContractID
@@ -286,16 +364,20 @@ escrowTXResult eID = throw $ NotEscrowOut $ entID eID
 bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue
 
+-- | Combs through an escrow-backed value, given another one where all the
+-- paths live, and replaces each escrow locator with the actual escrow ID.
 resolveEscrowLocators :: (HasEscrowIDs a, HasEscrowIDs b) => a -> b -> b
 resolveEscrowLocators input x = 
   runIdentity $ traverseEscrowIDs (Identity . resolveEscrowLocator input) x
 
+-- | Resolves a single escrow locator.
 resolveEscrowLocator :: 
   (HasEscrowIDs a) => 
   a -> EscrowID argType valType -> EscrowID argType valType
 resolveEscrowLocator input EscrowLocator{..} = locateEscrow input path
 resolveEscrowLocator _ eID = eID
 
+-- | Resolves an escrow path.
 locateEscrow :: 
   (HasEscrowIDs a) => 
   a -> [String] -> EscrowID argType valType
@@ -304,6 +386,8 @@ locateEscrow input path =
     [eID] -> EscrowID eID
     _ -> throw $ UnresolvedEscrowLocator path
 
+-- | The indexed traversal function that combs through the reference value
+-- in search of the desired path.
 selectEscrowLocator :: 
   [String] -> IndexedEscrowIDMap (Writer [EntryID])
 selectEscrowLocator path1 path2 EscrowLocator{..} 

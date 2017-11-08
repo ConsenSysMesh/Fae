@@ -1,3 +1,13 @@
+{- |
+Module: Blockchain.Fae.Internal.Transaction
+Description: Transaction execution
+Copyright: (c) Ryan Reich, 2017
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This module provides the code that navigates the intricacies of executing a transaction.  It is useful for front-end implementations, but not to users.
+-}
 module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae.Internal.Contract
@@ -29,13 +39,20 @@ import qualified Data.Map as Map
 import GHC.Generics hiding (to)
 import qualified GHC.Generics as Gen (to)
 
-{- Types -}
+-- * Types
 
+-- | 'StorageT' is only parametrized because 'AbstractContract' isn't
+-- defined in "Storage", which is because it would cause an import cycle.
+-- Storage always contains abstract contracts.
 type Storage = StorageT AbstractContract
+-- | Likewise
 type Outputs = OutputsT AbstractContract
+-- | Likewise
 type InputOutputs = InputOutputsT AbstractContract
+-- | Likewise
 type FaeStorage = FaeStorageT AbstractContract
 
+-- | How inputs are provided to transactions.
 type Inputs = [(ContractID, String)]
 
 -- | Transactions, though similar to contracts in many internal ways,
@@ -46,7 +63,7 @@ type Inputs = [(ContractID, String)]
 -- transferred anywhere).
 type Transaction a b = a -> FaeTX b
 
--- Exception type
+-- | Exception type
 data TransactionException =
   NotEnoughInputs |
   TooManyInputs |
@@ -69,33 +86,51 @@ class GetInputValues a where
     (Generic a, GGetInputValues (Rep a)) => [Dynamic] -> (a, [Dynamic])
   getInputValues = runState $ Gen.to <$> gGetInputValues
 
+-- | Generic helper class
 class GGetInputValues f where
+  -- | This is the state monad, rather than having the same signature as
+  -- 'getInputValues', because we need to walk through the list of dynamic
+  -- inputs and progressively remove values from it.  At the same time, we
+  -- need to know if there were leftovers.
   gGetInputValues :: State [Dynamic] (f p)
 
-{- Instances -}
+-- * Instances
 
+-- | Of course
 instance Exception TransactionException
 
+-- | Empty types not only have no input values, it is insulting to suggest
+-- that they might.
 instance GetInputValues Void where
   getInputValues _ = (throw TooManyInputs, [])
 
+-- | Default instance
 instance (Typeable a, Typeable b) => GetInputValues (a, b)
 
+-- | By default, any type tries to take a single input as its entire value.
+-- This may not actually be the case, of course.
 instance {-# OVERLAPPABLE #-} (Typeable a) => GetInputValues a where
   getInputValues (xDyn : rest) = (x, rest) where
     x = fromDyn xDyn $
       throw $ BadArgType (typeRep (Proxy @a)) (dynTypeRep xDyn)
   getInputValues [] = throw NotEnoughInputs
 
+-- | No values in a constructor with no records
 instance GGetInputValues U1 where
   gGetInputValues = return U1
 
+-- | We only allow product types to have input values, because how would
+-- one choose between different branches of a sum type?  Non-algebraic
+-- types are out of luck because we don't expose the methods of
+-- 'GetInputValues' to be implemented manually.
 instance (GGetInputValues f, GGetInputValues g) => GGetInputValues (f :*: g) where
   gGetInputValues = do
     l <- gGetInputValues
     r <- gGetInputValues
     return $ l :*: r
 
+-- | For a nested type, we peel off one input and fix its type.  We do
+-- _not_ do a recursive call.
 instance (Typeable c) => GGetInputValues (K1 i c) where
   gGetInputValues = do
     s <- get
@@ -106,11 +141,15 @@ instance (Typeable c) => GGetInputValues (K1 i c) where
         return $ K1 $ fromDyn xDyn $
           throw $ BadArgType (typeRep (Proxy @c)) (dynTypeRep xDyn)
 
+-- | Just ignore metadata for this one.
 instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
   gGetInputValues = M1 <$> gGetInputValues
 
-{- Functions -}
+-- * Functions
 
+-- | Runs a transaction on its inputs, with some basic information about
+-- the context.  This is written as a 'modify' call, so that the actual
+-- transaction running can be pure functions.
 runTransaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
   Transaction inputs a -> Inputs -> 
@@ -131,6 +170,8 @@ runTransaction f inputArgs txID txKey isReward = handleAll placeException $
           result = throw e :: Void
         }
 
+-- | A summary monad-running function.  You start with no escrows and the
+-- next escrow ID is the transaction ID.
 runFaeContract :: TransactionID -> PublicKey -> FaeContract Naught a -> a
 runFaeContract (ShortContractID dig) txKey =
   flip runReader txKey .
@@ -138,6 +179,10 @@ runFaeContract (ShortContractID dig) txKey =
   flip evalStateT Escrows{escrowMap = Map.empty, nextID = dig} .
   runCoroutine
 
+-- | Running the actual 'Transaction' as a function.  We don't convert to
+-- 'InternalT' or 'ConcreteContract' because transactions are rather
+-- unique: the handling of the arguments and the escrows is quite
+-- different.
 transaction :: 
   (GetInputValues input, HasEscrowIDs input, Typeable a, Show a) =>
   TransactionID ->
@@ -153,6 +198,9 @@ transaction txID isReward args f storage = do
     & _getStorage . at txID ?~ TransactionEntry{..}
     & _txLog %~ cons txID
 
+-- | Runs the transaction and checks that it didn't leave any escrows open.
+-- That would allow value to be destroyed, possibly by accident, which is
+-- bad.
 doTX :: Transaction input a -> input -> FaeContract Naught (a, Outputs)
 doTX f input = do
   (result, outputsL) <- listen $ getFae $ f input
@@ -161,6 +209,8 @@ doTX f input = do
   unless (Map.null escrows) $ throw OpenEscrows
   return (result, outputs)
 
+-- | Takes the list of contract IDs with input strings and forms the input
+-- object out of their results, taking care to resolve its escrow locators.
 runInputSpec :: 
   forall input.
   (GetInputValues input, HasEscrowIDs input) =>
@@ -175,6 +225,8 @@ runInputSpec args isReward storage = do
   input <- runTXEscrows $ resolveEscrowLocators input0 input0 
   return (triple & _1 .~ input)
  
+-- | Runs all the input contracts in a state monad recording the
+-- progressively increasing set of outputs.
 runInputContracts ::
   (GetInputValues input, HasEscrowIDs input) =>
   Proxy input ->
@@ -187,6 +239,10 @@ runInputContracts p isReward storage args = do
     forM_ args $ modifyM . uncurry (runInputContract p isReward)
   where modifyM f = get >>= lift . IdentityT . f >>= put
 
+-- | Runs a single input contract.  It is here that the rewards are
+-- created, if any.  This function uses the list of previous results to
+-- partially construct an input object for looking up escrow locators in
+-- the present contract; this only works because of laziness.
 runInputContract ::
   forall input.
   (GetInputValues input, HasEscrowIDs input) =>

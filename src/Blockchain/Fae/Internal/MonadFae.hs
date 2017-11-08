@@ -1,3 +1,13 @@
+{- |
+Module: Blockchain.Fae.Internal.MonadFae
+Description: The Fae API
+Copyright: (c) Ryan Reich, 2017
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This module provides a clean, minimal API for contract authoring.  The 'MonadTX' and 'MonadContract' classes exist to facilitate using monad transformers on top of the base 'Fae' monad when defining contracts.
+-}
 {-# LANGUAGE UndecidableInstances #-}
 module Blockchain.Fae.Internal.MonadFae where
 
@@ -21,7 +31,7 @@ import Data.Typeable
 
 import qualified Data.Map as Map
 
-{- Typeclasses -}
+-- * Type classes
 
 -- |
 -- Instances of this class have access to the full Fae API, allowing them
@@ -47,7 +57,7 @@ class (Monad m) => MonadTX m where
   -- | Injects the Fae transaction API into 'm'.
   liftTX :: FaeTX a -> m a
 
-{- Instances -}
+-- * Instances
 
 -- | An @UndecidableInstance@ for sure
 instance {-# OVERLAPPABLE #-}
@@ -63,18 +73,23 @@ instance {-# OVERLAPPABLE #-}
 
   liftTX = lift . liftTX
 
+-- | Of course
 instance 
   (HasEscrowIDs argType, HasEscrowIDs valType) => 
   MonadContract argType valType (Fae argType valType) where
 
   liftFae = id
 
+-- | A little backwards, since 'FaeContract' lies below rather than above
+-- 'FaeTX', but they are actually isomorphic, and we need to start the
+-- monad stack down here.
 instance (Functor s) => MonadTX (FaeContract s) where
   liftTX (Fae xM) = mapSuspension (const undefined) xM
 
+-- | Of course
 deriving instance (Functor s) => MonadTX (FaeM s)
 
-{- Functions -}
+-- * Functions
 
 -- | This function is like 'return' but also ensures that the returned
 -- value is passed with its backing escrows, maintaining its value.  Once

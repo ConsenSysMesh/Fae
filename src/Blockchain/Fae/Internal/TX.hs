@@ -1,3 +1,13 @@
+{- |
+Module: Blockchain.Fae.Internal.TX
+Description: Transaction interpreter
+Copyright: (c) Ryan Reich, 2017
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This module provides the function that interprets transactions given as source code.
+-}
 module Blockchain.Fae.Internal.TX where
 
 import Blockchain.Fae.Internal.Crypto
@@ -20,8 +30,10 @@ import Language.Haskell.Interpreter as Int
 
 import System.FilePath
 
-{- Types -}
+-- * Types
 
+-- | This is the data type that identifies a transaction in a block; the
+-- actual transaction function is only known at the time of interpretation.
 data TX =
   TX
   {
@@ -31,16 +43,26 @@ data TX =
   }
   deriving (Generic)
 
+-- | This builds on 'FaeStorage' because the interpreter has to access the
+-- storage as part of 'runTransaction'
 type FaeInterpret = InterpreterT FaeStorage
 
-{- Instances -}
+-- * Instances
 
+-- | Default instance
 instance Serialize TX
+-- | Default instance
 instance Digestible TX
+-- | Default instance
 instance NFData TX
 
-{- Functions -}
+-- * Functions
 
+-- | Interprets a transaction, looking it up as a module named after its
+-- transaction ID.  We set up the module search path carefully so that this
+-- transaction can effectively import both its own other modules, and those
+-- of other transactions.  The first transaction is very slow because the
+-- interpreter has to initialize, but subsequent ones are acceptably fast.
 interpretTX :: Bool -> TX -> FaeInterpret ()
 interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
   Int.set 
@@ -81,6 +103,7 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
       ]
     qualified varName = txSrc ++ "." ++ varName
 
+-- | Runs the interpreter.
 runFaeInterpret :: FaeInterpret a -> IO a
 runFaeInterpret = 
   fmap (either throw id) .

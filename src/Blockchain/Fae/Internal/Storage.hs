@@ -1,3 +1,13 @@
+{- |
+Module: Blockchain.Fae.Internal.Storage
+Description: Storage of contracts and transactions
+Copyright: (c) Ryan Reich, 2017
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This module provides the 'FaeStorageT' monad family, which tracks the state of Fae as contracts execute.
+-}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Storage where
 
@@ -18,15 +28,22 @@ import Data.Serialize
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
-{- Types -}
+-- * Types
 
+-- | Storage is just an association between transactions and what they did.
 data StorageT c =
   Storage 
   { 
     getStorage :: Map TransactionID (TransactionEntryT c),
-    txLog :: [TransactionID] -- In reverse!
+    txLog :: [TransactionID] -- ^ In reverse order
   }
 
+-- | Each transaction can produce outputs in two different ways (cf.
+-- 'ContractID'), has an associated "signer" public key, and a result,
+-- which can be anything, but should be 'show'able so that it has outside
+-- meaning.  This is an existential type, so the record names are just
+-- there for documentation; values have to be extracted by
+-- pattern-matching.
 data TransactionEntryT c =
   forall a. (Show a) =>
   TransactionEntry 
@@ -37,8 +54,16 @@ data TransactionEntryT c =
     result :: a
   }
 
+-- | Inputs are identified by 'ShortContractID's so that 'ContracIDs' of
+-- the 'InputOutput' variant can be flat, rather than nested potentially
+-- indefinitely.
 type InputOutputsT c = Map ShortContractID (OutputsT c)
+-- | Outputs are ordered by creation.  However, contracts can be deleted,
+-- so it's not enough to just store them in a sequence.
 type OutputsT c = IntMap c
+-- | The storage monad is just a state monad.  It has to be over 'IO' both
+-- because we need to catch exceptions, and because the interpreter has to
+-- be in a 'MonadIO'.
 newtype FaeStorageT c a = FaeStorage {getFaeStorage :: StateT (StorageT c) IO a}
   deriving 
   (
@@ -47,27 +72,35 @@ newtype FaeStorageT c a = FaeStorage {getFaeStorage :: StateT (StorageT c) IO a}
     MonadIO
   )
 
+-- | Just making it easier to use this monad.
 deriving instance MonadState (StorageT c) (FaeStorageT c)
 
--- Exception type
+-- | Exceptions for storage-related errors.
 data StorageException =
   BadTransactionID TransactionID |
   BadContractID ContractID |
   BadInputID ShortContractID
   deriving (Typeable, Show)
 
-{- TH -}
+-- * Template Haskell
 
 makeLenses ''StorageT
 makeLenses ''TransactionEntryT
 
-{- Instances -}
+-- * Instances
 
+-- | Of course
 instance Exception StorageException
 
+-- | For the 'At' instance
 type instance Index (StorageT c) = ContractID
+-- | For the 'At' instance
 type instance IxValue (StorageT c) = c
+-- | For the 'At' instance
 instance Ixed (StorageT c)
+-- | We define this instance _in addition to_ the natural 'TransactionID'
+-- indexing of a 'StorageT' so that we can look up contracts by ID, which
+-- requires descending to various levels into the maps.
 instance At (StorageT c) where
   at cID@(JustTransaction txID) = throw (BadContractID cID)
 
@@ -87,11 +120,14 @@ instance At (StorageT c) where
     defaultLens (throw $ BadInputID sID) .
     at i
 
-{- Functions -}
+-- * Functions
 
+-- | Just an 'IntMap' constructor
 intMapList :: [a] -> IntMap a
 intMapList = IntMap.fromList . zip [0 ..]
 
+-- | Convenience function for neatly showing a 'TransactionEntry' by ID,
+-- rather than actually going into the storage to get and format it.
 showTransaction :: TransactionID -> FaeStorageT c String
 showTransaction txID = do
   TransactionEntry ios os k x <- use $
@@ -111,6 +147,8 @@ showTransaction txID = do
       )
   where showOutputs os = "outputs: " ++ show (IntMap.keys os)
 
+-- | Shows all transactions.  Probably only useful for small testing Faes,
+-- because this would blow up in real usage.
 showTransactions :: FaeStorageT c [String]
 showTransactions = do
   txIDs <- gets $ reverse . txLog
