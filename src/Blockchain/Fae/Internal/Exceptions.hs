@@ -2,7 +2,7 @@ module Blockchain.Fae.Internal.Exceptions
   (
     module Blockchain.Fae.Internal.Exceptions,
     module Control.Monad.Catch,
-    Ex.throw,
+    Ex.throw, Ex.evaluate,
     T.Typeable
   ) where
 

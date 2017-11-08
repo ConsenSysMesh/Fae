@@ -37,14 +37,14 @@ data ContractID =
   JustTransaction TransactionID |
   TransactionOutput TransactionID Int |
   InputOutput TransactionID ShortContractID Int
-  deriving (Show, Generic)
+  deriving (Read, Show, Generic)
 
 -- | The hash of a 'ContractID', useful for abbreviating what would
 -- otherwise be unboundedly long chains of contracts that are outputs of
 -- contracts that are outputs of ... that are outputs of some long-ago
 -- transaction.
 newtype ShortContractID = ShortContractID Digest
-  deriving (Eq, Ord, Serialize, IsString)
+  deriving (Eq, Ord, Serialize, IsString, NFData)
 
 type TransactionID = ShortContractID -- ^ For simplicity
 type BlockID = Digest -- ^ For simplicity
@@ -144,6 +144,8 @@ instance (NFData argType, NFData valType) => NFData (EscrowID argType valType)
 
 instance Serialize ContractID
 instance Digestible ContractID
+instance NFData ContractID
+
 instance Digestible ShortContractID
 
 instance Read ShortContractID where

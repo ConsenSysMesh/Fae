@@ -16,7 +16,9 @@ import qualified Data.ByteArray as BA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
+import Data.Char
 import Data.Dynamic
+import Data.List
 import Data.Proxy
 import Data.Serialize (Serialize)
 import Data.String
@@ -164,8 +166,8 @@ readsPrecSer :: (Serialize a) => Int -> String -> [(a, String)]
 readsPrecSer _ s = 
   case Ser.decode bs of
     Left _ -> []
-    Right dig -> [(dig, C8.unpack rest)]
-  where (bs, rest) = B16.decode $ C8.pack s
+    Right x -> [(x, C8.unpack rest)]
+  where (bs, rest) = B16.decode $ C8.pack $ dropWhile isSpace s
 
 sign :: (Digestible a) => a -> PrivateKey -> Signed a
 sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) = 

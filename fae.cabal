@@ -42,9 +42,9 @@ library
     cryptonite,
     deepseq,
     exceptions,
+    filepath,
     hint,
     lens,
-    lifted-base,
     memory,
     monad-coroutine,
     mtl,
@@ -77,75 +77,36 @@ library
     TypeFamilies
     TypeOperators
 
-executable makePrivateKey
+executable faeServer
   buildable: True
   hs-source-dirs:      bin
-  main-is:             MakePrivateKey.hs
---  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  main-is:             FaeServer.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       
     base, 
     bytestring,
     cereal,
-    fae
-  default-language:    Haskell2010
-  
-executable getPublicKey
-  buildable: True
-  hs-source-dirs:      bin
-  main-is:             GetPublicKey.hs
---  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       
-    base, 
-    bytestring,
-    cereal,
-    fae
-  default-language:    Haskell2010
-  
-executable makeTX
-  buildable: True
-  hs-source-dirs:      bin
-  main-is:             MakeTX.hs
---  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       
-    base, 
-    bytestring,
-    cereal,
-    directory,
-    fae,
-    filepath
-  default-language:    Haskell2010
-
-executable makeBlock
-  buildable: True
-  hs-source-dirs:      bin
-  main-is:             MakeBlock.hs
---  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       
-    base, 
-    bytestring,
-    cereal,
-    directory,
-    fae,
-    filepath
-  default-language:    Haskell2010
-  default-extensions:
-    RecordWildCards
-
-executable runBlock
-  buildable: True
-  hs-source-dirs:      bin
-  main-is:             RunBlock.hs
---  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       
-    base, 
-    bytestring,
-    cereal,
+    containers,
+    deepseq,
     directory,
     fae,
     filepath,
-    mtl
+    http-types,
+    stm,
+    transformers,
+    unix,
+    wai,
+    wai-extra,
+    warp
   default-language:    Haskell2010
-
+  default-extensions:
+    LambdaCase
+    NamedFieldPuns
+    OverloadedStrings
+    RecordWildCards
+    ScopedTypeVariables
+    TypeApplications
+  
 -- test-suite fae-test
 --   type:                exitcode-stdio-1.0
 --   hs-source-dirs:      test

@@ -36,6 +36,8 @@ type Outputs = OutputsT AbstractContract
 type InputOutputs = InputOutputsT AbstractContract
 type FaeStorage = FaeStorageT AbstractContract
 
+type Inputs = [(ContractID, String)]
+
 -- | Transactions, though similar to contracts in many internal ways,
 -- differ greatly in their inputs and outputs.  The argument of type 'a' is
 -- constructed from the return values of the input contracts according to
@@ -111,7 +113,7 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 
 runTransaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
-  Transaction inputs a -> [(ContractID, String)] -> 
+  Transaction inputs a -> Inputs -> 
   TransactionID -> PublicKey -> Bool -> 
   FaeStorage ()
 runTransaction f inputArgs txID txKey isReward = handleAll placeException $
@@ -125,6 +127,7 @@ runTransaction f inputArgs txID txKey isReward = handleAll placeException $
         {
           inputOutputs = throw e,
           outputs = throw e,
+          signedBy = txKey,
           result = throw e :: Void
         }
 
@@ -139,12 +142,13 @@ transaction ::
   (GetInputValues input, HasEscrowIDs input, Typeable a, Show a) =>
   TransactionID ->
   Bool -> 
-  [(ContractID, String)] -> 
+  Inputs -> 
   Transaction input a -> 
   Storage -> FaeContract Naught Storage
 transaction txID isReward args f storage = do
   (input, storage', inputOutputs) <- runInputSpec args isReward storage
   (result, outputs) <- doTX f input
+  signedBy <- sender
   return $ storage' 
     & _getStorage . at txID ?~ TransactionEntry{..}
     & _txLog %~ cons txID
@@ -160,7 +164,7 @@ doTX f input = do
 runInputSpec :: 
   forall input.
   (GetInputValues input, HasEscrowIDs input) =>
-  [(ContractID, String)] -> Bool -> Storage -> 
+  Inputs -> Bool -> Storage -> 
   FaeContract Naught (input, Storage, InputOutputs)
 runInputSpec args isReward storage = do
   triple <- runInputContracts (Proxy @input) isReward storage args
@@ -176,7 +180,7 @@ runInputContracts ::
   Proxy input ->
   Bool ->
   Storage ->
-  [(ContractID, String)] ->
+  Inputs ->
   FaeContract Naught ([Dynamic], Storage, InputOutputs)
 runInputContracts p isReward storage args = do
   runIdentityT $ flip execStateT ([], storage, Map.empty) $ 

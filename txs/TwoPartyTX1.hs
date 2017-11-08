@@ -1,7 +1,10 @@
 import Blockchain.Fae.Contracts
 
-inputs :: [(ContractID, String)]
-inputs = []
+pubKey1 :: PublicKey
+pubKey1 = "f5e73775fa3cf0556ee841404a9d6efe5b9c700f0cdbc096b76c773c17758522"
+
+pubKey2 :: PublicKey
+pubKey2 = "f4e0734d17249a9c2506f66324a4c2da9e0cac242aa515e796fe1d056fd0081b"
 
 body :: Transaction Void ()
-body _ = twoPartySwap "12edc52fb91c8433b50faf7fbb1a51295a8382ee3ba8011ffaefc7160011e423" "e5a18e2466c8bb2a9807090d17731c9c91fda7006ddc0470c250d482a1cc0df5"
+body _ = twoPartySwap pubKey1 pubKey2

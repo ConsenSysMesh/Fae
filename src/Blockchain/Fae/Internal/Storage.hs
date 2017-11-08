@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Storage where
 
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
@@ -32,6 +33,7 @@ data TransactionEntryT c =
   {
     inputOutputs :: InputOutputsT c,
     outputs :: OutputsT c,
+    signedBy :: PublicKey,
     result :: a
   }
 
@@ -92,11 +94,12 @@ intMapList = IntMap.fromList . zip [0 ..]
 
 showTransaction :: TransactionID -> FaeStorageT c String
 showTransaction txID = do
-  TransactionEntry ios os x <- use $
+  TransactionEntry ios os k x <- use $
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   return $ 
     intercalate "\n  " $
       ("Transaction " ++ show txID) :
+      ("sender: " ++ show k) :
       (showOutputs os) :
       ("result: " ++ show x) :
       (flip map (Map.toList ios) $ \(cID, os) ->
