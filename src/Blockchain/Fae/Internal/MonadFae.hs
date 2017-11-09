@@ -44,7 +44,7 @@ class
   MonadContract argType valType m | m -> argType valType where
 
   -- | Injects the Fae contract API into 'm'.
-  liftFae :: Fae argType valType a -> m a
+  liftContract :: Fae argType valType a -> m a
 
 -- |
 -- Instances of this class may use the bulk of the Fae API; namely, they
@@ -57,14 +57,14 @@ class (Monad m) => MonadTX m where
   -- | Injects the Fae transaction API into 'm'.
   liftTX :: FaeTX a -> m a
 
--- * Instances
+{- Instances -}
 
 -- | An @UndecidableInstance@ for sure
 instance {-# OVERLAPPABLE #-}
   (MonadTrans t, MonadContract argType valType m, Monad (t m)) =>
   MonadContract argType valType (t m) where
 
-  liftFae = lift . liftFae
+  liftContract = lift . liftContract
 
 -- | An @UndecidableInstance@ for sure
 instance {-# OVERLAPPABLE #-}
@@ -78,11 +78,12 @@ instance
   (HasEscrowIDs argType, HasEscrowIDs valType) => 
   MonadContract argType valType (Fae argType valType) where
 
-  liftFae = id
+  liftContract = id
 
 -- | A little backwards, since 'FaeContract' lies below rather than above
 -- 'FaeTX', but they are actually isomorphic, and we need to start the
--- monad stack down here.
+-- monad stack down here so that we can derive @forall s. (Functor s) =>
+-- MonadTX (FaeM s)@. 
 instance (Functor s) => MonadTX (FaeContract s) where
   liftTX (Fae xM) = mapSuspension (const undefined) xM
 
@@ -106,7 +107,7 @@ spend = liftTX . Fae . internalSpend
 release :: 
   (HasEscrowIDs valType, NFData valType, MonadContract argType valType m) => 
   valType -> m argType
-release x = liftFae $ Fae $ do
+release x = liftContract $ Fae $ do
   req <- internalSpend x
   escrows <- get
   suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
@@ -131,11 +132,8 @@ useEscrow eID arg = liftTX $ Fae $ do
 -- is a list of Haskell values marked as "bearers" of escrow-backed Fae
 -- value; their backing escrows are transferred into the new escrow, so
 -- that the bearer is no longer valuable in the contract that calls this
--- function.  The returned ID is completely determined by the transaction
--- during whose execution the escrow is created, along with where in the
--- order of its inputs the contract that creates the escrow is placed.  It
--- can therefore be used as a literal argument to a contract; see
--- 'newContract'.
+-- function.  The returned ID is completely determined by the contract in
+-- which the escrow is created.
 newEscrow :: 
   (
     HasEscrowIDs argType, HasEscrowIDs valType,

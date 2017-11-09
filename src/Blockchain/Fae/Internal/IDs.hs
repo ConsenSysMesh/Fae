@@ -152,8 +152,11 @@ type IndexedEscrowIDTraversal a =
 -- The returned traversal /must/ contain, in any order, the IDs of every
 -- escrow upon which the type 'a' depends for its value.  These escrows
 -- will be transferred along with a value of type 'a' whenever it is
--- returned from a contract.  One usually need not define this class
--- explicitly, as suitable general instances are given.
+-- returned from a contract.  
+--
+-- Although this class must be instantiated for any user-defined types used
+-- in contracts, we do not export the class members, so that only the
+-- default instance may be used.
 class HasEscrowIDs a where
   -- | Like 'traverse' from 'Traversable', except that it only covers the
   -- escrow IDs, which may be of heterogeneous types.
@@ -213,7 +216,7 @@ instance Read (EscrowID argType valType) where
       pathSep = skipSpaces >> char '.' >> skipSpaces
 
 -- | In addition to displaying the contents of the escrow ID, 'show' should
--- also display the _type_, which is potentially an important diagnostic.
+-- also display the /type/, which is potentially an important diagnostic.
 instance (Typeable argType, Typeable valType) => Show (EscrowID argType valType) where
   show eID@EscrowLocator{..} = 
     "EscrowLocator " ++ 
@@ -255,11 +258,11 @@ instance
 -- | Default instance.
 instance HasEscrowIDs Void 
 -- | Default instance.
-instance (HasEscrowIDs a, Typeable a) => HasEscrowIDs (Maybe a)
+instance (HasEscrowIDs a) => HasEscrowIDs (Maybe a)
 -- | Default instance.
-instance (HasEscrowIDs a, Typeable a, HasEscrowIDs b, Typeable b) => HasEscrowIDs (Either a b)
+instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (Either a b)
 -- | Default instance.
-instance (HasEscrowIDs a, Typeable a, HasEscrowIDs b, Typeable b) => HasEscrowIDs (a, b)
+instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b)
 
 -- Boring Generic boilerplate
 

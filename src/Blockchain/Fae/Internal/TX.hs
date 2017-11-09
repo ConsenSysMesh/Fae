@@ -44,10 +44,10 @@ data TX =
   deriving (Generic)
 
 -- | This builds on 'FaeStorage' because the interpreter has to access the
--- storage as part of 'runTransaction'
+-- storage as part of 'runTransaction'.
 type FaeInterpret = InterpreterT FaeStorage
 
--- * Instances
+{- Instances -}
 
 -- | Default instance
 instance Serialize TX
@@ -59,7 +59,8 @@ instance NFData TX
 -- * Functions
 
 -- | Interprets a transaction, looking it up as a module named after its
--- transaction ID.  We set up the module search path carefully so that this
+-- transaction ID; the first argument is whether or not the transaction
+-- gets a reward.  We set up the module search path carefully so that this
 -- transaction can effectively import both its own other modules, and those
 -- of other transactions.  The first transaction is very slow because the
 -- interpreter has to initialize, but subsequent ones are acceptably fast.

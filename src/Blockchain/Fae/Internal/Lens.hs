@@ -22,8 +22,10 @@ import Data.Maybe
 import Language.Haskell.TH
 
 -- | Defined as
+--
 -- > makeLensesWith myLensRules
--- where 'myLensRules' _adds_ an underscore to names, rather than removes
+--
+-- where 'myLensRules' /adds/ an underscore to names, rather than removes
 -- one that exists.  Because the default behavior is backwards.
 makeLenses :: Name -> Q [Dec]
 makeLenses = makeLensesWith myLensRules
@@ -37,7 +39,9 @@ makeLenses = makeLensesWith myLensRules
         x -> [TopName $ mkName $ '_' : x]
 
 -- | Useful when using 'at', say
+-- 
 -- > someMapLens . at index . defaultLens (error $ show index ++ " not found!")
+--
 -- I'm pretty sure this can be replaced with some 'Traversal'-related
 -- function, but I am not familiar enough with @lens@ yet to figure out
 -- how.

@@ -20,29 +20,18 @@ Fae is not a completely pure functional system: it has exceptions.  This is both
 -}
 module Blockchain.Fae
   (
-    -- * Contract authors' API
-    -- ** Contract classes
-    MonadContract(..), MonadTX(..), 
-    -- ** Contract methods
-    release, spend, useEscrow, newEscrow, newContract, 
-    escrowTX, escrowTXResult,
-    sender, bearer, claimReward,
-    -- * Contract types
-    Contract, ContractT, Transaction, 
-    Fae, FaeTX, BearsValue, HasEscrowIDs,
-    EscrowIDTraversal, EscrowIDMap, GetInputValues, ReadInput,
-    Reward, RewardToken,
-    -- * Identifier types
-    PublicKey, ContractID(..), TransactionID, EscrowID, WithEscrows, RewardEscrowID, 
+    -- * Transactions
+    Transaction, TransactionID, PublicKey, 
+    -- * Contracts and escrows
+    module Blockchain.Fae.Internal.MonadFae,
+    Fae, FaeTX, Contract, ContractT, ContractID(..), EscrowID, BearsValue,
+    bearer, escrowTX, escrowTXResult,
+    -- * Rewards
+    RewardEscrowID, claimReward,
+    -- * Opaque classes
+    GetInputValues, ReadInput, HasEscrowIDs, 
     -- * Re-exports
-    -- | Only 'NFData(..)':
-    module Control.DeepSeq,
-    -- | Only 'throw':
-    module Control.Exception,
-    -- | Only 'Void':
-    module Data.Void,
-    -- | Only 'Generic':
-    module GHC.Generics
+    NFData(..), Typeable, Generic, Void, throw, evaluate
   ) where
 
 import Blockchain.Fae.Internal.Contract
@@ -53,7 +42,8 @@ import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Transaction
 
 import Control.DeepSeq (NFData(..))
-import Control.Exception (throw)
+import Control.Exception (throw, evaluate)
+import Data.Typeable (Typeable)
 import Data.Void (Void)
 import GHC.Generics (Generic)
 

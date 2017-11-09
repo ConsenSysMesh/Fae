@@ -51,6 +51,8 @@ type Outputs = OutputsT AbstractContract
 type InputOutputs = InputOutputsT AbstractContract
 -- | Likewise
 type FaeStorage = FaeStorageT AbstractContract
+-- | Likewise
+type TransactionEntry = TransactionEntryT AbstractContract
 
 -- | How inputs are provided to transactions.
 type Inputs = [(ContractID, String)]
@@ -74,12 +76,13 @@ data TransactionException =
 {- Typeclasses -}
 
 -- | This class controls how a type is constructed from
--- a heterogeneously-type list of input return values.  Its default
+-- a heterogeneously-typed list of input return values.  Its default
 -- instance, for any 'Generic' type, simply assigns each field of a product
 -- type from successive values in the list, failing if they don't all match
--- or there are extras on one side.  Therefore it is unlikely you will have
--- to write an instance yourself; however, you do need to @instance
--- GetInputValues <your type>@ for any 'a' you choose to use.
+-- or there are extras on one side.  For the moment, the member function is
+-- not exported, so you can't write your own implementations; however, you
+-- do need to @instance GetInputValues <your type>@ for any 'a' you choose
+-- to use.
 class GetInputValues a where
   getInputValues :: [Dynamic] -> (a, [Dynamic])
   default getInputValues :: 
@@ -88,13 +91,13 @@ class GetInputValues a where
 
 -- | Generic helper class
 class GGetInputValues f where
-  -- | This is the state monad, rather than having the same signature as
+  -- | This is in the 'State' monad, rather than having the same signature as
   -- 'getInputValues', because we need to walk through the list of dynamic
   -- inputs and progressively remove values from it.  At the same time, we
   -- need to know if there were leftovers.
   gGetInputValues :: State [Dynamic] (f p)
 
--- * Instances
+{- Instances -}
 
 -- | Of course
 instance Exception TransactionException
@@ -130,7 +133,7 @@ instance (GGetInputValues f, GGetInputValues g) => GGetInputValues (f :*: g) whe
     return $ l :*: r
 
 -- | For a nested type, we peel off one input and fix its type.  We do
--- _not_ do a recursive call.
+-- /not/ do a recursive call.
 instance (Typeable c) => GGetInputValues (K1 i c) where
   gGetInputValues = do
     s <- get

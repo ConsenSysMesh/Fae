@@ -6,7 +6,7 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module both nicely bundles "Control.Monad.Coroutine" and "Control.Monad.Coroutine.SuspensionFunctors", but it also defines some much-needed 'mtl' instances for 'Coroutine's.  Sadly, since @monad-coroutine@ dropped the ball here, these have to be orphan instances (and undecidable to boot), because I don't feel like wrapping 'Coroutine' in a @newtype@.
+This module both nicely bundles "Control.Monad.Coroutine" and "Control.Monad.Coroutine.SuspensionFunctors", but it also defines some much-needed 'mtl' instances for 'Coroutine's.  Sadly, since @monad-coroutine@ dropped the ball here, these have to be orphan instances (and undecidable to boot), because wrapping 'Coroutine' in a newtype turns out to be surprisingly messy due to its recursive definition.
 -}
 {-# LANGUAGE UndecidableInstances #-}
 module Blockchain.Fae.Internal.Coroutine 

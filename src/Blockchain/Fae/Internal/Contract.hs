@@ -48,7 +48,7 @@ type EscrowMap = Map EntryID AbstractEscrow
 -- | This type encodes a value together with its backing escrows.  It is
 -- constructed automatically, and you can't construct it manually, so it is
 -- only useful in type signatures; it forces contracts to return values
--- only via `spend` and `release`.
+-- only via 'spend' and 'release'.
 data WithEscrows a = WithEscrows EscrowMap a
 -- | The 'Request' type is backwards for my visualization of contracts as
 -- coroutines, and also needs to be augmented with backing escrows.
@@ -84,7 +84,7 @@ type Contract argType valType = ContractT (Fae argType valType) argType valType
 
 -- | An internal representation of a contract, partway through full
 -- "compilation".  An 'InternalT' has its escrows hidden, because it will
--- need to be evaluated inside a _different_ 'FaeContract' monad that has
+-- need to be evaluated inside a /different/ 'FaeContract' monad that has
 -- its own escrows that shouldn't interfere.
 type InternalT s argType valType = 
   ContractT (Coroutine s FaeRW) argType valType
@@ -136,13 +136,13 @@ data Input = forall a. (HasEscrowIDs a) => Input a String
 -- Fae that 'readInput' behave in this way.
 class ReadInput a where
   -- | Like 'read', but with a little extra data.
-  readInput :: Input -> a
-  -- | The default instance reads the argument string, then resolves escrow
+  -- The default instance reads the argument string, then resolves escrow
   -- locators in it.
+  readInput :: Input -> a
   default readInput :: (Read a, Typeable a) => Input -> a
   readInput (Input x s) =
-    case filter (null . snd) $ reads s of
-      [(y, "")] -> resolveEscrowLocators x y
+    case [ y | (y, "") <- reads s] of
+      [y] -> resolveEscrowLocators x y
       _ -> throw $ BadInputParse s (typeRep $ Proxy @a)
 
 {- Instances -}
@@ -154,7 +154,7 @@ instance Exception ContractException
 -- This is necessary to prevent malicious actors from embedding
 -- a non-terminating transaction that a recipient will have to execute.
 instance NFData Escrows
--- | Because escrows are contracts
+-- | Escrows are contracts, so we need this for @NFData Escrows@.
 instance NFData (ConcreteContract argType valType) where
   rnf (ConcreteContract !f) = ()
 
@@ -323,7 +323,7 @@ takeEscrows xs = do
 -- | Just concatenates the list of all escrows in each of the objects, then
 -- turns it into a map.  Internally, this uses an imiation of the @lens@
 -- function 'toList' for 'Traversal's, but since an 'EscrowIDTraversal' is
--- not _exactly_ a 'Traversal', we have to reproduce it.
+-- not /exactly/ a 'Traversal', we have to reproduce it.
 getEscrowMap :: forall m. (MonadState Escrows m) => [BearsValue] -> m EscrowMap
 getEscrowMap xs =
   fmap (Map.fromList . join) $ 
@@ -336,7 +336,7 @@ getEscrowMap xs =
 
 -- | Actually looks up an escrow by ID.  If an escrow locator has made it
 -- this far, this is where it causes an error.  This function actually
--- _takes_ the escrows, not just copies them, because valuable things can't
+-- /takes/ the escrows, not just copies them, because valuable things can't
 -- be copied.
 takeEscrow :: (MonadState Escrows m) => 
   EscrowID argType valType -> m (EntryID, AbstractEscrow)

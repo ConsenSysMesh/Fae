@@ -6,7 +6,7 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module just re-exports "Control.Monad.Catch", as well as "Data.Typeable" so that we can derive 'Exception' with just this module imported, and also 'throw' and 'evaluate' from "Control.Exception", which seem not to be re-exported elsewhere.
+This module just re-exports "Control.Monad.Catch", as well as 'Typeable' so that we can derive 'Exception' with just this module imported, and also 'throw' and 'evaluate' from "Control.Exception", which seem not to be re-exported elsewhere.
 -}
 module Blockchain.Fae.Internal.Exceptions
   (

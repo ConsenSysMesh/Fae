@@ -46,13 +46,14 @@ import System.IO.Unsafe
 -- These are only here to avoid an UndecidableInstance in the Serialize
 -- instance.
 
--- | Newtyped 'PublicKey' for defining my own instances of things.
+-- | Newtyped 'Ed.PublicKey' for defining my own instances of things.
 newtype EdPublicKey = EdPublicKey Ed.PublicKey deriving (Eq, NFData)
--- | Newtyped 'SecretKey for defining my own instances of things.
+-- | Newtyped 'Ed.SecretKey' for defining my own instances of things.
 newtype EdSecretKey = EdSecretKey Ed.SecretKey deriving (Eq, NFData)
--- | Newtyped 'Signature for defining my own instances of things.
+-- | Newtyped 'Ed.Signature' for defining my own instances of things.
 newtype EdSignature = EdSignature Ed.Signature deriving (Eq, NFData)
--- | Newtyped @Digest SHA3_256@ for defining my own instances of things.
+-- | Newtyped 'Hash.Digest' 'Hash.SHA3_256' for defining my own instances
+-- of things.
 newtype Digest = HashDigest (Hash.Digest Hash.SHA3_256) deriving (Eq, Ord, NFData)
 
 -- | It's what it looks like.  We don't implement our own crypto because we
@@ -75,22 +76,22 @@ data Signed a = Signed {sig :: Signature, body :: a} deriving (Generic)
 -- implement this class.
 class Digestible a where
   -- | Hashes any 'Digestible'.
+  -- The default digest is the hash of the binary serialization.
   digest :: a -> Digest
 
-  -- | The digest is the hash of the binary serialization.
   default digest :: (Serialize a) => a -> Digest
   digest = HashDigest . Hash.hash . Ser.encode
 
 -- | Class #1 for uniformly defining 'Serialize' instances for all the
 -- crypto types above.
 class (Monad t) => PassFail t where
-  -- | Essentially, 'passOrThrow' is like 'fromMaybe (error err)', but for
+  -- | Essentially, 'passOrThrow' is like @fromMaybe (error err)@, but for
   -- any monad 't' instead of just 'Maybe'.
   passOrThrow :: t a -> a
 
--- | Class #1 for uniformly defining 'Serialize' instances for all the
+-- | Class #2 for uniformly defining 'Serialize' instances for all the
 -- crypto types above.
-class (PassFail (PassFailM a)) => PartialDecode a where
+class (PassFail (PassFailM a)) => PartialSerialize a where
   -- | The container type for the result of decoding, or the error from
   -- doing so.
   type PassFailM a :: * -> *
@@ -118,60 +119,61 @@ instance PassFail Maybe where
 instance PassFail CryptoFailable where
   passOrThrow = throwCryptoError
 
--- | 'partialDecode' is 'digestFromByteString'.  Only @cryptonite-0.24@ and
--- up export 'hashDigestSize', which we use for 'decodeSize'.
-instance PartialDecode (Hash.Digest Hash.SHA3_256) where
+-- Only @cryptonite-0.24@ and up export 'hashDigestSize', which we use for
+-- 'decodeSize'.
+-- | 'partialDecode' is 'digestFromByteString'.  
+instance PartialSerialize (Hash.Digest Hash.SHA3_256) where
   type PassFailM (Hash.Digest Hash.SHA3_256) = Maybe
   encode = BA.convert
   decodeSize _ = Hash.hashDigestSize Hash.SHA3_256
   partialDecode = Hash.digestFromByteString
 
+-- 'publicKeySize' comes from @cryptonite-0.24@.
 -- | 'partialDecode' is 'publicKey', which is very finicky and should
 -- probably just be a 'Serialize' instance for 'Ed.PublicKey'.
--- 'publicKeySize' comes from @cryptonite-0.24@.
-instance PartialDecode Ed.PublicKey where
+instance PartialSerialize Ed.PublicKey where
   type PassFailM Ed.PublicKey = CryptoFailable
   encode = BA.convert
   decodeSize _ = Ed.publicKeySize
   partialDecode = Ed.publicKey
 
+-- 'secretKeySize' comes from @cryptonite-0.24@.
 -- | 'partialDecode' is 'secretKey', which is very finicky and should
 -- probably just be a 'Serialize' instance for 'Ed.SecretKey'.
--- 'secretKeySize' comes from @cryptonite-0.24@.
-instance PartialDecode Ed.SecretKey where
+instance PartialSerialize Ed.SecretKey where
   type PassFailM Ed.SecretKey = CryptoFailable
   encode = BA.convert
   decodeSize _ = Ed.secretKeySize
   partialDecode = Ed.secretKey
 
--- | 'partialDecode' is 'signature', which is very finicky and should
--- probably just be a 'Serialize' instance for 'Ed.Signature.
 -- 'signatureSize' comes from @cryptonite-0.24@.
-instance PartialDecode Ed.Signature where
+-- | 'partialDecode' is 'signature', which is very finicky and should
+-- probably just be a 'Serialize' instance for 'Ed.Signature'.
+instance PartialSerialize Ed.Signature where
   type PassFailM Ed.Signature = CryptoFailable
   encode = BA.convert
   decodeSize _ = Ed.signatureSize
   partialDecode = Ed.signature
 
--- | Uniform serialization via 'PartialDecode'
+-- | Uniform serialization via 'PartialSerialize'
 instance Serialize EdPublicKey where
-  put (EdPublicKey x) = putPartialDecode x
-  get = EdPublicKey <$> getPartialDecode
+  put (EdPublicKey x) = putPartialSerialize x
+  get = EdPublicKey <$> getPartialSerialize
 
--- | Uniform serialization via 'PartialDecode'
+-- | Uniform serialization via 'PartialSerialize'
 instance Serialize EdSecretKey where
-  put (EdSecretKey x) = putPartialDecode x
-  get = EdSecretKey <$> getPartialDecode
+  put (EdSecretKey x) = putPartialSerialize x
+  get = EdSecretKey <$> getPartialSerialize
 
--- | Uniform serialization via 'PartialDecode'
+-- | Uniform serialization via 'PartialSerialize'
 instance Serialize EdSignature where
-  put (EdSignature x) = putPartialDecode x
-  get = EdSignature <$> getPartialDecode
+  put (EdSignature x) = putPartialSerialize x
+  get = EdSignature <$> getPartialSerialize
 
--- | Uniform serialization via 'PartialDecode'
+-- | Uniform serialization via 'PartialSerialize'
 instance Serialize Digest where
-  put (HashDigest x) = putPartialDecode x
-  get = HashDigest <$> getPartialDecode
+  put (HashDigest x) = putPartialSerialize x
+  get = HashDigest <$> getPartialSerialize
 
 -- instance Serialize PublicKey
 -- instance Serialize Digest
@@ -222,8 +224,8 @@ instance Read EdPublicKey where
 instance IsString Digest where
   fromString = read
 
--- | Transaction inputs' arguments may need to contain public keys that
--- come from outside Fae, and it should be easy to enter them.
+-- | Contracts may need to contain public keys that come from outside Fae,
+-- and it should be easy to enter them.
 instance IsString EdPublicKey where
   fromString = read
 
@@ -238,15 +240,15 @@ instance Show Digest where
 -- * Functions
 
 -- | 'put' for 'Serialize' is easy to define: just convert to a bytestring,
--- which is what 'PartialDecode' allows us to do.
-putPartialDecode :: (PartialDecode a) => a -> Ser.Put
-putPartialDecode x = Ser.putByteString $ encode x
+-- which is what 'PartialSerialize' allows us to do.
+putPartialSerialize :: (PartialSerialize a) => a -> Ser.Put
+putPartialSerialize x = Ser.putByteString $ encode x
 
--- | 'get' for Serialize is not so simple.  You have to make sure you are
+-- | 'get' for 'Serialize' is not so simple.  You have to make sure you are
 -- consuming exactly the right number of bytes, with none left over, before
 -- decoding.  Fortunately 'isolate' does this nicely.
-getPartialDecode :: forall a. (PartialDecode a) => Ser.Get a
-getPartialDecode = Ser.isolate numBytes $ do
+getPartialSerialize :: forall a. (PartialSerialize a) => Ser.Get a
+getPartialSerialize = Ser.isolate numBytes $ do
   encodeBS <- Ser.getBytes numBytes
   return $ passOrThrow $ partialDecode encodeBS
   where numBytes = decodeSize $ Proxy @a
@@ -261,6 +263,8 @@ readsPrecSer _ s =
   where (bs, rest) = B16.decode $ C8.pack $ dropWhile isSpace s
 
 -- | This function replaces 'Ed.sign' to use our semantically-nice types.
+--
+-- prop> unsign . sign = public
 sign :: (Digestible a) => a -> PrivateKey -> Signed a
 sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) = 
   Signed
@@ -271,7 +275,9 @@ sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) =
   where HashDigest dig = digest x
 
 -- | The public-key signature recovery function.  Doubles as a way to
--- verify a signature.
+-- verify a signature.  Satisfies the law
+--
+-- prop> unsign . sign = public
 unsign :: (Digestible a) => Signed a -> Maybe PublicKey
 unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig), body = msg}
   | Ed.verify edPublicKey dig sig = Just pubKey
@@ -295,7 +301,9 @@ unsafeNewPrivateKey :: PrivateKey
 unsafeNewPrivateKey = unsafePerformIO newPrivateKey
 
 -- | Converts a private key into its corresponding public key, and at the
--- same time, verifies the 'PrivateKey' value.
+-- same time, verifies the 'PrivateKey' value.  Satisfies the law
+--
+-- prop> unsign . sign = public
 public :: PrivateKey -> Maybe PublicKey
 public (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey))
   | Ed.toPublic secKey == edPublicKey = Just pubKey

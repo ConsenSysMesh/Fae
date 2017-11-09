@@ -1,8 +1,8 @@
 name:                fae
-version:             0.1.0.0
+version:             0.9.0.0
 -- synopsis:
 -- description:
--- homepage:            https://github.com/
+homepage:            https://github.com/Consensys/Fae
 license:             BSD3
 license-file:        LICENSE
 author:              Ryan Reich
@@ -17,6 +17,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     
     Blockchain.Fae
+    Blockchain.Fae.FrontEnd
     Blockchain.Fae.Internal
     Blockchain.Fae.Contracts
     Blockchain.Fae.Currency

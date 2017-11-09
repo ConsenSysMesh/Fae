@@ -6,7 +6,7 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module provides the 'FaeStorageT' monad family, which tracks the state of Fae as contracts execute.
+This module provides the 'FaeStorageT' monad family, which tracks the state of Fae as contracts execute.  All the types here are parametrized over an unconstrained parameter @c@, but only 'AbstractContract' is ever used.  This indirection is necessary to avert an import cycle between this module and "Blockchain.Fae.Internal.Contract".
 -}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Storage where
@@ -44,6 +44,12 @@ data StorageT c =
 -- meaning.  This is an existential type, so the record names are just
 -- there for documentation; values have to be extracted by
 -- pattern-matching.
+--
+-- The technical reason for separating 'inputOutputs' from 'outputs' is
+-- that it makes it possible for contracts to create new contracts without
+-- putting a global lock on the storage; thunk execution will go straight
+-- to the correct contract's outputs and not do any other contract's or the
+-- transaction's direct outputs.
 data TransactionEntryT c =
   forall a. (Show a) =>
   TransactionEntry 
@@ -54,12 +60,13 @@ data TransactionEntryT c =
     result :: a
   }
 
--- | Inputs are identified by 'ShortContractID's so that 'ContracIDs' of
+-- | Inputs are identified by 'ShortContractID's so that 'ContractIDs' of
 -- the 'InputOutput' variant can be flat, rather than nested potentially
 -- indefinitely.
 type InputOutputsT c = Map ShortContractID (OutputsT c)
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
--- so it's not enough to just store them in a sequence.
+-- and deletion must preserve the original ordering index of the remaining
+-- contracts, so it's not enough to just store them in a sequence.
 type OutputsT c = IntMap c
 -- | The storage monad is just a state monad.  It has to be over 'IO' both
 -- because we need to catch exceptions, and because the interpreter has to
@@ -87,7 +94,7 @@ data StorageException =
 makeLenses ''StorageT
 makeLenses ''TransactionEntryT
 
--- * Instances
+{- Instances -}
 
 -- | Of course
 instance Exception StorageException
@@ -98,7 +105,7 @@ type instance Index (StorageT c) = ContractID
 type instance IxValue (StorageT c) = c
 -- | For the 'At' instance
 instance Ixed (StorageT c)
--- | We define this instance _in addition to_ the natural 'TransactionID'
+-- | We define this instance /in addition to/ the natural 'TransactionID'
 -- indexing of a 'StorageT' so that we can look up contracts by ID, which
 -- requires descending to various levels into the maps.
 instance At (StorageT c) where
@@ -122,7 +129,7 @@ instance At (StorageT c) where
 
 -- * Functions
 
--- | Just an 'IntMap' constructor
+-- | Just an 'IntMap' constructor, indexing consecutively from 0.
 intMapList :: [a] -> IntMap a
 intMapList = IntMap.fromList . zip [0 ..]
 
