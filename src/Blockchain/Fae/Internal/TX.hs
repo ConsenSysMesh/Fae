@@ -17,7 +17,6 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 
 import Control.DeepSeq
-
 import Control.Monad 
 import Control.Monad.State
 
@@ -39,7 +38,7 @@ data TX =
   {
     txID :: TransactionID,
     inputs :: Inputs,
-    pubKey :: PublicKey
+    pubKeys :: Signers
   }
   deriving (Generic)
 
@@ -77,7 +76,7 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
     ("runTransaction " ++ qualified "body")
     infer
     --(as :: Inputs -> TransactionID -> PublicKey -> Bool -> FaeStorage ())
-  lift $ run inputs txID pubKey isReward 
+  lift $ run inputs txID pubKeys isReward 
   where
     fixGHCErrors (WontCompile []) = error "Compilation error"
     fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
@@ -88,7 +87,8 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
     pkgModules = 
       [
         "Blockchain.Fae.Internal",
-        "Data.Dynamic"
+        "Data.Dynamic",
+        "Data.Map"
       ]
     languageExts =
       [

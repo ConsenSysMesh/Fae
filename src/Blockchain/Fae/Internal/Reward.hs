@@ -15,8 +15,6 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.MonadFae
 import Blockchain.Fae.Internal.Storage
 
-import Control.DeepSeq
-
 import GHC.Generics
 
 -- * Types
@@ -27,13 +25,6 @@ data Reward = Reward deriving (Generic)
 data RewardToken = Token deriving (Generic)
 -- | The escrow ID of a reward token provided by the system.
 type RewardEscrowID = EscrowID RewardToken Reward 
-
--- | So that 'RewardEscrowID' is also 'NFData', which is necessary for
--- spending.
-instance NFData RewardToken
--- | So that 'RewardEscrowID' is also 'NFData', which is necessary for
--- spending.
-instance NFData Reward
 
 -- | For the 'RewardEscrowID' instance
 instance HasEscrowIDs RewardToken

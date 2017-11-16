@@ -156,11 +156,11 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 runTransaction :: 
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
   Transaction inputs a -> Inputs -> 
-  TransactionID -> PublicKey -> Bool -> 
+  TransactionID -> Signers -> Bool -> 
   FaeStorage ()
-runTransaction f inputArgs txID txKey isReward = handleAll placeException $
+runTransaction f inputArgs txID txKeys isReward = handleAll placeException $
   modify $ 
-    runFaeContract txID txKey .
+    runFaeContract txID txKeys .
     transaction txID isReward inputArgs f
   where
     placeException e = 
@@ -169,15 +169,15 @@ runTransaction f inputArgs txID txKey isReward = handleAll placeException $
         {
           inputOutputs = throw e,
           outputs = throw e,
-          signedBy = txKey,
+          signers = txKeys,
           result = throw e :: Void
         }
 
 -- | A summary monad-running function.  You start with no escrows and the
 -- next escrow ID is the transaction ID.
-runFaeContract :: TransactionID -> PublicKey -> FaeContract Naught a -> a
-runFaeContract (ShortContractID dig) txKey =
-  flip runReader txKey .
+runFaeContract :: TransactionID -> Signers -> FaeContract Naught a -> a
+runFaeContract (ShortContractID dig) txKeys =
+  flip runReader txKeys .
   fmap fst . runWriterT .
   flip evalStateT Escrows{escrowMap = Map.empty, nextID = dig} .
   runCoroutine
@@ -196,7 +196,7 @@ transaction ::
 transaction txID isReward args f storage = do
   (input, storage', inputOutputs) <- runInputSpec args isReward storage
   (result, outputs) <- doTX f input
-  signedBy <- sender
+  signers <- ask
   return $ storage' 
     & _getStorage . at txID ?~ TransactionEntry{..}
     & _txLog %~ cons txID
@@ -213,7 +213,7 @@ doTX f input = do
   return (result, outputs)
 
 -- | Takes the list of contract IDs with input strings and forms the input
--- object out of their results, taking care to resolve its escrow locators.
+-- object out of their results.
 runInputSpec :: 
   forall input.
   (GetInputValues input, HasEscrowIDs input) =>
@@ -221,11 +221,8 @@ runInputSpec ::
   FaeContract Naught (input, Storage, InputOutputs)
 runInputSpec args isReward storage = do
   triple <- runInputContracts (Proxy @input) isReward storage args
-  let (input0, unused) = getInputValues $ triple ^. _1
+  let (input, unused) = getInputValues $ triple ^. _1
   unless (null unused) $ throw TooManyInputs
-  -- We don't have to be careful about self-referencing here because we
-  -- already checked it in 'runInputContract'
-  input <- runTXEscrows $ resolveEscrowLocators input0 input0 
   return (triple & _1 .~ input)
  
 -- | Runs all the input contracts in a state monad recording the
@@ -243,9 +240,7 @@ runInputContracts p isReward storage args = do
   where modifyM f = get >>= lift . IdentityT . f >>= put
 
 -- | Runs a single input contract.  It is here that the rewards are
--- created, if any.  This function uses the list of previous results to
--- partially construct an input object for looking up escrow locators in
--- the present contract; this only works because of laziness.
+-- created, if any.
 runInputContract ::
   forall input.
   (GetInputValues input, HasEscrowIDs input) =>
@@ -255,11 +250,10 @@ runInputContract ::
   String ->
   ([Dynamic], Storage, InputOutputs) ->
   FaeContract Naught ([Dynamic], Storage, InputOutputs)
-runInputContract _ isReward cID argS (results, storage, inputOutputs) = do
+runInputContract _ isReward cID arg (results, storage, inputOutputs) = do
   input <- withReward $ results ++ repeat (throw NotEnoughInputs)
   let 
     (argInput :: input, _) = getInputValues input
-    arg = Input argInput argS
     ConcreteContract fAbs = 
       storage ^. at cID . defaultLens (throw $ BadInput cID)
   ((gAbsM, result), outputsL) <- listen $ fAbs arg

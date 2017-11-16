@@ -18,7 +18,6 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Storage
 
-import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
@@ -26,12 +25,15 @@ import Control.Monad.Writer
 import Data.Dynamic
 import Data.Functor.Const
 import Data.Map (Map)
+import Data.Maybe
 import Data.Typeable
 import Data.Void
 
 import qualified Data.Map as Map
 
 import GHC.Generics
+
+import Text.Read (readMaybe)
 
 -- * Types
 
@@ -57,7 +59,7 @@ type FaeRequest argType valType =
 
 -- | This monad contains everything that relates a contract to its
 -- surrounding transaction.
-type FaeRW = WriterT [AbstractContract] (Reader PublicKey) 
+type FaeRW = WriterT [AbstractContract] (Reader Signers) 
 
 -- | The actual contract monad builds on 'FaeRW' by adding escrows and
 -- continuation support.
@@ -112,20 +114,16 @@ type AbstractEscrow = ConcreteContract Dynamic Dynamic
 -- string inputs, which they have to parse into the argument type they
 -- expect.  This prevents malicious users from injecting their own code
 -- into transactions' contract calls.
-type AbstractContract = ConcreteContract Input Dynamic
+type AbstractContract = ConcreteContract String Dynamic
 
 -- | Exception type
 data ContractException =
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
-  BadEscrowID EntryID
+  BadEscrowID EntryID |
+  MissingSigner String
   deriving (Typeable, Show)
-
--- | A representation of an input contract call, containing a reference
--- object (for resolving escrow locators) and an argument string to be
--- parsed into the correct argument type.
-data Input = forall a. (HasEscrowIDs a) => Input a String
 
 -- * Type classes
 
@@ -136,27 +134,17 @@ data Input = forall a. (HasEscrowIDs a) => Input a String
 -- Fae that 'readInput' behave in this way.
 class ReadInput a where
   -- | Like 'read', but with a little extra data.
-  -- The default instance reads the argument string, then resolves escrow
-  -- locators in it.
-  readInput :: Input -> a
-  default readInput :: (Read a, Typeable a) => Input -> a
-  readInput (Input x s) =
-    case [ y | (y, "") <- reads s] of
-      [y] -> resolveEscrowLocators x y
-      _ -> throw $ BadInputParse s (typeRep $ Proxy @a)
+  -- When we get to it, this will also read version identifiers in the
+  -- input and resolve them to the appropriate values.
+  readInput :: (Functor s) => String -> FaeContract s a
+  default readInput :: (Read a, Typeable a, Functor s) => String -> FaeContract s a
+  readInput s = 
+    return $ fromMaybe (throw $ BadInputParse s (typeRep $ Proxy @a)) $ readMaybe s
 
 {- Instances -}
 
 -- | Of course
 instance Exception ContractException
-
--- | So that we can force escrows as they are returned from contracts.
--- This is necessary to prevent malicious actors from embedding
--- a non-terminating transaction that a recipient will have to execute.
-instance NFData Escrows
--- | Escrows are contracts, so we need this for @NFData Escrows@.
-instance NFData (ConcreteContract argType valType) where
-  rnf (ConcreteContract !f) = ()
 
 -- | Default instance
 instance ReadInput Void
@@ -184,7 +172,7 @@ instance (Read a, Typeable a, Read b, Typeable b) => ReadInput (a, b)
 instance (Read a, Typeable a, Read b, Typeable b) => ReadInput (Either a b)
 -- | Default instance
 instance 
-  (Typeable argType, Typeable valType) =>
+  (Typeable argType, Typeable valType) => 
   ReadInput (EscrowID argType valType)
 
 -- * Template Haskell
@@ -198,14 +186,14 @@ makeLenses ''Escrows
 makeEscrow ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType, NFData argType,
+    Typeable argType, Typeable valType,
     Functor s
   ) =>
   [BearsValue] ->
   Contract argType valType ->
   FaeContract s AbstractEscrow
 makeEscrow eIDs f = 
-  makeEscrowAbstract . makeEscrowConcrete <$> makeInternalT eIDs (getFae . f)
+  makeEscrowAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
 
 -- | The high-level contract constructor, which goes from what a contract
 -- author provides to the internal representation of a contract.
@@ -219,7 +207,7 @@ makeContract ::
   Contract argType valType ->
   FaeContract s AbstractContract
 makeContract eIDs f =
-  makeContractAbstract . makeContractConcrete <$> makeInternalT eIDs (getFae . f)
+  makeContractAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
 
 -- | Processes a 'Contract' so that it can take escrows on the first call,
 -- and hides the escrow storage.
@@ -238,35 +226,15 @@ makeInternalT eIDs f = do
       _escrowMap %= Map.union inputEscrows
       f x
 
--- | Uniform definition.  The non-escrow-endowed input to
--- a 'ConcreteContract' is scanned for escrow IDs before it is passed in.
-makeEscrowConcrete ::
-  (HasEscrowIDs argType, HasEscrowIDs valType, NFData argType) =>
-  InternalContract argType valType ->
-  ConcreteContract argType valType
-makeEscrowConcrete = makeConcrete internalSpend
-
--- | Uniform definition.  A contract argument is never endowed with
--- escrows, because it is a security hole to allow callers to pass their
--- own code to called contracts.  This is what transactional escrows
--- handle.
-makeContractConcrete ::
-  (HasEscrowIDs argType, HasEscrowIDs valType) =>
-  InternalContract argType valType ->
-  ConcreteContract argType valType
-makeContractConcrete = makeConcrete $ return . WithEscrows Map.empty
-
 -- | Takes care of running the contract coroutine and extracting the
 -- continuation.  It also correctly retrieves escrows from the argument and
 -- places the escrows of the return value into the local storage.
 makeConcrete ::
   (HasEscrowIDs argType, HasEscrowIDs valType) =>
-  (forall s. (Functor s) => argType -> FaeContract s (WithEscrows argType)) ->
   InternalContract argType valType ->
   ConcreteContract argType valType
-makeConcrete mkE f = ConcreteContract $ \x -> do
-  x' <- runTXEscrows x
-  xE <- mkE x'
+makeConcrete f = ConcreteContract $ \x -> do
+  xE <- internalSpend x
   result <- lift $ lift $ resume $ f xE
   let 
     (gM, WithEscrows outputEscrows z) =
@@ -274,7 +242,7 @@ makeConcrete mkE f = ConcreteContract $ \x -> do
         Left (Request y g) -> (Just g, y)
         Right y -> (Nothing, y)
   _escrowMap %= Map.union outputEscrows
-  let gConcM = makeConcrete mkE <$> gM
+  let gConcM = makeConcrete <$> gM
   return (gConcM, z)
 
 -- | An abstract escrow just needs to check the type of its input and clear
@@ -297,7 +265,7 @@ makeContractAbstract ::
   (ReadInput argType, Typeable argType, Typeable valType) =>
   ConcreteContract argType valType -> AbstractContract
 makeContractAbstract (ConcreteContract f) = ConcreteContract $ \input -> do
-  (gM, y) <- f $ readInput input
+  (gM, y) <- f =<< readInput input
   return (makeContractAbstract <$> gM, toDyn y)
 
 -- | Because when we call an escrow, we actually know exactly what type was
@@ -330,17 +298,14 @@ getEscrowMap xs =
   forM xs $ \(BearsValue x) -> do
     let
       f :: EscrowIDMap (Writer [m (EntryID, AbstractEscrow)])
-      f eID@EscrowLocator{} = return eID
       f eID = tell [takeEscrow eID] >> return eID
     sequence $ execWriter $ traverseEscrowIDs f x
 
--- | Actually looks up an escrow by ID.  If an escrow locator has made it
--- this far, this is where it causes an error.  This function actually
+-- | Actually looks up an escrow by ID.  This function actually
 -- /takes/ the escrows, not just copies them, because valuable things can't
 -- be copied.
 takeEscrow :: (MonadState Escrows m) => 
   EscrowID argType valType -> m (EntryID, AbstractEscrow)
-takeEscrow EscrowLocator{..} = throw $ UnresolvedEscrowLocator path
 takeEscrow eID = do
   let k = entID eID
   xM <- use $ _escrowMap . at k
@@ -353,36 +318,12 @@ takeEscrow eID = do
 -- | Because we need to essentially 'spend' a value internally, and we
 -- haven't defined that function yet.
 internalSpend :: 
-  (HasEscrowIDs valType, MonadState Escrows m, NFData valType) => 
+  (HasEscrowIDs valType, MonadState Escrows m) => 
   valType -> m (WithEscrows valType)
 internalSpend x = do
   Escrows{..} <- takeEscrows [bearer x]
   -- We need to force both the escrows and the value because they may have
   -- nonterminating computations in them, which we want to be suffered by
   -- the originating contract and not by its victims.
-  return $ WithEscrows (force escrowMap) (force x)
-
--- | Because we need to use escrows internally, specifically in
--- 'runTXEscrows'.
-internalUseEscrow :: 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    Functor s
-  ) =>
-  EntryID -> argType -> FaeContract s valType
-internalUseEscrow entID x = do
-  fAbs <- use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
-  let ConcreteContract f = unmakeAbstractEscrow fAbs
-  (gConcM, y) <- f x
-  _escrowMap . at entID .= fmap makeEscrowAbstract gConcM
-  return y
-
--- | Traverses all the escrows in a valuable object, picks out the
--- transactional inputs, and executes them, replacing them with outputs.
-runTXEscrows :: forall a s. (HasEscrowIDs a, Functor s) => a -> FaeContract s a
-runTXEscrows = traverseEscrowIDs f where
-  f :: EscrowIDMap (FaeContract s)
-  f (TXEscrowIn eID arg) = TXEscrowOut eID <$> internalUseEscrow eID arg
-  f eID = return eID
+  return $ WithEscrows escrowMap x
 

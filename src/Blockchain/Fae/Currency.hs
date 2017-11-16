@@ -95,7 +95,6 @@ class
 -- | This opaque type is the value of our sample currency.
 newtype Coin = Coin Natural deriving (Generic)
 
-instance NFData Coin
 instance HasEscrowIDs Coin
 
 -- @Spend@ exists so that we can get close the escrow and get its
@@ -116,7 +115,6 @@ instance HasEscrowIDs Coin
 -- a malicious user could create their own coins.
 data Token = Spend | UnsafePeek deriving (Generic)
 
-instance NFData Token
 instance HasEscrowIDs Token
 
 instance Currency Token Coin where

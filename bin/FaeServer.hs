@@ -85,18 +85,22 @@ runFae txQueue mainTID = runFaeInterpret $ forever $
 serverApp :: TXQueue -> Application
 serverApp txQueue request respond = do
   (params, files) <- parseRequestBody lbsBackEnd request
-  let
-    keyM = lookup "key" params
-    key = maybe "key1" C8.unpack keyM
   let 
-    inputParams = [ C8.unpack inputBS | ("input", inputBS) <- params ]
+    keyNames0 = 
+      [ break (== ':') (C8.unpack keyBS) | ("key", keyBS) <- params ]
+    keyNames = if null keyNames0 then [("self", "key1")] else keyNames0
+    inputParams = 
+      [ C8.unpack inputBS | ("input", inputBS) <- params ]
     inputs = fromMaybe (error "Couldn't parse inputs") $ 
       mapM readMaybe inputParams
 
-  tx@TX{pubKey, txID} <- nextTX key inputs >>= evaluate . force
+  tx@TX{pubKeys, txID} <- nextTX keyNames inputs >>= evaluate . force
   let (mainFileM, modules) = makeFilesMap files txID
   case mainFileM of
-    Nothing -> respond $ buildResponse $ key ++ ": " ++ show pubKey
+    Nothing -> respond $ buildResponse $ 
+      intercalate "\n" $ 
+      map (\(x,y) -> x ++ ": " ++ show y) $
+      Map.toList pubKeys
     Just mainFile -> do
       writeModules mainFile modules txID
 
@@ -115,18 +119,21 @@ buildResponse = responseBuilder ok200 headers . stringUtf8 where
       (hContentType, "text/plain")
     ]
 
-nextTX :: String -> Inputs -> IO TX
-nextTX keyName inputs = do
-  keyExists <- doesFileExist keyName
-  unless keyExists $ do
-    privKey <- newPrivateKey
-    B.writeFile keyName $ S.encode (privKey, 0 :: Int) 
-  decodeE <- S.decode <$> B.readFile keyName
-  let (privKey, nonce :: Int) = either error id decodeE
-  B.writeFile keyName $ S.encode (privKey, nonce + 1)
+nextTX :: [(String, String)] -> Inputs -> IO TX
+nextTX keyNames inputs = do
+  signerNonces <- forM keyNames $ \(signer, keyName) -> do
+    keyExists <- doesFileExist keyName
+    unless keyExists $ do
+      privKey <- newPrivateKey
+      B.writeFile keyName $ S.encode (privKey, 0 :: Int) 
+    decodeE <- S.decode <$> B.readFile keyName
+    let (privKey, nonce :: Int) = either error id decodeE
+    B.writeFile keyName $ S.encode (privKey, nonce + 1)
+    let Just pubKey = public privKey
+    return (signer, (pubKey, nonce))
   let 
-    Just pubKey = public privKey
-    txID = ShortContractID $ digest (pubKey, nonce)
+    pubKeys = fmap fst $ Map.fromList signerNonces
+    txID = ShortContractID $ digest signerNonces
   return TX{..}
 
 makeFilesMap :: 

@@ -1,4 +1,4 @@
-txs/Blockchain/
+test/
 *.sw*
 *~
 dist

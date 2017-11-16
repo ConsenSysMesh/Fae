@@ -19,13 +19,13 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Storage
 
-import Control.DeepSeq
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Writer.Class
 
 import Data.Dynamic
+import Data.Maybe
 import Data.Sequence (Seq)
 import Data.Typeable
 
@@ -96,7 +96,7 @@ deriving instance (Functor s) => MonadTX (FaeM s)
 -- value is passed with its backing escrows, maintaining its value.  Once
 -- a contract terminates with a 'spend', it is removed from storage.
 spend :: 
-  (HasEscrowIDs valType, NFData valType, MonadContract argType' valType' m) => 
+  (HasEscrowIDs valType, MonadContract argType' valType' m) => 
   valType -> m (WithEscrows valType)
 spend = liftTX . Fae . internalSpend 
 
@@ -105,7 +105,7 @@ spend = liftTX . Fae . internalSpend
 -- `spend`ing an intermediate value, and awaiting its next call to
 -- continue with the arg that was passed.
 release :: 
-  (HasEscrowIDs valType, NFData valType, MonadContract argType valType m) => 
+  (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m argType
 release x = liftContract $ Fae $ do
   req <- internalSpend x
@@ -113,7 +113,7 @@ release x = liftContract $ Fae $ do
   suspend $ Request req $ \(WithEscrows inputEscrows y) -> do
     put escrows -- makeInternalT wipes out the ongoing escrows
     _escrowMap %= Map.union inputEscrows
-    runTXEscrows y
+    return y
 
 -- | Calls the given escrow by ID as a function.  This causes the escrow to
 -- be updated, and possibly deleted if it terminated with a `spend`.
@@ -124,9 +124,12 @@ useEscrow ::
     MonadTX m
   ) =>
   EscrowID argType valType -> argType -> m valType
-useEscrow eID arg = liftTX $ Fae $ do
-  val <- internalUseEscrow (entID eID) arg
-  runTXEscrows val
+useEscrow EscrowID{..} x = liftTX $ Fae $ do
+  fAbs <- use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
+  let ConcreteContract f = unmakeAbstractEscrow fAbs
+  (gConcM, y) <- f x
+  _escrowMap . at entID .= fmap makeEscrowAbstract gConcM
+  return y
 
 -- | Registers a contract as a new escrow, returning its ID.  The argument
 -- is a list of Haskell values marked as "bearers" of escrow-backed Fae
@@ -138,7 +141,6 @@ newEscrow ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
     Typeable argType, Typeable valType, 
-    NFData argType, NFData valType,
     MonadTX m
   ) =>
   [BearsValue] -> Contract argType valType -> m (EscrowID argType valType)
@@ -156,7 +158,6 @@ newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 
     ReadInput argType, Typeable argType, Typeable valType, 
-    NFData argType, NFData valType,
     MonadTX m
   ) =>
   [BearsValue] -> Contract argType valType -> m ()
@@ -164,7 +165,10 @@ newContract eIDs f = liftTX $ Fae $ do
   cAbs <- makeContract eIDs f
   tell [cAbs]
 
--- | Gives the public key that signed the current transaction.
-sender :: (MonadTX m) => m PublicKey
-sender = liftTX $ Fae ask
+-- | Looks up a named signatory, maybe. 
+lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
+lookupSigner = liftTX . Fae . view . at
 
+-- | Looks up a named signatory, or throws if not found.
+signer :: (MonadTX m) => String -> m PublicKey
+signer s = fromMaybe (throw $ MissingSigner s) <$> lookupSigner s

@@ -56,7 +56,7 @@ data TransactionEntryT c =
   {
     inputOutputs :: InputOutputsT c,
     outputs :: OutputsT c,
-    signedBy :: PublicKey,
+    signers :: Signers,
     result :: a
   }
 
@@ -68,6 +68,8 @@ type InputOutputsT c = Map ShortContractID (OutputsT c)
 -- and deletion must preserve the original ordering index of the remaining
 -- contracts, so it's not enough to just store them in a sequence.
 type OutputsT c = IntMap c
+-- | Transactions can have many named signatories.
+type Signers = Map String PublicKey
 -- | The storage monad is just a state monad.  It has to be over 'IO' both
 -- because we need to catch exceptions, and because the interpreter has to
 -- be in a 'MonadIO'.
@@ -137,13 +139,13 @@ intMapList = IntMap.fromList . zip [0 ..]
 -- rather than actually going into the storage to get and format it.
 showTransaction :: TransactionID -> FaeStorageT c String
 showTransaction txID = do
-  TransactionEntry ios os k x <- use $
+  TransactionEntry ios os ss x <- use $
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   return $ 
     intercalate "\n  " $
       ("Transaction " ++ show txID) :
-      ("sender: " ++ show k) :
-      (showOutputs os) :
+      prettySigners ss :
+      showOutputs os :
       ("result: " ++ show x) :
       (flip map (Map.toList ios) $ \(cID, os) ->
         intercalate "\n    "
@@ -152,7 +154,13 @@ showTransaction txID = do
           showOutputs os
         ]
       )
-  where showOutputs os = "outputs: " ++ show (IntMap.keys os)
+  where 
+    showOutputs os = "outputs: " ++ show (IntMap.keys os)
+    prettySigners =
+      intercalate "\n    " .
+      ("signers:" :) .
+      map (\(name, key) -> name ++ ": " ++ show key) .
+      Map.toList 
 
 -- | Shows all transactions.  Probably only useful for small testing Faes,
 -- because this would blow up in real usage.

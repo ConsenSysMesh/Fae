@@ -25,13 +25,13 @@ module Blockchain.Fae
     -- * Contracts and escrows
     module Blockchain.Fae.Internal.MonadFae,
     Fae, FaeTX, Contract, ContractT, ContractID(..), EscrowID, BearsValue,
-    bearer, escrowTX, escrowTXResult,
+    bearer,
     -- * Rewards
     RewardEscrowID, claimReward,
     -- * Opaque classes
     GetInputValues, ReadInput, HasEscrowIDs, 
     -- * Re-exports
-    NFData(..), Typeable, Generic, Void, throw, evaluate
+    Typeable, Generic, Void, throw, evaluate
   ) where
 
 import Blockchain.Fae.Internal.Contract
@@ -41,7 +41,6 @@ import Blockchain.Fae.Internal.MonadFae
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Transaction
 
-import Control.DeepSeq (NFData(..))
 import Control.Exception (throw, evaluate)
 import Data.Typeable (Typeable)
 import Data.Void (Void)
