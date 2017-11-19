@@ -21,7 +21,8 @@ module Blockchain.Fae.Internal
     module Blockchain.Fae.Internal.Reward,
     module Blockchain.Fae.Internal.Storage,
     module Blockchain.Fae.Internal.Transaction,
-    module Blockchain.Fae.Internal.TX
+    module Blockchain.Fae.Internal.TX,
+    module Blockchain.Fae.Internal.Versions
   ) where
 
 import Blockchain.Fae.Internal.Block
@@ -36,3 +37,4 @@ import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.TX
+import Blockchain.Fae.Internal.Versions

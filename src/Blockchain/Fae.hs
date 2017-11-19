@@ -21,15 +21,27 @@ Fae is not a completely pure functional system: it has exceptions.  This is both
 module Blockchain.Fae
   (
     -- * Transactions
+    -- | Transactions are handled outside of Fae's Haskell API, but their
+    -- definitions are still within it.  When processed, a transaction must
+    -- be accompanied by a list of @(ContractID, String)@ pairs denoting
+    -- the literal arguments passed to the contracts with the given IDs.
+    -- These are then 'read' into Haskell types, to prevent malicious
+    -- authors from inserting nonterminating code into the contract calls.
     Transaction, TransactionID, PublicKey, 
     -- * Contracts and escrows
     module Blockchain.Fae.Internal.MonadFae,
     Fae, FaeTX, Contract, ContractT, ContractID(..), EscrowID, BearsValue,
     bearer,
+    -- * Versioning
+    -- | In order to ensure that transaction authors can rely on getting
+    -- the escrow-backed values they expect, contract outputs are
+    -- "versioned" and any change to any escrow ID alters the version.
+    -- Contract literal arguments can refer to these values by version.
+    Versioned(Versioned), getVersioned,
     -- * Rewards
     RewardEscrowID, claimReward,
     -- * Opaque classes
-    GetInputValues, ReadInput, HasEscrowIDs, 
+    GetInputValues, HasEscrowIDs, Versionable, 
     -- * Re-exports
     Typeable, Generic, Void, throw, evaluate
   ) where
@@ -40,6 +52,7 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.MonadFae
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Transaction
+import Blockchain.Fae.Internal.Versions
 
 import Control.Exception (throw, evaluate)
 import Data.Typeable (Typeable)

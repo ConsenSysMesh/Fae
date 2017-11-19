@@ -148,8 +148,6 @@ instance Digestible ContractID
 -- | For 'faeServer'
 instance NFData ContractID
 
---instance Digestible ShortContractID
-
 -- | 'ShortContractID's and, by extension, 'TransactionIDs', are read as
 -- the digests they wrap.
 instance Read ShortContractID where
@@ -163,18 +161,6 @@ instance Show ShortContractID where
 -- | So we can have escrow IDs as contract arguments.
 instance Read (EscrowID argType valType) where
   readsPrec n = map (_1 %~ EscrowID) . readsPrec n 
-
--- | This default instance allows casual transaction authors to use basic,
--- non-escrow-backed types without any hoopla.
-instance {-# OVERLAPPABLE #-} HasEscrowIDs a where
-  traverseEscrowIDs _ = pure
-
--- | This is just natural, though it can probably be covered in most
--- practical cases by the 'Generic' instance, if probably slower.
-instance {-# OVERLAPPABLE #-} 
-  (Traversable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
-
-  traverseEscrowIDs g = traverse (traverseEscrowIDs g)
 
 -- | Escrow IDs, of course, contain themselves.  A tricky special case is
 -- that the transactional variants contain escrows in their argument or
@@ -191,12 +177,40 @@ instance
 
 -- | Default instance.
 instance HasEscrowIDs Void 
+-- | Default instance
+instance HasEscrowIDs () 
+-- | Default instance
+instance HasEscrowIDs Bool
+-- | Default instance
+instance HasEscrowIDs Char where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | Default instance
+instance HasEscrowIDs Int where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | Default instance
+instance HasEscrowIDs Integer where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | Default instance
+instance HasEscrowIDs Float where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | Default instance
+instance HasEscrowIDs Double where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | Default instance
+instance HasEscrowIDs Natural where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | This is just natural, though it can probably be covered in most
+-- practical cases by the 'Generic' instance, if probably slower.
+instance {-# OVERLAPPABLE #-} 
+  (Traversable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
+
+  traverseEscrowIDs g = traverse (traverseEscrowIDs g)
 -- | Default instance.
 instance (HasEscrowIDs a) => HasEscrowIDs (Maybe a)
 -- | Default instance.
-instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (Either a b)
--- | Default instance.
 instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b)
+-- | Default instance.
+instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (Either a b)
 
 -- Boring Generic boilerplate
 
@@ -236,3 +250,8 @@ shorten = ShortContractID . digest
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue
+
+-- | For making empty instances of 'HasEscrowIDs'
+defaultTraverseEscrowIDs :: EscrowIDTraversal a
+defaultTraverseEscrowIDs _ x = return x -- Not point-free to specialize forall
+

@@ -19,6 +19,7 @@ import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.MonadFae
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
+import Blockchain.Fae.Internal.Versions
 
 import Control.Monad
 import Control.Monad.Reader
@@ -39,6 +40,8 @@ import qualified Data.Map as Map
 import GHC.Generics hiding (to)
 import qualified GHC.Generics as Gen (to)
 
+import Numeric.Natural
+
 -- * Types
 
 -- | 'StorageT' is only parametrized because 'AbstractContract' isn't
@@ -49,6 +52,8 @@ type Storage = StorageT AbstractContract
 type Outputs = OutputsT AbstractContract
 -- | Likewise
 type InputOutputs = InputOutputsT AbstractContract
+-- | Likewise
+type InputOutputVersions = InputOutputVersionsT AbstractContract
 -- | Likewise
 type FaeStorage = FaeStorageT AbstractContract
 -- | Likewise
@@ -106,17 +111,47 @@ instance Exception TransactionException
 -- that they might.
 instance GetInputValues Void where
   getInputValues _ = (throw TooManyInputs, [])
-
+-- | Generic instance
+instance GetInputValues ()
+-- | Generic instance
+instance GetInputValues Bool where
+  getInputValues = defaultGetInputValues
 -- | Default instance
-instance (Typeable a, Typeable b) => GetInputValues (a, b)
+instance GetInputValues Char where
+  getInputValues = defaultGetInputValues
+-- | Default instance
+instance GetInputValues Int where
+  getInputValues = defaultGetInputValues
+-- | Default instance
+instance GetInputValues Integer where
+  getInputValues = defaultGetInputValues
+-- | Default instance
+instance GetInputValues Float where
+  getInputValues = defaultGetInputValues
+-- | Default instance
+instance GetInputValues Double where
+  getInputValues = defaultGetInputValues
+-- | Default instance
+instance GetInputValues Natural where
+  getInputValues = defaultGetInputValues
+-- | Default instance
+instance (Typeable a) => GetInputValues (Maybe a) where
+  getInputValues = defaultGetInputValues
+-- | Default instance
+instance (Typeable a, Typeable b) => GetInputValues (Either a b) where
+  getInputValues = defaultGetInputValues
+-- | Generic instance.
+instance 
+  (GetInputValues a, GetInputValues b, Typeable a, Typeable b) => 
+  GetInputValues (a, b)
+-- | Generic instance.
+instance 
+  (
+    GetInputValues a, GetInputValues b, GetInputValues c, 
+    Typeable a, Typeable b, Typeable c
 
--- | By default, any type tries to take a single input as its entire value.
--- This may not actually be the case, of course.
-instance {-# OVERLAPPABLE #-} (Typeable a) => GetInputValues a where
-  getInputValues (xDyn : rest) = (x, rest) where
-    x = fromDyn xDyn $
-      throw $ BadArgType (typeRep (Proxy @a)) (dynTypeRep xDyn)
-  getInputValues [] = throw NotEnoughInputs
+  ) => 
+  GetInputValues (a, b, c)
 
 -- | No values in a constructor with no records
 instance GGetInputValues U1 where
@@ -176,8 +211,8 @@ runTransaction f inputArgs txID txKeys isReward = handleAll placeException $
 -- | A summary monad-running function.  You start with no escrows and the
 -- next escrow ID is the transaction ID.
 runFaeContract :: TransactionID -> Signers -> FaeContract Naught a -> a
-runFaeContract (ShortContractID dig) txKeys =
-  flip runReader txKeys .
+runFaeContract thisTXID@(ShortContractID dig) txSigners =
+  flip runReader TXData{..} .
   fmap fst . runWriterT .
   flip evalStateT Escrows{escrowMap = Map.empty, nextID = dig} .
   runCoroutine
@@ -194,9 +229,9 @@ transaction ::
   Transaction input a -> 
   Storage -> FaeContract Naught Storage
 transaction txID isReward args f storage = do
-  (input, storage', inputOutputs) <- runInputSpec args isReward storage
+  (input, storage', inputOutputs, _) <- runInputSpec args isReward storage
   (result, outputs) <- doTX f input
-  signers <- ask
+  signers <- view _txSigners
   return $ storage' 
     & _getStorage . at txID ?~ TransactionEntry{..}
     & _txLog %~ cons txID
@@ -218,7 +253,7 @@ runInputSpec ::
   forall input.
   (GetInputValues input, HasEscrowIDs input) =>
   Inputs -> Bool -> Storage -> 
-  FaeContract Naught (input, Storage, InputOutputs)
+  FaeContract Naught (input, Storage, InputOutputs, VersionMap)
 runInputSpec args isReward storage = do
   triple <- runInputContracts (Proxy @input) isReward storage args
   let (input, unused) = getInputValues $ triple ^. _1
@@ -233,9 +268,9 @@ runInputContracts ::
   Bool ->
   Storage ->
   Inputs ->
-  FaeContract Naught ([Dynamic], Storage, InputOutputs)
+  FaeContract Naught ([Dynamic], Storage, InputOutputs, VersionMap)
 runInputContracts p isReward storage args = do
-  runIdentityT $ flip execStateT ([], storage, Map.empty) $ 
+  runIdentityT $ flip execStateT ([], storage, Map.empty, Map.empty) $ 
     forM_ args $ modifyM . uncurry (runInputContract p isReward)
   where modifyM f = get >>= lift . IdentityT . f >>= put
 
@@ -248,20 +283,24 @@ runInputContract ::
   Bool ->
   ContractID ->
   String ->
-  ([Dynamic], Storage, InputOutputs) ->
-  FaeContract Naught ([Dynamic], Storage, InputOutputs)
-runInputContract _ isReward cID arg (results, storage, inputOutputs) = do
+  ([Dynamic], Storage, InputOutputs, VersionMap) ->
+  FaeContract Naught ([Dynamic], Storage, InputOutputs, VersionMap)
+runInputContract _ isReward cID arg (results, storage, inputOutputs, vers) = do
   input <- withReward $ results ++ repeat (throw NotEnoughInputs)
   let 
     (argInput :: input, _) = getInputValues input
     ConcreteContract fAbs = 
       storage ^. at cID . defaultLens (throw $ BadInput cID)
-  ((gAbsM, result), outputsL) <- listen $ fAbs arg
+  ((gAbsM, (result, vMap)), outputsL) <- listen $ fAbs (arg, vers)
+  let 
+    iOutputs = intMapList outputsL
+    inputVersions = fmap dynTypeRep vMap
   censor (const []) $ return $
     (
       results |> result,
       storage & at cID .~ gAbsM,
-      inputOutputs & at (shorten cID) ?~ intMapList outputsL
+      inputOutputs & at (shorten cID) ?~ InputOutputVersions{..},
+      vers `Map.union` vMap
     )
 
   where
@@ -270,4 +309,11 @@ runInputContract _ isReward cID arg (results, storage, inputOutputs) = do
           eID <- newEscrow [] rewardEscrow
           return $ toDyn eID : inputs
       | otherwise = return 
+
+defaultGetInputValues :: forall a. (Typeable a) => [Dynamic] -> (a, [Dynamic])
+defaultGetInputValues (xDyn : rest) = (x, rest) where
+  x = fromDyn xDyn $
+    throw $ BadArgType (typeRep (Proxy @a)) (dynTypeRep xDyn)
+defaultGetInputValues [] = throw NotEnoughInputs
+
 

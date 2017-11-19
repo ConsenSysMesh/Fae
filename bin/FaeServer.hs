@@ -28,6 +28,7 @@ import Control.DeepSeq
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.State.Class
 import Control.Monad.Trans.Class
 
 import Data.ByteString.Builder
@@ -56,7 +57,7 @@ import System.FilePath
 
 import Text.Read (readMaybe)
 
-type TXQueue = TQueue (TX, TMVar String, ThreadId)
+type TXQueue = TQueue (Bool, TX, TMVar String, ThreadId)
 
 main :: IO ()
 main = do
@@ -73,10 +74,13 @@ faeSettings = defaultSettings &
 runFae :: TXQueue -> ThreadId -> IO ()
 runFae txQueue mainTID = runFaeInterpret $ forever $ 
   handle (liftIO . throwTo @SomeException mainTID) $ do
-    (tx@TX{..}, resultVar, tID) <- liftIO $ atomically $ readTQueue txQueue
+    (fake, tx@TX{..}, resultVar, tID) <- 
+      liftIO $ atomically $ readTQueue txQueue
+    s0 <- lift get
     resultE <- try $ do
       interpretTX False tx
       lift $ showTransaction txID
+    when fake $ lift $ put s0
     liftIO $ either 
       (throwTo @SomeException tID)
       (atomically . putTMVar resultVar)
@@ -86,8 +90,12 @@ serverApp :: TXQueue -> Application
 serverApp txQueue request respond = do
   (params, files) <- parseRequestBody lbsBackEnd request
   let 
+    fake = not $ null [ () | ("fake", _) <- params]
     keyNames0 = 
-      [ break (== ':') (C8.unpack keyBS) | ("key", keyBS) <- params ]
+      [ (signerName, tail keyName) | -- Remove the colon
+        ("key", keyBS) <- params,
+        let (signerName, keyName) = break (== ':') (C8.unpack keyBS) 
+      ]
     keyNames = if null keyNames0 then [("self", "key1")] else keyNames0
     inputParams = 
       [ C8.unpack inputBS | ("input", inputBS) <- params ]
@@ -106,7 +114,7 @@ serverApp txQueue request respond = do
 
       tID <- myThreadId
       resultVar <- atomically newEmptyTMVar
-      atomically $ writeTQueue txQueue (tx, resultVar, tID)
+      atomically $ writeTQueue txQueue (fake, tx, resultVar, tID)
       result <- atomically $ takeTMVar resultVar
 
       respond $ buildResponse result

@@ -18,8 +18,12 @@ module Blockchain.Fae.FrontEnd
     -- interpretation.
     runTransaction,
     -- * Storage
-    Storage, Outputs, InputOutputs, FaeStorage, 
-    showTransaction, showTransactions
+    Storage, StorageT(..),
+    TransactionEntry, TransactionEntryT(..), 
+    Outputs, OutputsT(..), 
+    InputOutputs, InputOutputsT(..), 
+    InputOutputVersions, InputOutputVersionsT(..),
+    FaeStorage
   ) where
 
 import Blockchain.Fae.Internal.Block

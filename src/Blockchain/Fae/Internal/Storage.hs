@@ -15,6 +15,7 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.Versions
 
 import Control.Monad.IO.Class
 import Control.Monad.State
@@ -24,6 +25,7 @@ import Data.IntMap (IntMap)
 import Data.List
 import Data.Map (Map)
 import Data.Serialize
+import Data.Typeable
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -63,7 +65,15 @@ data TransactionEntryT c =
 -- | Inputs are identified by 'ShortContractID's so that 'ContractIDs' of
 -- the 'InputOutput' variant can be flat, rather than nested potentially
 -- indefinitely.
-type InputOutputsT c = Map ShortContractID (OutputsT c)
+type InputOutputsT c = Map ShortContractID (InputOutputVersionsT c)
+-- | We save the versions map, with the actual values scrubbed, so that it
+-- can be displayed to learn the actual version IDs.
+data InputOutputVersionsT c =
+  InputOutputVersions
+  {
+    iOutputs :: OutputsT c,
+    inputVersions :: Map VersionID TypeRep
+  }
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
 -- contracts, so it's not enough to just store them in a sequence.
@@ -91,10 +101,13 @@ data StorageException =
   BadInputID ShortContractID
   deriving (Typeable, Show)
 
+data TXResult = forall a. (Show a) => TXResult a
+
 -- * Template Haskell
 
 makeLenses ''StorageT
 makeLenses ''TransactionEntryT
+makeLenses ''InputOutputVersionsT
 
 {- Instances -}
 
@@ -127,6 +140,7 @@ instance At (StorageT c) where
     _inputOutputs .
     at sID .
     defaultLens (throw $ BadInputID sID) .
+    _iOutputs .
     at i
 
 -- * Functions
@@ -144,14 +158,15 @@ showTransaction txID = do
   return $ 
     intercalate "\n  " $
       ("Transaction " ++ show txID) :
-      prettySigners ss :
-      showOutputs os :
       ("result: " ++ show x) :
-      (flip map (Map.toList ios) $ \(cID, os) ->
+      showOutputs os :
+      prettySigners ss :
+      (flip map (Map.toList ios) $ \(cID, InputOutputVersions{..}) ->
         intercalate "\n    "
         [
           "input " ++ show cID,
-          showOutputs os
+          showOutputs iOutputs,
+          prettyVersions inputVersions
         ]
       )
   where 
@@ -160,6 +175,11 @@ showTransaction txID = do
       intercalate "\n    " .
       ("signers:" :) .
       map (\(name, key) -> name ++ ": " ++ show key) .
+      Map.toList 
+    prettyVersions =
+      intercalate "\n      " .
+      ("versions:" :) .
+      map (\(vID, tRep) -> show vID ++ ": " ++ show tRep) .
       Map.toList 
 
 -- | Shows all transactions.  Probably only useful for small testing Faes,

@@ -55,6 +55,7 @@ import Numeric.Natural
 twoPartySwap ::
   (
     HasEscrowIDs a, HasEscrowIDs b, 
+    Versionable a, Versionable b,
     Typeable a, Typeable b,
     MonadTX m
   ) =>
@@ -66,7 +67,7 @@ twoPartySwap x y = do
 
 -- | Both parts have two stages, so this contract has four iterations.
 twoPartySwapC :: 
-  (HasEscrowIDs a, HasEscrowIDs b) =>
+  (HasEscrowIDs a, HasEscrowIDs b, Versionable a, Versionable b) =>
   PublicKey -> PublicKey -> 
   a -> b ->
   Contract Bool (Maybe (Either a b))
@@ -119,7 +120,7 @@ twoPartySwapC partyA partyB x y choice = do
 sell :: 
   forall a m tok coin.
   (
-    HasEscrowIDs a, Typeable a, 
+    HasEscrowIDs a, Typeable a, Versionable a,
     Currency tok coin, MonadTX m
   ) =>
   a -> Valuation tok coin -> PublicKey -> m ()
@@ -146,8 +147,9 @@ redeem ::
   forall a b m m'.
   (
     HasEscrowIDs a, HasEscrowIDs b, 
-    Typeable a, Typeable b, ReadInput b,
-    MonadTX m
+    Versionable a, Versionable b, 
+    Typeable a, Typeable b, 
+    Read b, MonadTX m
   ) =>
   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
 redeem x valid seller = newContract [bearer x] redeemC where
@@ -174,7 +176,7 @@ redeem x valid seller = newContract [bearer x] redeemC where
 -- in which case it returns the value.
 signOver ::
   forall a m.
-  (HasEscrowIDs a, Typeable a, MonadTX m) =>
+  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
   a -> PublicKey -> m ()
 signOver x owner = newContract [bearer x] signOverC where
   signOverC :: Contract () a

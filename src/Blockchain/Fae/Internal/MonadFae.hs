@@ -18,6 +18,7 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Storage
+import Blockchain.Fae.Internal.Versions
 
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
@@ -125,10 +126,17 @@ useEscrow ::
   ) =>
   EscrowID argType valType -> argType -> m valType
 useEscrow EscrowID{..} x = liftTX $ Fae $ do
-  fAbs <- use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
+  (fAbs, ver) <- 
+    use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
   let ConcreteContract f = unmakeAbstractEscrow fAbs
   (gConcM, y) <- f x
-  _escrowMap . at entID .= fmap makeEscrowAbstract gConcM
+  txID <- view _thisTXID
+  -- We hash with the transaction ID so that each new version reflects how
+  -- it was created.  If the transaction is a known quantity, then this
+  -- ensures that the version accurately reflects its effects and not those
+  -- of some other, hidden, transaction.
+  let newVer = digest (ver, txID)
+  _escrowMap . at entID .= ((,newVer) . makeEscrowAbstract <$> gConcM)
   return y
 
 -- | Registers a contract as a new escrow, returning its ID.  The argument
@@ -147,7 +155,7 @@ newEscrow ::
 newEscrow eIDs f = liftTX $ Fae $ do
   entID <- use _nextID
   cAbs <- makeEscrow eIDs f -- modifies nextID
-  _escrowMap %= Map.insert entID cAbs
+  _escrowMap %= Map.insert entID (cAbs, entID) -- Initial version is entry ID
   return $ EscrowID entID
 
 -- | Registers a contract publicly, with the same interface as 'newEscrow'.
@@ -157,8 +165,9 @@ newEscrow eIDs f = liftTX $ Fae $ do
 newContract ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType, 
-    ReadInput argType, Typeable argType, Typeable valType, 
-    MonadTX m
+    Versionable argType, Versionable valType,
+    Typeable argType, Typeable valType, 
+    Read argType, MonadTX m
   ) =>
   [BearsValue] -> Contract argType valType -> m ()
 newContract eIDs f = liftTX $ Fae $ do
@@ -167,8 +176,9 @@ newContract eIDs f = liftTX $ Fae $ do
 
 -- | Looks up a named signatory, maybe. 
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
-lookupSigner = liftTX . Fae . view . at
+lookupSigner s = liftTX $ Fae $ view $ _txSigners . at s
 
 -- | Looks up a named signatory, or throws if not found.
 signer :: (MonadTX m) => String -> m PublicKey
 signer s = fromMaybe (throw $ MissingSigner s) <$> lookupSigner s
+

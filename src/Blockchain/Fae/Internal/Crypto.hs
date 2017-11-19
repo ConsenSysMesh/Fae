@@ -39,6 +39,8 @@ import qualified Data.Serialize.Get as Ser
 
 import GHC.Generics
 
+import Numeric.Natural
+
 import System.IO.Unsafe
 
 -- * Types
@@ -202,6 +204,12 @@ instance Digestible Char
 -- | Default instance
 instance Digestible Integer
 -- | Default instance
+instance Digestible Float
+-- | Default instance
+instance Digestible Double
+-- | Default instance
+instance Digestible Natural
+-- | Default instance
 instance (Serialize a, Serialize b) => Digestible (a, b)
 -- | Default instance
 instance (Serialize a) => Digestible [a]
@@ -209,6 +217,8 @@ instance (Serialize a) => Digestible [a]
 instance (Serialize a) => Digestible (Maybe a) 
 -- | Default instance
 instance (Serialize a, Serialize b) => Digestible (Either a b)
+-- | Default instance
+instance (Serialize a, Serialize b, Serialize c) => Digestible (a, b, c)
 
 -- | Uniform instance from 'Serialize'
 instance Read Digest where

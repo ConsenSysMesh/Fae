@@ -34,6 +34,7 @@ library
     Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Transaction
     Blockchain.Fae.Internal.TX
+    Blockchain.Fae.Internal.Versions
   build-depends:       
     base >= 4.7 && < 5,
     base16-bytestring,
@@ -93,6 +94,7 @@ executable faeServer
     fae,
     filepath,
     http-types,
+    mtl,
     stm,
     transformers,
     unix,
