@@ -74,25 +74,9 @@ data TXData =
 -- | The actual contract monad builds on 'FaeRW' by adding escrows and
 -- continuation support.
 type FaeContract s = Coroutine s (StateT Escrows FaeRW)
--- | This wrapper is necessary because 'Fae' and 'FaeTX' are monads that
--- contract authors can actually use, and so we need to carefully limit the
--- capabilities they are allowed.
-newtype FaeM s a = Fae { getFae :: FaeContract s a }
-  deriving (Functor, Applicative, Monad)
-
--- | The monad for multi-stage contracts taking an 'argType' and returning
--- a 'valType'.  These may not be transactions.
-type Fae argType valType = FaeM (FaeRequest argType valType)
--- | The monad for single-stage contracts, i.e. transactions.
-type FaeTX = FaeM Naught
-
 -- | A "contract transformer", for use with the 'MonadContract' and
 -- 'MonadTX' typeclasses.
 type ContractT m argType valType = argType -> m (WithEscrows valType)
--- | This is the type to use when defining a new contract.  Its argument is
--- the argument given in the first call to this contract; all subsequent
--- calls pass in their arguments via 'release'.
-type Contract argType valType = ContractT (Fae argType valType) argType valType
 
 -- | An internal representation of a contract, partway through full
 -- "compilation".  An 'InternalT' has its escrows hidden, because it will
@@ -146,37 +130,6 @@ makeLenses ''TXData
 instance Exception ContractException
 
 -- * Functions
-
--- | The high-level escrow constructor, which goes from what a contract
--- author provides to the internal representation of an escrow.
-makeEscrow ::
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType,
-    Functor s
-  ) =>
-  [BearsValue] ->
-  Contract argType valType ->
-  FaeContract s AbstractEscrow
-makeEscrow eIDs f = 
-  makeEscrowAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
-
--- | The high-level contract constructor, which goes from what a contract
--- author provides to the internal representation of a contract.
-makeContract ::
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType, 
-    Read argType, 
-    Versionable argType,
-    Versionable valType,
-    Typeable argType, Typeable valType,
-    Functor s
-  ) =>
-  [BearsValue] ->
-  Contract argType valType ->
-  FaeContract s AbstractContract
-makeContract eIDs f =
-  makeContractAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
 
 -- | Processes a 'Contract' so that it can take escrows on the first call,
 -- and hides the escrow storage.

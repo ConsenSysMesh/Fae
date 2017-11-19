@@ -32,6 +32,23 @@ import Data.Typeable
 
 import qualified Data.Map as Map
 
+-- * Types
+
+-- | This wrapper is necessary because 'Fae' and 'FaeTX' are monads that
+-- contract authors can actually use, and so we need to carefully limit the
+-- capabilities they are allowed.
+newtype FaeM s a = Fae { getFae :: FaeContract s a }
+  deriving (Functor, Applicative, Monad)
+-- | The monad for multi-stage contracts taking an 'argType' and returning
+-- a 'valType'.  These may not be transactions.
+type Fae argType valType = FaeM (FaeRequest argType valType)
+-- | The monad for single-stage contracts, i.e. transactions.
+type FaeTX = FaeM Naught
+-- | This is the type to use when defining a new contract.  Its argument is
+-- the argument given in the first call to this contract; all subsequent
+-- calls pass in their arguments via 'release'.
+type Contract argType valType = ContractT (Fae argType valType) argType valType
+
 -- * Type classes
 
 -- |
@@ -154,7 +171,8 @@ newEscrow ::
   [BearsValue] -> Contract argType valType -> m (EscrowID argType valType)
 newEscrow eIDs f = liftTX $ Fae $ do
   entID <- use _nextID
-  cAbs <- makeEscrow eIDs f -- modifies nextID
+  -- modifies nextID
+  cAbs <- makeEscrowAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
   _escrowMap %= Map.insert entID (cAbs, entID) -- Initial version is entry ID
   return $ EscrowID entID
 
@@ -171,7 +189,7 @@ newContract ::
   ) =>
   [BearsValue] -> Contract argType valType -> m ()
 newContract eIDs f = liftTX $ Fae $ do
-  cAbs <- makeContract eIDs f
+  cAbs <- makeContractAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
   tell [cAbs]
 
 -- | Looks up a named signatory, maybe. 

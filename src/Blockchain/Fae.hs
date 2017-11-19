@@ -30,8 +30,7 @@ module Blockchain.Fae
     Transaction, TransactionID, PublicKey, 
     -- * Contracts and escrows
     module Blockchain.Fae.Internal.MonadFae,
-    Fae, FaeTX, Contract, ContractT, ContractID(..), EscrowID, BearsValue,
-    bearer,
+    ContractID(..), EscrowID, BearsValue, bearer,
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
     -- the escrow-backed values they expect, contract outputs are
