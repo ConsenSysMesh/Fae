@@ -30,6 +30,7 @@ import Control.Monad.Trans.Identity
 
 import Data.Dynamic
 import Data.Foldable
+import Data.Functor.Identity
 import Data.Maybe
 import Data.Typeable
 import Data.Void
@@ -69,6 +70,12 @@ type Inputs = [(ContractID, String)]
 -- contain escrows (or rather, the escrow IDs it contains will not be
 -- transferred anywhere).
 type Transaction a b = a -> FaeTX b
+
+-- | This monad is a little different from 'FaeTX' in that it is built on
+-- 'FaeStorage', meaning it has direct access to the storage and also to
+-- 'IO'.  Needless to say, we don't want any of that near user-defined
+-- contracts.
+type TXStorageM = FaeContractT Naught FaeStorage
 
 -- | Exception type
 data TransactionException =
@@ -189,119 +196,42 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 -- the context.  This is written as a 'modify' call, so that the actual
 -- transaction running can be pure functions.
 runTransaction :: 
+  forall a inputs.
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
   Transaction inputs a -> Inputs -> 
   TransactionID -> Signers -> Bool -> 
   FaeStorage ()
-runTransaction f inputArgs txID txKeys isReward = handleAll placeException $
-  modify $ 
-    runFaeContract txID txKeys .
-    transaction txID isReward inputArgs f
-  where
-    placeException e = 
-      _getStorage . at txID ?=
-        TransactionEntry
-        {
-          inputOutputs = throw e,
-          outputs = throw e,
-          signers = txKeys,
-          result = throw e :: Void
-        }
-
--- | A summary monad-running function.  You start with no escrows and the
--- next escrow ID is the transaction ID.
-runFaeContract :: TransactionID -> Signers -> FaeContract Naught a -> a
-runFaeContract thisTXID@(ShortContractID dig) txSigners =
-  flip runReader TXData{..} .
-  fmap fst . runWriterT .
-  flip evalStateT Escrows{escrowMap = Map.empty, nextID = dig} .
-  runCoroutine
-
--- | Running the actual 'Transaction' as a function.  We don't convert to
--- 'InternalT' or 'ConcreteContract' because transactions are rather
--- unique: the handling of the arguments and the escrows is quite
--- different.
-transaction :: 
-  (GetInputValues input, HasEscrowIDs input, Typeable a, Show a) =>
-  TransactionID ->
-  Bool -> 
-  Inputs -> 
-  Transaction input a -> 
-  Storage -> FaeContract Naught Storage
-transaction txID isReward args f storage = do
-  (input, storage', inputOutputs, _) <- runInputSpec args isReward storage
-  (result, outputs) <- doTX f input
-  signers <- view _txSigners
-  return $ storage' 
-    & _getStorage . at txID ?~ TransactionEntry{..}
-    & _txLog %~ cons txID
-
--- | Runs the transaction and checks that it didn't leave any escrows open.
--- That would allow value to be destroyed, possibly by accident, which is
--- bad.
-doTX :: Transaction input a -> input -> FaeContract Naught (a, Outputs)
-doTX f input = do
-  (result, outputsL) <- listen $ getFae $ f input
-  let outputs = intMapList outputsL
-  escrows <- use _escrowMap
-  unless (Map.null escrows) $ throw OpenEscrows
-  return (result, outputs)
+runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $ do
+  liftFaeContract $ _getStorage . at txID ?= 
+    TransactionEntry
+    {
+      inputOutputs = Map.empty,
+      outputs = IntMap.empty,
+      signers,
+      result = undefined :: a
+    }
+  input <- runInputSpec inputArgs isReward 
+  (result, outputs) <- handleAll (\e -> return (throw e, throw e)) $ do
+    (result, outputsL) <- hoistFaeContract $ listen $ getFae $ f input
+    escrows <- use _escrowMap
+    unless (Map.null escrows) $ throw OpenEscrows
+    return (result, intMapList outputsL)
+  liftFaeContract $ do
+    _getStorage . at txID %= 
+      fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
+    _txLog %= cons txID
 
 -- | Takes the list of contract IDs with input strings and forms the input
 -- object out of their results.
 runInputSpec :: 
-  forall input.
   (GetInputValues input, HasEscrowIDs input) =>
-  Inputs -> Bool -> Storage -> 
-  FaeContract Naught (input, Storage, InputOutputs, VersionMap)
-runInputSpec args isReward storage = do
-  triple <- runInputContracts (Proxy @input) isReward storage args
-  let (input, unused) = getInputValues $ triple ^. _1
+  Inputs -> Bool -> 
+  TXStorageM input
+runInputSpec args isReward = do
+  inputsL <- runInputContracts args
+  (input, unused) <- hoistFaeContract $ getInputValues <$> withReward inputsL 
   unless (null unused) $ throw TooManyInputs
-  return (triple & _1 .~ input)
- 
--- | Runs all the input contracts in a state monad recording the
--- progressively increasing set of outputs.
-runInputContracts ::
-  (GetInputValues input, HasEscrowIDs input) =>
-  Proxy input ->
-  Bool ->
-  Storage ->
-  Inputs ->
-  FaeContract Naught ([Dynamic], Storage, InputOutputs, VersionMap)
-runInputContracts p isReward storage args = do
-  runIdentityT $ flip execStateT ([], storage, Map.empty, Map.empty) $ 
-    forM_ args $ modifyM . uncurry (runInputContract p isReward)
-  where modifyM f = get >>= lift . IdentityT . f >>= put
-
--- | Runs a single input contract.  It is here that the rewards are
--- created, if any.
-runInputContract ::
-  forall input.
-  (GetInputValues input, HasEscrowIDs input) =>
-  Proxy input ->
-  Bool ->
-  ContractID ->
-  String ->
-  ([Dynamic], Storage, InputOutputs, VersionMap) ->
-  FaeContract Naught ([Dynamic], Storage, InputOutputs, VersionMap)
-runInputContract _ isReward cID arg (results, storage, inputOutputs, vers) = do
-  input <- withReward $ results ++ repeat (throw NotEnoughInputs)
-  let 
-    (argInput :: input, _) = getInputValues input
-    ConcreteContract fAbs = 
-      storage ^. at cID . defaultLens (throw $ BadInput cID)
-  ((gAbsM, (result, vMap)), outputsL) <- listen $ fAbs (arg, vers)
-  let 
-    iOutputs = intMapList outputsL
-    inputVersions = fmap dynTypeRep vMap
-  censor (const []) $ return $
-    (
-      results |> result,
-      storage & at cID .~ gAbsM,
-      inputOutputs & at (shorten cID) ?~ InputOutputVersions{..},
-      vers `Map.union` vMap
-    )
+  return input
 
   where
     withReward 
@@ -309,6 +239,36 @@ runInputContract _ isReward cID arg (results, storage, inputOutputs, vers) = do
           eID <- newEscrow [] rewardEscrow
           return $ toDyn eID : inputs
       | otherwise = return 
+ 
+-- | Runs all the input contracts in a state monad recording the
+-- progressively increasing set of outputs.
+runInputContracts :: Inputs -> TXStorageM [Dynamic]
+runInputContracts args = 
+  fmap fst $ flip execStateT ([], Map.empty) $ forM_ args $ 
+    modifyM . uncurry runInputContract
+  where modifyM f = get >>= lift . f >>= put
+
+-- | Runs a single input contract.  It is here that the rewards are
+-- created, if any.
+runInputContract ::
+  ContractID -> String ->
+  ([Dynamic], VersionMap) -> TXStorageM ([Dynamic], VersionMap)
+runInputContract cID arg (results, vers) = do
+  ConcreteContract fAbs <- liftFaeContract $ use $
+    at cID . defaultLens (throw $ BadInput cID)
+  let inputError e = return (throw e, throw e, vers)
+  (ioVersions, result, vers') <- handleAll inputError $ do
+    ((gAbsM, (result, vMap)), outputsL) <- 
+      hoistFaeContract $ listen $ fAbs (arg, vers)
+    let 
+      iOutputs = intMapList outputsL
+      inputVersions = fmap dynTypeRep vMap
+    liftFaeContract $ at cID .= gAbsM
+    return (InputOutputVersions{..}, result, vers `Map.union` vMap)
+  txID <- view _thisTXID
+  liftFaeContract $ _getStorage . at txID %= 
+    fmap (_inputOutputs . at (shorten cID) ?~ ioVersions)
+  censor (const []) $ return (results |> result, vers')
 
 defaultGetInputValues :: forall a. (Typeable a) => [Dynamic] -> (a, [Dynamic])
 defaultGetInputValues (xDyn : rest) = (x, rest) where

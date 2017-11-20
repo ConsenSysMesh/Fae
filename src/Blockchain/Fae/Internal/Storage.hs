@@ -150,27 +150,32 @@ intMapList :: [a] -> IntMap a
 intMapList = IntMap.fromList . zip [0 ..]
 
 -- | Convenience function for neatly showing a 'TransactionEntry' by ID,
--- rather than actually going into the storage to get and format it.
+-- rather than actually going into the storage to get and format it.  It
+-- catches all exceptions thrown by contracts or transactions and prints
+-- an error message instead; thus, whatever actually did complete is part
+-- of the output.
 showTransaction :: TransactionID -> FaeStorageT c String
 showTransaction txID = do
   TransactionEntry ios os ss x <- use $
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
+  resultSafe <- liftIO $ displayException show x
+  outputsSafe <- liftIO $ displayException (show . IntMap.keys) os
+  inputsSafe <- liftIO $ mapM (displayException showIOVersions) ios
   return $ 
     intercalate "\n  " $
       ("Transaction " ++ show txID) :
-      ("result: " ++ show x) :
-      showOutputs os :
+      ("result: " ++ resultSafe) :
+      ("outputs: " ++ outputsSafe) :
       prettySigners ss :
-      (flip map (Map.toList ios) $ \(cID, InputOutputVersions{..}) ->
-        intercalate "\n    "
-        [
-          "input " ++ show cID,
-          showOutputs iOutputs,
-          prettyVersions inputVersions
-        ]
-      )
+      (Map.elems $ flip Map.mapWithKey inputsSafe $ 
+        \cID str -> "input " ++ show cID ++ "\n    " ++ str)
   where 
+    displayException f x = 
+      catchAll (f <$> evaluate x) $ \e -> return $ "<exception> " ++ show e
     showOutputs os = "outputs: " ++ show (IntMap.keys os)
+    showIOVersions InputOutputVersions{..} =
+      showOutputs iOutputs ++ "\n    " ++
+      prettyVersions inputVersions
     prettySigners =
       intercalate "\n    " .
       ("signers:" :) .

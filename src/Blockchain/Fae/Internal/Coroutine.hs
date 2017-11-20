@@ -16,6 +16,8 @@ module Blockchain.Fae.Internal.Coroutine
     module Control.Monad.Coroutine.SuspensionFunctors
   ) where
 
+import Control.Monad.Catch
+
 import Control.Monad.Coroutine
 import Control.Monad.Coroutine.SuspensionFunctors
 
@@ -53,3 +55,15 @@ instance (Functor f, MonadWriter w m) => MonadWriter w (Coroutine f m) where
     case e of
       Left scr -> return $ Left (fmap pass scr)
       Right p -> fmap Right $ pass $ return p
+
+-- | A 'Coroutine' can 'throw' just as a plain value without continuation.
+instance (Functor f, MonadThrow m) => MonadThrow (Coroutine f m) where
+  throwM = Coroutine . fmap Right . throwM 
+
+-- | A 'Coroutine' can 'catch' by catching the regular value and passing
+-- along the attempt to the continuation.
+instance (Functor f, MonadCatch m) => MonadCatch (Coroutine f m) where
+  catch (Coroutine mE) ef = Coroutine $ do
+    xE <- catch mE $ resume . ef
+    return $ bimap (fmap $ flip catch ef) id xE
+

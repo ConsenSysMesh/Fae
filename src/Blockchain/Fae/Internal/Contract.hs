@@ -25,6 +25,7 @@ import Control.Monad.Writer
 
 import Data.Dynamic
 import Data.Functor.Const
+import Data.Functor.Identity
 import Data.Map (Map)
 import Data.Maybe
 import Data.Typeable
@@ -62,7 +63,9 @@ type FaeRequest argType valType =
 
 -- | This monad contains everything that relates a contract to its
 -- surrounding transaction.
-type FaeRW = WriterT [AbstractContract] (Reader TXData) 
+type FaeRWT m = WriterT [AbstractContract] (ReaderT TXData m)
+-- | The commonly used variant
+type FaeRW = FaeRWT Identity
 -- | The relevant transaction info
 data TXData =
   TXData
@@ -73,7 +76,9 @@ data TXData =
 
 -- | The actual contract monad builds on 'FaeRW' by adding escrows and
 -- continuation support.
-type FaeContract s = Coroutine s (StateT Escrows FaeRW)
+type FaeContractT s m = Coroutine s (StateT Escrows (FaeRWT m))
+-- | The commonly used variant
+type FaeContract s = FaeContractT s Identity
 -- | A "contract transformer", for use with the 'MonadContract' and
 -- 'MonadTX' typeclasses.
 type ContractT m argType valType = argType -> m (WithEscrows valType)
@@ -267,4 +272,26 @@ internalSpend x = do
   -- nonterminating computations in them, which we want to be suffered by
   -- the originating contract and not by its victims.
   return $ WithEscrows escrowMap x
+
+-- | A summary monad-running function.  You start with no escrows and the
+-- next escrow ID is the transaction ID.
+runFaeContract :: 
+  (Monad m) => 
+  TransactionID -> Signers -> FaeContractT Naught m a -> m a
+runFaeContract thisTXID@(ShortContractID dig) txSigners =
+  flip runReaderT TXData{..} .
+  fmap fst . runWriterT .
+  flip evalStateT Escrows{escrowMap = Map.empty, nextID = dig} .
+  runCoroutine
+
+-- | Boosts the base monad from 'Identity'.
+hoistFaeContract :: (Monad m, Functor s) => FaeContract s a -> FaeContractT s m a
+hoistFaeContract = mapMonad hoistFaeRWST where
+  hoistFaeRWST (StateT f) = StateT $ hoistFaeRWT . f
+  hoistFaeRWT (WriterT p) = WriterT $ hoistFaeReaderT p
+  hoistFaeReaderT (ReaderT f) = reader $ runIdentity . f
+
+-- | Goes all the way up the rather long monad stack.
+liftFaeContract :: (Monad m, Functor s) => m a -> FaeContractT s m a
+liftFaeContract = lift . lift . lift . lift
 
