@@ -50,7 +50,7 @@ data Versioned a =
 
 data VersionErrors =
   BadVersionID VersionID |
-  BadVersionedType TypeRep |
+  BadVersionedType TypeRep TypeRep |
   UnresolvedVersionID VersionID |
   UnexpectedResolvedVersion
   deriving (Show, Typeable)
@@ -113,13 +113,14 @@ instance (Versionable a) => Versionable (Versioned a) where
   versions f (Versioned x) = (ver, Map.empty) where
     (ver, _) = versions f x 
 
+  versionMap f (Versioned x) = versionMap f x
+
   mapVersions _ Versioned{} = throw $ UnexpectedResolvedVersion
   mapVersions vMap (VersionedID ver) =
     Versioned $ 
-    fromMaybe (throw $ BadVersionedType (typeRep $ Proxy @a)) $ 
-    fromDynamic $ 
-    fromMaybe (throw $ BadVersionID ver) $ 
-    Map.lookup ver vMap
+    fromMaybe (throw $ BadVersionedType (dynTypeRep xDyn) (typeRep $ Proxy @a)) $ 
+    fromDynamic xDyn
+    where xDyn = fromMaybe (throw $ BadVersionID ver) $ Map.lookup ver vMap
 
 instance (HasEscrowIDs a) => HasEscrowIDs (Versioned a) where
   traverseEscrowIDs f (Versioned x) = Versioned <$> traverseEscrowIDs f x
@@ -174,6 +175,10 @@ instance Versionable Double where
   mapVersions = defaultMapVersions
 -- | Generic instance
 instance Versionable Natural where
+  versions = defaultVersions
+  mapVersions = defaultMapVersions
+-- | Generic instance
+instance Versionable PublicKey where
   versions = defaultVersions
   mapVersions = defaultMapVersions
 -- | Generic instance overlapping that for 'Foldable', since we actually do

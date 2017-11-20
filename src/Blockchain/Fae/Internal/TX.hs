@@ -94,7 +94,8 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
       [
         DeriveDataTypeable,
         DeriveGeneric,
-        OverloadedStrings
+        OverloadedStrings,
+        TypeApplications
       ]
     thisTXPath = 
       [

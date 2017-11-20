@@ -199,6 +199,9 @@ instance HasEscrowIDs Double where
 -- | Default instance
 instance HasEscrowIDs Natural where
   traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | Default instance
+instance HasEscrowIDs PublicKey where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
 -- | This is just natural, though it can probably be covered in most
 -- practical cases by the 'Generic' instance, if probably slower.
 instance {-# OVERLAPPABLE #-} 

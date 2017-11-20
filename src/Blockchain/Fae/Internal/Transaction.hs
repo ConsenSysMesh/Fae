@@ -142,6 +142,13 @@ instance GetInputValues Double where
 instance GetInputValues Natural where
   getInputValues = defaultGetInputValues
 -- | Default instance
+instance GetInputValues PublicKey where
+  getInputValues = defaultGetInputValues
+-- | Lists are read as a single value, because it makes no sense to expect
+-- an indefinitely long input when they have to be given as literals.
+instance (Typeable a) => GetInputValues [a] where
+  getInputValues = defaultGetInputValues
+-- | Default instance
 instance (Typeable a) => GetInputValues (Maybe a) where
   getInputValues = defaultGetInputValues
 -- | Default instance
@@ -151,6 +158,12 @@ instance (Typeable a, Typeable b) => GetInputValues (Either a b) where
 instance 
   (GetInputValues a, GetInputValues b, Typeable a, Typeable b) => 
   GetInputValues (a, b)
+-- | Default instance
+instance 
+  (Typeable argType, Typeable valType) => 
+  GetInputValues (EscrowID argType valType) where
+
+  getInputValues = defaultGetInputValues
 -- | Generic instance.
 instance 
   (
