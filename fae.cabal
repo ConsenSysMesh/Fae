@@ -1,5 +1,5 @@
 name:                fae
-version:             0.9.0.0
+version:             0.9.1.0
 -- synopsis:
 -- description:
 homepage:            https://github.com/Consensys/Fae
@@ -58,7 +58,6 @@ library
     BangPatterns
     DefaultSignatures
     DeriveGeneric
-    EmptyDataDecls,
     ExistentialQuantification
     FlexibleContexts
     FlexibleInstances

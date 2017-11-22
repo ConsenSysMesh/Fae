@@ -7,6 +7,32 @@ Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
 Everything in Fae is a contract, and this module defines contracts and their construction.
+
+It may be a little confusing how a user-provided 'Contract' becomes the 'AbstractContract' stored by Fae.  This happens in three steps:
+
+  - A 'Contract' is partially "compiled" to an 'InternalContract', which
+  handles escrows in the first call and also makes the entire escrow
+  storage private.
+
+  - An 'InternalContract' is further "compiled" to a 'ConcreteContract',
+  which handles the suspend/resume mechanism and makes a contract basically
+  isomorphic to a function from argument to value types.
+
+  - A 'ConcreteContract' is, finally, made into an 'AbstractContract',
+  which handles conversion of its input and output types from and to
+  untyped 'String' and 'Dynamic', respectively.  It also resolves version IDs to 
+  their corresponding correctly-typed values.
+
+Each of these stages takes place in some @FaeContract s@ monad, but it is important to understand that in fact, there are /three/ different monad contexts occurring in the life cycle of a contract:
+
+  - The one inside the contract, in which the user-defined code is executed;
+
+  - The one in which the contract is created;
+
+  - The one in which the contract is called.
+
+Information is passed among all of these in a manner controlled by the three steps shown above.  Escrows from the creating context are passed in via 'bearer' to the internal context; escrows from the return value (and for escrows themselves, also the argument) are passed via 'WithEscrows'; and the 'FaeRWT' stratum is shared between the internal context and the calling context.  The effect of the 'InternalContract' stage is to prevent escrows from being shared between the internal and calling contexts except as mediated by 'WithEscrows'.
+  
 -}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Contract where

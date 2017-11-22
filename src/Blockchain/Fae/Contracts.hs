@@ -48,7 +48,7 @@ import Numeric.Natural
 -- parties.  Each one has the chance to verify the other's offering before
 -- approving the swap; if either disagrees, both can get their offering
 -- back; if both agree, each one gets the other's.
---
+
 -- | This contract accepts both offerings on creation; the intention is
 -- that it is created in a single transaction signed jointly by both
 -- parties, who withdraw their values from their respective "accounts".
@@ -70,7 +70,7 @@ twoPartySwapC ::
   (HasEscrowIDs a, HasEscrowIDs b, Versionable a, Versionable b) =>
   PublicKey -> PublicKey -> 
   a -> b ->
-  Contract Bool (Maybe (Either a b))
+  Contract Bool (Maybe (Either (Versioned a) (Versioned b)))
 twoPartySwapC partyA partyB x y choice = do
   values <- part1 choice
   part2 values
@@ -90,10 +90,12 @@ twoPartySwapC partyA partyB x y choice = do
       --   stage 2
       sender2 <- getPartySigner
       --     Back to stage 1, so that 'sender1' can change their vote.
+      let 
+        xRet = Left $ Versioned x
+        yRet = Right $ Versioned y
       if sender1 == sender2
       then part1 choice2
-      else return $ 
-        if choice1 && choice2 then (Right y, Left x) else (Left x, Right y)
+      else return $ if choice1 && choice2 then (yRet, xRet) else (xRet, yRet)
     -- Accept requests to pay out and deliver appropriately.
     part2 values = do
       _ <- release Nothing -- Vote is ignored now
@@ -126,19 +128,22 @@ sell ::
   a -> Valuation tok coin -> PublicKey -> m ()
 sell x price seller = newContract [bearer x] sellC where
   sellC :: Contract 
-            (EscrowID tok coin) 
-            (Either (EscrowID tok coin) (a, EscrowID tok coin))
-  sellC payment = do
+            (Versioned (EscrowID tok coin))
+            (Either 
+              (Versioned (EscrowID tok coin)) 
+              (Versioned a, Versioned (EscrowID tok coin))
+            )
+  sellC (Versioned payment) = do
     claimedSeller <- signer "seller"
     unless (claimedSeller == seller) $ 
       throw $ UnauthorizedSeller claimedSeller
     changeM <- change payment price
     let (cost, remit) = fromMaybe (throw NotEnough) changeM
-    _ <- release $ Right (x, remit)
+    _ <- release $ Right (Versioned x, Versioned remit)
     sender <- signer "self"
     unless (sender == seller) $
       throw $ NotOwner sender
-    spend $ Left cost
+    spend $ Left $ Versioned cost
 
 -- | This is very similar to 'sell' except that instead of accepting
 -- a currency and making change, it accepts an opaque token and

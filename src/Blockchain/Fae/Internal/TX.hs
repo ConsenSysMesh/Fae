@@ -6,7 +6,27 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module provides the function that interprets transactions given as source code.
+This module provides the function that interprets transactions given as
+source code.  The interpreter enables the following extensions globally;
+this is the set of extensions I consider to be both generally harmless and
+indispensable:
+
+  - BangPatterns
+  - DeriveDataTypeable
+  - DeriveGeneric
+  - FlexibleContexts
+  - FlexibleInstances
+  - FunctionalDependencies
+  - GeneralizedNewtypeDeriving
+  - MultiParamTypeClasses
+  - MultiWayIf
+  - NamedFieldPuns
+  - OverloadedStrings
+  - PatternGuards
+  - RecordWildCards
+  - StandaloneDeriving
+  - TupleSections
+  - TypeApplications
 -}
 module Blockchain.Fae.Internal.TX where
 
@@ -92,9 +112,21 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
       ]
     languageExts =
       [
+        BangPatterns,
         DeriveDataTypeable,
         DeriveGeneric,
+        FlexibleContexts,
+        FlexibleInstances,
+        FunctionalDependencies,
+        GeneralizedNewtypeDeriving,
+        MultiParamTypeClasses,
+        MultiWayIf,
+        NamedFieldPuns,
         OverloadedStrings,
+        PatternGuards,
+        RecordWildCards,
+        StandaloneDeriving,
+        TupleSections,
         TypeApplications
       ]
     thisTXPath = 

@@ -93,7 +93,7 @@ data TransactionException =
 -- type from successive values in the list, failing if they don't all match
 -- or there are extras on one side.  For the moment, the member function is
 -- not exported, so you can't write your own implementations; however, you
--- do need to @instance GetInputValues <your type>@ for any 'a' you choose
+-- do need to @instance GetInputValues a@ for any 'a' you choose
 -- to use.
 class GetInputValues a where
   getInputValues :: [Dynamic] -> (a, [Dynamic])
@@ -206,8 +206,7 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 -- * Functions
 
 -- | Runs a transaction on its inputs, with some basic information about
--- the context.  This is written as a 'modify' call, so that the actual
--- transaction running can be pure functions.
+-- the context.
 runTransaction :: 
   forall a inputs.
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
@@ -236,7 +235,8 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
       fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
 
 -- | Takes the list of contract IDs with input strings and forms the input
--- object out of their results.
+-- object out of their results.  It is here that the rewards are created,
+-- if any.
 runInputSpec :: 
   (GetInputValues input, HasEscrowIDs input) =>
   Inputs -> Bool -> 
@@ -262,8 +262,7 @@ runInputContracts args =
     modifyM . uncurry runInputContract
   where modifyM f = get >>= lift . f >>= put
 
--- | Runs a single input contract.  It is here that the rewards are
--- created, if any.
+-- | Runs a single input contract.
 runInputContract ::
   ContractID -> String ->
   ([Dynamic], VersionMap) -> TXStorageM ([Dynamic], VersionMap)
@@ -289,6 +288,7 @@ runInputContract cID arg (results, vers) = do
     fmap (_inputOutputs . at (shorten cID) ?~ ioVersions)
   censor (const []) $ return (results |> result, vers')
 
+-- | Gets a single value from a single input
 defaultGetInputValues :: forall a. (Typeable a) => [Dynamic] -> (a, [Dynamic])
 defaultGetInputValues (xDyn : rest) = (x, rest) where
   x = fromDyn xDyn $

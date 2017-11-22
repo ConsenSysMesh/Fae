@@ -77,9 +77,10 @@ data InputOutputVersionsT c =
   }
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
--- contracts, so it's not enough to just store them in a sequence.
+-- contracts, so it's not enough to just store them in a sequence.  The
+-- second field is the "nonce" of a contract, the number of times it has
+-- been called, used for security.
 type OutputsT c = IntMap (c, Int)
--- | Contracts are stored with a count of their calls.
 -- | Transactions can have many named signatories.
 type Signers = Map String PublicKey
 -- | The storage monad is just a state monad.  It has to be over 'IO' both
@@ -104,8 +105,6 @@ data StorageException =
   BadNonce ContractID Int Int |
   InvalidNonceAt ContractID
   deriving (Typeable, Show)
-
-data TXResult = forall a. (Show a) => TXResult a
 
 -- * Template Haskell
 

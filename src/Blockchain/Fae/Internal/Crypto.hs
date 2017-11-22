@@ -107,7 +107,7 @@ class (PassFail (PassFailM a)) => PartialSerialize a where
   -- I choose to use this flexibility to throw anyway.
   partialDecode :: BS.ByteString -> PassFailM a a
 
--- * Instances
+{- Instances -}
 
 -- | Decoding a hash returns a 'Maybe' value.  This is of course the
 -- motivating type for the 'PassFail' class.
@@ -274,7 +274,7 @@ readsPrecSer _ s =
 
 -- | This function replaces 'Ed.sign' to use our semantically-nice types.
 --
--- prop> unsign . sign = public
+-- prop> forall x. (Digestible x) => unsign . sign x = public
 sign :: (Digestible a) => a -> PrivateKey -> Signed a
 sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) = 
   Signed
@@ -287,7 +287,7 @@ sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) =
 -- | The public-key signature recovery function.  Doubles as a way to
 -- verify a signature.  Satisfies the law
 --
--- prop> unsign . sign = public
+-- prop> forall x. (Digestible x) => unsign . sign x = public
 unsign :: (Digestible a) => Signed a -> Maybe PublicKey
 unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig), body = msg}
   | Ed.verify edPublicKey dig sig = Just pubKey

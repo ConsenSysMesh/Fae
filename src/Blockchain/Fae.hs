@@ -36,7 +36,7 @@ module Blockchain.Fae
     -- the escrow-backed values they expect, contract outputs are
     -- "versioned" and any change to any escrow ID alters the version.
     -- Contract literal arguments can refer to these values by version.
-    Versioned(Versioned), getVersioned,
+    Versioned(Versioned, getVersioned),
     -- * Rewards
     RewardEscrowID, claimReward,
     -- * Opaque classes

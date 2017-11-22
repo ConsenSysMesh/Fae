@@ -38,6 +38,8 @@ import GHC.TypeLits
 
 import Numeric.Natural
 
+-- * Types
+
 -- | For convenience
 type VersionID = Digest
 -- | The inverse to the map of subobjects to their versions.
@@ -48,6 +50,7 @@ data Versioned a =
   Versioned { getVersioned :: a } |
   VersionedID VersionID 
 
+-- | Errors that can arise when dealing with versions.
 data VersionErrors =
   BadVersionID VersionID |
   BadVersionedType TypeRep TypeRep |
@@ -55,8 +58,10 @@ data VersionErrors =
   UnexpectedResolvedVersion
   deriving (Show, Typeable)
 
--- | Types that can be versioned inside a monad, which is always going to
--- be @FaeContract s@
+-- * Type classes
+
+-- | Types that can be versioned, meaning a unique identifier is calculated
+-- for it and all subobjects (stopping at 'Versioned' fields).
 class (Typeable a) => Versionable a where
   -- | Returns the map of all versions, including self.
   versionMap :: (EntryID -> VersionID) -> a -> VersionMap
@@ -99,6 +104,9 @@ class GRecords f where
   -- | Like 'mapVersions'
   gRMapVersions :: VersionMap -> f p -> (f p)
 
+{- Instances -}
+
+-- | Of course
 instance Exception VersionErrors
 
 -- | Read 'Versioned' values as their version, which is a 'Digest'.
@@ -122,10 +130,13 @@ instance (Versionable a) => Versionable (Versioned a) where
     fromDynamic xDyn
     where xDyn = fromMaybe (throw $ BadVersionID ver) $ Map.lookup ver vMap
 
+-- | Pass through the 'Versioned' constructor
 instance (HasEscrowIDs a) => HasEscrowIDs (Versioned a) where
   traverseEscrowIDs f (Versioned x) = Versioned <$> traverseEscrowIDs f x
   traverseEscrowIDs _ (VersionedID ver) = throw $ UnresolvedVersionID ver
 
+-- | This key base case actually uses the function argument to 'versions'
+-- by applying it to the escrow ID.
 instance 
   (Typeable argType, Typeable valType) => 
   Versionable (EscrowID argType valType) where
@@ -246,10 +257,12 @@ instance
 
   gMapVersions vMap (M1 x) = M1 $ gRMapVersions vMap x
 
+-- | Empty type has no records
 instance GRecords V1 where
   gRecords _ _ = return Map.empty
   gRMapVersions _ _ = undefined
 
+-- | Type with no fields has no records
 instance GRecords U1 where
   gRecords _ U1 = return Map.empty
   gRMapVersions _ U1 = U1
@@ -281,6 +294,7 @@ instance (Versionable c) => GRecords (K1 i c) where
 
   gRMapVersions vMap (K1 x) = K1 $ mapVersions vMap x
 
+-- * Functions
 -- | For default instances of 'Versionable'
 defaultVersions :: 
   (Digestible a) => 

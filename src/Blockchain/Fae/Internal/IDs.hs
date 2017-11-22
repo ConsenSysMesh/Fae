@@ -80,10 +80,11 @@ type EntryID = Digest
 -- immutable.  Each escrow ID is valid only within a contract or other
 -- escrow that actually holds the escrow, and the type parameters must
 -- correspond to the escrow's actual argument and value types.  Escrow IDs
--- may be constructed by the 'newEscrow' function or from string literals.
--- However, they should appear type-correct in contract signatures to
--- formally verify that the contract receives and returns a particular kind
--- of opaque value, e.g. a currency.
+-- may only be constructed by the 'newEscrow' function; in contract calls,
+-- they can also be referenced by version (see "Versions").  However, they
+-- should appear type-correct in contract signatures to formally verify
+-- that the contract receives and returns a particular kind of opaque
+-- value, e.g. a currency.
 newtype EscrowID argType valType = EscrowID { entID :: EntryID }
   deriving (Generic)
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
@@ -162,10 +163,6 @@ instance Read ShortContractID where
 -- strings.  This should be inverse to the 'Read' instance.
 instance Show ShortContractID where
   show (ShortContractID dig) = show dig
-
--- | So we can have escrow IDs as contract arguments.
-instance Read (EscrowID argType valType) where
-  readsPrec n = map (_1 %~ EscrowID) . readsPrec n 
 
 -- | Escrow IDs, of course, contain themselves.  A tricky special case is
 -- that the transactional variants contain escrows in their argument or
@@ -269,6 +266,7 @@ hasNonce :: ContractID -> Bool
 hasNonce (_ :# n) = True
 hasNonce _ = False
 
+-- | Normalizes a contract ID for storing with transaction inputs 
 withoutNonce :: ContractID -> ContractID
 withoutNonce (cID :# n) = cID
 withoutNonce cID = cID
