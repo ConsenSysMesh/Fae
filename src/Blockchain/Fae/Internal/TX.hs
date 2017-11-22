@@ -109,7 +109,7 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
 runFaeInterpret :: FaeInterpret a -> IO a
 runFaeInterpret = 
   fmap (either throw id) .
-  flip evalStateT (Storage Map.empty []) . 
+  flip evalStateT (Storage Map.empty) . 
   getFaeStorage . 
   runInterpreter
 

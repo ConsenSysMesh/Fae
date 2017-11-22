@@ -33,11 +33,10 @@ import qualified Data.Map as Map
 -- * Types
 
 -- | Storage is just an association between transactions and what they did.
-data StorageT c =
+newtype StorageT c =
   Storage 
   { 
-    getStorage :: Map TransactionID (TransactionEntryT c),
-    txLog :: [TransactionID] -- ^ In reverse order
+    getStorage :: Map TransactionID (TransactionEntryT c)
   }
 
 -- | Each transaction can produce outputs in two different ways (cf.
@@ -57,6 +56,7 @@ data TransactionEntryT c =
   TransactionEntry 
   {
     inputOutputs :: InputOutputsT c,
+    inputOrder :: [ShortContractID],
     outputs :: OutputsT c,
     signers :: Signers,
     result :: a
@@ -71,13 +71,15 @@ type InputOutputsT c = Map ShortContractID (InputOutputVersionsT c)
 data InputOutputVersionsT c =
   InputOutputVersions
   {
+    iRealID :: ContractID,
     iOutputs :: OutputsT c,
-    inputVersions :: Map VersionID TypeRep
+    iVersions :: Map VersionID TypeRep
   }
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
 -- contracts, so it's not enough to just store them in a sequence.
-type OutputsT c = IntMap c
+type OutputsT c = IntMap (c, Int)
+-- | Contracts are stored with a count of their calls.
 -- | Transactions can have many named signatories.
 type Signers = Map String PublicKey
 -- | The storage monad is just a state monad.  It has to be over 'IO' both
@@ -98,7 +100,9 @@ deriving instance MonadState (StorageT c) (FaeStorageT c)
 data StorageException =
   BadTransactionID TransactionID |
   BadContractID ContractID |
-  BadInputID ShortContractID
+  BadInputID ShortContractID |
+  BadNonce ContractID Int Int |
+  InvalidNonceAt ContractID
   deriving (Typeable, Show)
 
 data TXResult = forall a. (Show a) => TXResult a
@@ -124,58 +128,90 @@ instance Ixed (StorageT c)
 -- indexing of a 'StorageT' so that we can look up contracts by ID, which
 -- requires descending to various levels into the maps.
 instance At (StorageT c) where
-  at cID@(JustTransaction txID) = throw (BadContractID cID)
-
-  at cID@(TransactionOutput txID i) =
-    _getStorage .
-    at txID .
-    defaultLens (throw $ BadTransactionID txID) .
-    _outputs .
-    at i
-
-  at cID@(InputOutput txID sID i) = 
-    _getStorage .
-    at txID .
-    defaultLens (throw $ BadTransactionID txID) .
-    _inputOutputs .
-    at sID .
-    defaultLens (throw $ BadInputID sID) .
-    _iOutputs .
-    at i
+  at cID@((_ :# n) :# m) = throw $ InvalidContractID cID
+  at (cID :# n) = nonceAt cID . checkNonce cID (Just n)
+  at cID = nonceAt cID . checkNonce cID Nothing
 
 -- * Functions
 
+-- | Like 'at', but retaining the nonce
+nonceAt :: ContractID -> Lens' (StorageT c) (Maybe (c, Int))
+nonceAt cID@(JustTransaction txID) = throw (BadContractID cID)
+nonceAt cID@(TransactionOutput txID i) =
+  _getStorage .
+  at txID .
+  defaultLens (throw $ BadTransactionID txID) .
+  _outputs .
+  at i
+nonceAt cID@(InputOutput txID sID i) = 
+  _getStorage .
+  at txID .
+  defaultLens (throw $ BadTransactionID txID) .
+  _inputOutputs .
+  at sID .
+  defaultLens (throw $ BadInputID sID) .
+  _iOutputs .
+  at i
+nonceAt cID = throw $ InvalidNonceAt cID
+
+-- | Enforces nonce-correctness when it is required
+checkNonce :: 
+  ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
+checkNonce _ Nothing = lens (fmap fst) nonceSetter
+checkNonce cID (Just n) = lens (fmap $ \(x, m) -> f m x) checkNonceSetter where
+  checkNonceSetter xM@(Just (_, m)) yM = f m $ nonceSetter xM yM
+  checkNonceSetter Nothing yM = nonceSetter Nothing yM
+  f :: Int -> b -> b
+  f m x = if m == n then x else throw $ BadNonce cID m n
+
+-- | Updating a contract entry nonce-correctly
+nonceSetter :: Maybe (a, Int) -> Maybe a -> Maybe (a, Int)
+nonceSetter (Just (x, m)) (Just y) = Just (y, m + 1)
+nonceSetter Nothing (Just y) = Just (y, 0)
+nonceSetter _ _ = Nothing
+
 -- | Just an 'IntMap' constructor, indexing consecutively from 0.
-intMapList :: [a] -> IntMap a
-intMapList = IntMap.fromList . zip [0 ..]
+intMapList :: [a] -> IntMap (a, Int)
+intMapList = IntMap.fromList . zip [0 ..] . flip zip (repeat 0)
 
 -- | Convenience function for neatly showing a 'TransactionEntry' by ID,
 -- rather than actually going into the storage to get and format it.  It
 -- catches all exceptions thrown by contracts or transactions and prints
 -- an error message instead; thus, whatever actually did complete is part
 -- of the output.
-showTransaction :: TransactionID -> FaeStorageT c String
+showTransaction :: forall c. TransactionID -> FaeStorageT c String
 showTransaction txID = do
-  TransactionEntry ios os ss x <- use $
+  TransactionEntry ios ino os ss x <- use $
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  resultSafe <- liftIO $ displayException show x
-  outputsSafe <- liftIO $ displayException (show . IntMap.keys) os
-  inputsSafe <- liftIO $ mapM (displayException showIOVersions) ios
+  resultSafe <- displayException show x
+  outputsSafe <- displayException (show . IntMap.keys) os
+  inputsSafe <- forM ino $ \sID -> do
+    let iov = ios Map.! sID
+    n <- handleAll (return . throw) $ showNonce iov
+    iovS <- displayException (showIOVersions n) iov
+    return (sID, iovS)
   return $ 
     intercalate "\n  " $
       ("Transaction " ++ show txID) :
       ("result: " ++ resultSafe) :
       ("outputs: " ++ outputsSafe) :
       prettySigners ss :
-      (Map.elems $ flip Map.mapWithKey inputsSafe $ 
-        \cID str -> "input " ++ show cID ++ "\n    " ++ str)
+      (flip map inputsSafe $ uncurry $
+        \sID str -> "input " ++ show sID ++ "\n    " ++ str)
   where 
-    displayException f x = 
+    displayException f x = liftIO $
       catchAll (f <$> evaluate x) $ \e -> return $ "<exception> " ++ show e
+    showNonce iov = 
+      case iov of
+        InputOutputVersions{..} -> 
+          use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
     showOutputs os = "outputs: " ++ show (IntMap.keys os)
-    showIOVersions InputOutputVersions{..} =
-      showOutputs iOutputs ++ "\n    " ++
-      prettyVersions inputVersions
+    showIOVersions nS InputOutputVersions{..} = intercalate "\n    " $
+      [
+        "nonce: " ++ nS, 
+        showOutputs iOutputs,
+        prettyVersions iVersions
+      ]
     prettySigners =
       intercalate "\n    " .
       ("signers:" :) .
@@ -187,9 +223,3 @@ showTransaction txID = do
       map (\(vID, tRep) -> show vID ++ ": " ++ show tRep) .
       Map.toList 
 
--- | Shows all transactions.  Probably only useful for small testing Faes,
--- because this would blow up in real usage.
-showTransactions :: FaeStorageT c [String]
-showTransactions = do
-  txIDs <- gets $ reverse . txLog
-  mapM showTransaction txIDs

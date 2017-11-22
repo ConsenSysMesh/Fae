@@ -53,7 +53,11 @@ data ContractID =
   -- execution of one of its input contract calls.  The outputs are indexed
   -- from 0 in order of creation, with the indexing specific to each input
   -- contract.
-  InputOutput TransactionID ShortContractID Int
+  InputOutput TransactionID ShortContractID Int |
+  -- | Contracts can be given with an optional /nonce/, denoting how many
+  -- times they have been called.  This infix constructor is for
+  -- convenience.  
+  ContractID :# Int
   deriving (Read, Show, Generic)
 
 -- | The hash of a 'ContractID', useful for abbreviating what would
@@ -91,7 +95,8 @@ data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 -- | Exceptions for ID-related errors.
 data IDException =
   BadInputEscrow String |
-  NotEscrowOut EntryID
+  NotEscrowOut EntryID |
+  InvalidContractID ContractID
   deriving (Typeable, Show)
 
 -- | A map of escrow IDs that preserves input and output types, regardless
@@ -248,7 +253,8 @@ instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i m f) where
 
 -- | Take the hash of a contract ID.
 shorten :: ContractID -> ShortContractID
-shorten = ShortContractID . digest
+shorten (cID :# n) = ShortContractID $ digest cID
+shorten cID = ShortContractID $ digest cID
 
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue
@@ -257,4 +263,13 @@ bearer = BearsValue
 -- | For making empty instances of 'HasEscrowIDs'
 defaultTraverseEscrowIDs :: EscrowIDTraversal a
 defaultTraverseEscrowIDs _ x = return x -- Not point-free to specialize forall
+
+-- | Predicate for determining whether a required nonce was provided.
+hasNonce :: ContractID -> Bool
+hasNonce (_ :# n) = True
+hasNonce _ = False
+
+withoutNonce :: ContractID -> ContractID
+withoutNonce (cID :# n) = cID
+withoutNonce cID = cID
 

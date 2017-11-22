@@ -215,10 +215,12 @@ runTransaction ::
   TransactionID -> Signers -> Bool -> 
   FaeStorage ()
 runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $ do
+  let inputOrder = map (shorten . fst) inputArgs
   liftFaeContract $ _getStorage . at txID ?= 
     TransactionEntry
     {
       inputOutputs = Map.empty,
+      inputOrder = inputOrder,
       outputs = IntMap.empty,
       signers,
       result = undefined :: a
@@ -229,10 +231,9 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
     escrows <- use _escrowMap
     unless (Map.null escrows) $ throw OpenEscrows
     return (result, intMapList outputsL)
-  liftFaeContract $ do
+  liftFaeContract $ 
     _getStorage . at txID %= 
       fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
-    _txLog %= cons txID
 
 -- | Takes the list of contract IDs with input strings and forms the input
 -- object out of their results.
@@ -274,10 +275,15 @@ runInputContract cID arg (results, vers) = do
     ((gAbsM, (result, vMap)), outputsL) <- 
       hoistFaeContract $ listen $ fAbs (arg, vers)
     let 
+      iRealID = withoutNonce cID
       iOutputs = intMapList outputsL
-      inputVersions = fmap dynTypeRep vMap
+      -- Only nonce-protected contract calls are allowed to return
+      -- versioned values.
+      (iVersions, vers') 
+        | hasNonce cID = (fmap dynTypeRep vMap, vers `Map.union` vMap)
+        | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
-    return (InputOutputVersions{..}, result, vers `Map.union` vMap)
+    return (InputOutputVersions{..}, result, vers')
   txID <- view _thisTXID
   liftFaeContract $ _getStorage . at txID %= 
     fmap (_inputOutputs . at (shorten cID) ?~ ioVersions)
