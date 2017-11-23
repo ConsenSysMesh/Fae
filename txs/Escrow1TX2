@@ -1,0 +1,3 @@
+body = Escrow1TX2
+inputs
+  TransactionOutput $tx1 0 = "Hello, world!"

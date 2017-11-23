@@ -1,0 +1,4 @@
+body = TwoPartyTX1
+keys
+  partyA = key1
+  partyB = key2

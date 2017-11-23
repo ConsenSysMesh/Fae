@@ -108,6 +108,17 @@ executable faeServer
     RecordWildCards
     ScopedTypeVariables
     TypeApplications
+
+executable curlTX
+  buildable: True
+  hs-source-dirs: scripts
+  main-is: CurlTX.hs
+  build-depends:
+    base,
+    directory,
+    fae,
+    lens,
+    process
   
 -- test-suite fae-test
 --   type:                exitcode-stdio-1.0

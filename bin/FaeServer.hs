@@ -157,7 +157,7 @@ makeFilesMap files txID = (txMain, modules) where
         (C8.unpack fileName, LC8.toStrict fileContent) 
           | ("other", FileInfo{..}) <- files
       ]
-  mainFileM = lookup "main" files
+  mainFileM = lookup "body" files
 
 addHeader :: TransactionID -> C8.ByteString -> C8.ByteString
 addHeader txID = C8.append $ C8.pack $

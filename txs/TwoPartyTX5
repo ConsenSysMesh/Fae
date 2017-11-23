@@ -1,0 +1,5 @@
+body = TwoPartyTX5
+inputs
+  TransactionOutput $tx1 0 = True
+keys
+  self = key2
