@@ -57,7 +57,7 @@ import System.FilePath
 
 import Text.Read (readMaybe)
 
-type TXQueue = TQueue (Bool, TX, TMVar String, ThreadId)
+type TXQueue = TQueue (Bool, Bool, TX, TMVar String, ThreadId)
 
 main :: IO ()
 main = do
@@ -74,11 +74,11 @@ faeSettings = defaultSettings &
 runFae :: TXQueue -> ThreadId -> IO ()
 runFae txQueue mainTID = runFaeInterpret $ forever $ 
   handle (liftIO . throwTo @SomeException mainTID) $ do
-    (fake, tx@TX{..}, resultVar, tID) <- 
+    (fake, reward, tx@TX{..}, resultVar, tID) <- 
       liftIO $ atomically $ readTQueue txQueue
     s0 <- lift get
     resultE <- try $ do
-      interpretTX False tx
+      interpretTX reward tx
       lift $ showTransaction txID
     when fake $ lift $ put s0
     liftIO $ either 
@@ -90,7 +90,8 @@ serverApp :: TXQueue -> Application
 serverApp txQueue request respond = do
   (params, files) <- parseRequestBody lbsBackEnd request
   let 
-    fake = not $ null [ () | ("fake", _) <- params]
+    fake = last $ False : [ read $ C8.unpack s | ("fake", s) <- params ]
+    reward = last $ False : [ read $ C8.unpack s | ("reward", s) <- params ]
     keyNames0 = 
       [ (signerName, tail keyName) | -- Remove the colon
         ("key", keyBS) <- params,
@@ -114,7 +115,7 @@ serverApp txQueue request respond = do
 
       tID <- myThreadId
       resultVar <- atomically newEmptyTMVar
-      atomically $ writeTQueue txQueue (fake, tx, resultVar, tID)
+      atomically $ writeTQueue txQueue (fake, reward, tx, resultVar, tID)
       result <- atomically $ takeTMVar resultVar
 
       respond $ buildResponse result

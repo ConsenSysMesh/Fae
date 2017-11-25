@@ -16,7 +16,8 @@ data TXData =
     body :: Maybe String,
     others :: [String],
     inputs :: [(ContractID, String)],
-    keys :: [(String, String)]
+    keys :: [(String, String)],
+    reward :: Bool
   }
 
 main :: IO ()
@@ -24,20 +25,16 @@ main = do
   args <- getArgs
   let 
     triple0 = ("TX", "localhost:27182", False)
-    parseArgs args =
-      case args of
-        [] -> error "Required argument missing: transaction specification name"
-        "--fake" : [] -> triple0 & _3 .~ True
-        txSpec : [] -> triple0 & _1 .~ txSpec
-        arg1 : "--fake" : [] -> parseArgs [arg1] & _3 .~ True
-        arg1 : host : [] -> parseArgs [arg1] & _2 .~ host
-        arg1 : arg2 : "--fake" : [] -> parseArgs [arg1, arg2] & _3 .~ True
-        arg1 : arg2 : host : [] -> parseArgs [arg1, arg2] & _2 .~ host
-        _ -> error "Too many arguments"
-    (txSpec, host, fake) = parseArgs args
+    (txSpec, host, fake) = view _1 $ 
+      (\l x g -> foldl g x l) args (triple0, False, False) $ \st arg -> 
+        case arg of
+          "--fake" -> st & _1 . _3 .~ True
+          x | st ^. _2 && st ^. _3 -> error "TX name and host already given"
+            | st ^. _2 -> st & _1 . _2 .~ x & _3 .~ True
+            | otherwise -> st & _1 . _1 .~ x & _2 .~ True
   specLines <- lines <$> readFile txSpec
   txData <- readData specLines 
-    TXData{body = Nothing, others = [], inputs = [], keys = []} 
+    TXData{body = Nothing, others = [], inputs = [], keys = [], reward = False} 
   case body txData of
     Nothing -> error "Missing body filename"
     Just _ -> return ()
@@ -46,7 +43,8 @@ main = do
 runCurl :: String -> Bool -> TXData -> IO ()
 runCurl host fake TXData{..} = callProcess "curl" $ args ++ [host] where
   args = ("-F" :) . intersperse "-F" $ 
-    (if fake then ("fake=True" :) else id) $
+    (if fake then ("fake=True" :) else ("fake=False" :)) $
+    (if reward then ("reward=True" :) else ("reward=False" :)) $
     bodyArg : inputArgs ++ othersArgs ++ keysArgs
   bodyArg = "body=@" ++ fromJust body ++ ".hs"
   inputArgs = map (\p -> "input=" ++ show p) inputs
@@ -59,6 +57,9 @@ readData (line1 : rest) txData =
   case breakEquals line1 of
     ("", Nothing) -> readData rest txData
     ("body", body@Just{}) -> readData rest txData{body} 
+    ("reward", Just rewardS) -> 
+      let reward = read rewardS in
+      readData rest txData{reward} 
     ("others", sM) 
       | maybe True null sM -> readOthers rest txData 
       | otherwise -> forbiddenArgument "others" $ fromJust sM
