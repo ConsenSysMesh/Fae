@@ -36,7 +36,7 @@ library
     Blockchain.Fae.Internal.TX
     Blockchain.Fae.Internal.Versions
   build-depends:       
-    base >= 4.7 && < 5,
+    base >= 4.10 && < 5,
     base16-bytestring,
     bytestring,
     cereal,

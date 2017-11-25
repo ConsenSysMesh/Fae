@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
+import Debug.Trace
 import Blockchain.Fae (ContractID)
 import Control.Lens
 import Data.Bifunctor
@@ -20,7 +21,6 @@ data TXData =
 
 main :: IO ()
 main = do
-  setCurrentDirectory "txs"
   args <- getArgs
   let 
     triple0 = ("TX", "localhost:27182", False)
@@ -46,11 +46,11 @@ main = do
 runCurl :: String -> Bool -> TXData -> IO ()
 runCurl host fake TXData{..} = callProcess "curl" $ args ++ [host] where
   args = ("-F" :) . intersperse "-F" $ 
-    fakeArg : bodyArg : inputArgs ++ othersArgs ++ keysArgs
-  fakeArg = "fake=" ++ show fake
-  bodyArg = "body=@" ++ fromJust body
+    (if fake then ("fake=True" :) else id) $
+    bodyArg : inputArgs ++ othersArgs ++ keysArgs
+  bodyArg = "body=@" ++ fromJust body ++ ".hs"
   inputArgs = map (\p -> "input=" ++ show p) inputs
-  othersArgs = map ("other=@" ++) others
+  othersArgs = map (\file -> "other=@" ++ file ++ ".hs") others
   keysArgs = map (\(signer, key) -> "key=" ++ signer ++ ":" ++ key) keys
 
 readData :: [String] -> TXData -> IO TXData

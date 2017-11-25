@@ -92,10 +92,7 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
     ]
   loadModules [txSrc]
   setImportsQ $ (txSrc, Just txSrc) : map (,Nothing) pkgModules 
-  run <- interpret 
-    ("runTransaction " ++ qualified "body")
-    infer
-    --(as :: Inputs -> TransactionID -> PublicKey -> Bool -> FaeStorage ())
+  run <- interpret ("runTransaction " ++ qualified "body") infer
   lift $ run inputs txID pubKeys isReward 
   where
     fixGHCErrors (WontCompile []) = error "Compilation error"

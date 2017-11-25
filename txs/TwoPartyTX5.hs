@@ -1,3 +1,3 @@
-body :: Transaction (Maybe (Either String String)) String
-body (Just (Left s)) = return s
+body :: Transaction (Maybe (Either (Versioned String) (Versioned String))) String
+body (Just (Left (Versioned s))) = return s
 body _ = error "Swap failed!"

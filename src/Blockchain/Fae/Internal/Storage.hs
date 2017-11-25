@@ -24,6 +24,7 @@ import Data.Dynamic
 import Data.IntMap (IntMap)
 import Data.List
 import Data.Map (Map)
+import Data.Maybe
 import Data.Serialize
 import Data.Typeable
 
@@ -185,7 +186,10 @@ showTransaction txID = do
   resultSafe <- displayException show x
   outputsSafe <- displayException (show . IntMap.keys) os
   inputsSafe <- forM ino $ \sID -> do
-    let iov = ios Map.! sID
+    let 
+      iov = 
+        fromMaybe (error $ "Contract ID " ++ show sID ++ " missing") $ 
+        Map.lookup sID ios
     n <- handleAll (return . throw) $ showNonce iov
     iovS <- displayException (showIOVersions n) iov
     return (sID, iovS)

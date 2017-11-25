@@ -194,10 +194,10 @@ instance (Typeable c) => GGetInputValues (K1 i c) where
     s <- get
     case s of
       [] -> throw NotEnoughInputs
-      xDyn : s' -> do
-        put s'
-        return $ K1 $ fromDyn xDyn $
-          throw $ BadArgType (typeRep (Proxy @c)) (dynTypeRep xDyn)
+      l -> do
+        let (x, rest) = defaultGetInputValues l
+        put rest
+        return $ K1 x
 
 -- | Just ignore metadata for this one.
 instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
@@ -214,18 +214,22 @@ runTransaction ::
   TransactionID -> Signers -> Bool -> 
   FaeStorage ()
 runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $ do
-  let inputOrder = map (shorten . fst) inputArgs
+  let 
+    inputIDs = map fst inputArgs
+    defaultIOs = flip map inputIDs $ \cID ->
+      (shorten cID, InputOutputVersions cID IntMap.empty Map.empty)
+    inputOrder = map fst defaultIOs
   liftFaeContract $ _getStorage . at txID ?= 
     TransactionEntry
     {
-      inputOutputs = Map.empty,
+      inputOutputs = Map.fromList defaultIOs,
       inputOrder = inputOrder,
       outputs = IntMap.empty,
       signers,
       result = undefined :: a
     }
-  input <- runInputSpec inputArgs isReward 
   (result, outputs) <- handleAll (\e -> return (throw e, throw e)) $ do
+    input <- makeInput isReward inputArgs
     (result, outputsL) <- hoistFaeContract $ listen $ getFae $ f input
     escrows <- use _escrowMap
     unless (Map.null escrows) $ throw OpenEscrows
@@ -233,44 +237,37 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
   liftFaeContract $ 
     _getStorage . at txID %= 
       fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
-
--- | Takes the list of contract IDs with input strings and forms the input
--- object out of their results.  It is here that the rewards are created,
--- if any.
-runInputSpec :: 
-  (GetInputValues input, HasEscrowIDs input) =>
-  Inputs -> Bool -> 
-  TXStorageM input
-runInputSpec args isReward = do
-  inputsL <- runInputContracts args
+ 
+-- | Constructs the transaction's input argument object
+makeInput :: (GetInputValues input) => Bool -> Inputs -> TXStorageM input
+makeInput isReward inputArgs = do
+  inputsL <- runInputContracts inputArgs
   (input, unused) <- hoistFaeContract $ getInputValues <$> withReward inputsL 
   unless (null unused) $ throw TooManyInputs
   return input
-
   where
     withReward 
       | isReward = \inputs -> do
           eID <- newEscrow [] rewardEscrow
           return $ toDyn eID : inputs
       | otherwise = return 
- 
+
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
 runInputContracts :: Inputs -> TXStorageM [Dynamic]
-runInputContracts args = 
-  fmap fst $ flip execStateT ([], Map.empty) $ forM_ args $ 
-    modifyM . uncurry runInputContract
-  where modifyM f = get >>= lift . f >>= put
+runInputContracts = fmap fst .
+  foldl' (>>=) (return ([], Map.empty)) .
+  map (uncurry runInputContract) 
 
 -- | Runs a single input contract.
 runInputContract ::
   ContractID -> String ->
   ([Dynamic], VersionMap) -> TXStorageM ([Dynamic], VersionMap)
 runInputContract cID arg (results, vers) = do
-  ConcreteContract fAbs <- liftFaeContract $ use $
-    at cID . defaultLens (throw $ BadInput cID)
   let inputError e = return (throw e, throw e, vers)
   (ioVersions, result, vers') <- handleAll inputError $ do
+    ConcreteContract fAbs <- liftFaeContract $ use $
+      at cID . defaultLens (throw $ BadInput cID)
     ((gAbsM, (result, vMap)), outputsL) <- 
       hoistFaeContract $ listen $ fAbs (arg, vers)
     let 
@@ -278,7 +275,7 @@ runInputContract cID arg (results, vers) = do
       iOutputs = intMapList outputsL
       -- Only nonce-protected contract calls are allowed to return
       -- versioned values.
-      (iVersions, vers') 
+      (iVersions, vers')
         | hasNonce cID = (fmap dynTypeRep vMap, vers `Map.union` vMap)
         | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
@@ -289,10 +286,9 @@ runInputContract cID arg (results, vers) = do
   censor (const []) $ return (results |> result, vers')
 
 -- | Gets a single value from a single input
-defaultGetInputValues :: forall a. (Typeable a) => [Dynamic] -> (a, [Dynamic])
+defaultGetInputValues :: 
+  forall a. (Typeable a) => [Dynamic] -> (a, [Dynamic])
 defaultGetInputValues (xDyn : rest) = (x, rest) where
-  x = fromDyn xDyn $
-    throw $ BadArgType (typeRep (Proxy @a)) (dynTypeRep xDyn)
+  x = fromDyn xDyn $ throw $ BadArgType (typeOf x) (dynTypeRep xDyn)
 defaultGetInputValues [] = throw NotEnoughInputs
-
 

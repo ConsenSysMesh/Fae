@@ -1,4 +1,4 @@
 body = VersionsTX2
 inputs
-  TransactionOutput $tx1 0 = ()
-  TransactionOutput $tx1 1 :# 0 = $version
+  TransactionOutput $tx1 0 :# 0 = ()
+  TransactionOutput $tx1 1 = $version
