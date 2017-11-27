@@ -1,0 +1,5 @@
+body = AuctionTX1
+keys
+  self = seller
+others
+  - Auction

@@ -10,8 +10,10 @@ The primary motivating example of a smart contract is a currency such as Bitcoin
 -}
 module Blockchain.Fae.Currency 
   (
+    -- * The currency typeclass
     Currency(..),
-    Coin, Token, reward
+    -- * Basic numeric currency
+    Coin, reward
   )
 where
 
@@ -35,67 +37,73 @@ import Numeric.Natural
 -- "homomorphic" operations.  Note that no actual encryption needs to be
 -- involved.
 class 
-  (
-    Typeable tok, Typeable coin,
-    HasEscrowIDs tok, HasEscrowIDs coin,
-    Integral (Valuation tok coin)
-  ) => 
-  Currency tok coin where
+  (Versionable coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
+  Currency coin where
 
-  data Valuation tok coin
+  data Valuation coin
 
-  -- | Almost an @Ord@ instance; for comparing coin values.  
-  balance :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Ordering
-  -- | Create a new value.  It is important that this function be strict in
-  -- its first argument, so that we know that the caller actually has
-  -- a token and not just @undefined@.  This means that the correct way to
-  -- handle bad permissions is to throw an exception.
-  mint :: (MonadTX m) => tok -> Valuation tok coin -> m (EscrowID tok coin)
+  -- | A mixed 'Ord'-style comparison
+  valCompare :: (MonadTX m) => coin -> Valuation coin -> m Ordering
   -- | Peek at the value inside.  The ID remains valid.  Careful!  For
   -- semantic correctness, this function must also validate the escrow to
   -- prove that it actually has value.
-  value :: (MonadTX m) => EscrowID tok coin -> m (Valuation tok coin)
+  value :: (MonadTX m) => coin -> m (Valuation coin)
   -- | Close the given accounts and make a new one with their sum.
-  add :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m (EscrowID tok coin)
+  add :: (MonadTX m) => coin -> coin -> m coin
   -- | Take off the given amount and return it and the change if both are
   -- nonnegative, otherwise @empty@.
   change :: 
-    (Alternative f, MonadTX m) =>
-    EscrowID tok coin -> Valuation tok coin -> 
-    m (f (EscrowID tok coin, EscrowID tok coin))
+    (Alternative f, Alternative f', MonadTX m) =>
+    coin -> Valuation coin -> m (f (coin, f' coin))
   -- | Partition the value into the given proportions and the remainder.
   split :: 
-    (Traversable t, MonadTX m) =>
-    EscrowID tok coin -> t Natural -> 
-    m (t (EscrowID tok coin), EscrowID tok coin)
+    (Traversable t, Alternative f, MonadTX m) =>
+    coin -> t Natural -> m (t coin, f coin)
 
-  -- | Equality of values
-  balanced :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Bool
-  balanced eID1 eID2 = (== EQ) <$> balance eID1 eID2
+  -- | A mixed 'Eq'-style comparison
+  atLeast :: (MonadTX m) => coin -> Valuation coin -> m Bool
+  atLeast c n = not <$> lessThan c n
 
-  -- | First value is greater than second
-  beats :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Bool
-  beats eID1 eID2 = (== GT) <$> balance eID1 eID2
+  -- | Strict mixed 'Eq'-style comparison
+  moreThan :: (MonadTX m) => coin -> Valuation coin -> m Bool
+  moreThan c n = (== GT) <$> valCompare c n
 
-  -- | First value is less than second
-  loses :: (MonadTX m) => EscrowID tok coin -> EscrowID tok coin -> m Bool
-  loses eID1 eID2 = (== LT) <$> balance eID1 eID2
+  -- | Reversed strict mixed 'Eq'-style comparison
+  lessThan :: (MonadTX m) => coin -> Valuation coin -> m Bool
+  lessThan c n = (== LT) <$> valCompare c n
+
+  -- | A pure 'Ord'-style comparison
+  coinCompare :: (MonadTX m) => coin -> coin -> m Ordering
+  coinCompare c1 c2 = do
+    n <- value c2
+    valCompare c1 n
+
+  -- | A pure 'Eq'-style comparison
+  matches :: (MonadTX m) => coin -> coin -> m Bool
+  matches c1 c2 = not <$> losesTo c1 c2
+
+  -- | A strict pure 'Eq'-style comparison
+  beats :: (MonadTX m) => coin -> coin -> m Bool
+  beats c1 c2 = (== GT) <$> coinCompare c1 c2
+
+  -- | A reversed strict pure 'Eq'-style comparison
+  losesTo :: (MonadTX m) => coin -> coin -> m Bool
+  losesTo c1 c2 = (== LT) <$> coinCompare c1 c2
 
   -- | Rounds a coin down to the nearest multiple of some number, returning
   -- this rounded coin and the remainder.
   round :: (MonadTX m) => 
-    EscrowID tok coin -> Natural -> 
-    m (Maybe (EscrowID tok coin), EscrowID tok coin)
-  round eID n = do
-    (l, r) <- split eID [n]
-    return (listToMaybe l, r)
+    coin -> Natural -> m (Maybe coin, coin)
+  round c n = do
+    (l, rM) <- split c [n]
+    return (listToMaybe l, fromMaybe c rM)
 
 {- The basic example -}
 
 -- | This opaque type is the value of our sample currency.
-newtype Coin = Coin Natural deriving (Generic)
+newtype CoinVal = CoinVal Natural deriving (Generic)
 
-instance HasEscrowIDs Coin
+instance HasEscrowIDs CoinVal
 
 -- @Spend@ exists so that we can get close the escrow and get its
 -- contents.  @UnsafePeek@ skips the closing part, and is therefore
@@ -117,49 +125,57 @@ data Token = Spend | UnsafePeek deriving (Generic)
 
 instance HasEscrowIDs Token
 
-instance Currency Token Coin where
-  newtype Valuation Token Coin = CoinValuation Natural
+-- | This is the actual currency; no user ever looks inside directly.
+type Coin = EscrowID Token CoinVal
+
+-- | This internal function is obviously not to be called by users.
+mint :: (MonadTX m) => Natural -> m Coin
+mint n = newEscrow [] f where
+  f :: Contract Token CoinVal
+  f UnsafePeek = release coin >>= f
+  f Spend = spend coin
+  coin = CoinVal n
+
+instance Currency Coin where
+  newtype Valuation Coin = CoinValuation Natural
     deriving (Eq, Ord, Num, Real, Enum, Integral)
 
-  balance eID1 eID2 = do
-    Coin n1 <- useEscrow eID1 UnsafePeek
-    Coin n2 <- useEscrow eID2 UnsafePeek
-    return $ compare n1 n2
-
-  mint !_ (CoinValuation n) = newEscrow [] f where
-    f :: Contract Token Coin
-    f UnsafePeek = release coin >>= f
-    f Spend = spend coin
-    coin = Coin n
+  valCompare eID (CoinValuation n) = do
+    CoinValuation m <- value eID
+    return $ compare m n
 
   value eID = do
-    Coin n <- useEscrow eID UnsafePeek
+    CoinVal n <- useEscrow eID UnsafePeek
     return $ CoinValuation n
 
   add eID1 eID2 = do
-    Coin n1 <- useEscrow eID1 Spend
-    Coin n2 <- useEscrow eID2 Spend
-    eID <- mint Spend $ CoinValuation $ n1 + n2
+    CoinVal n1 <- useEscrow eID1 Spend
+    CoinVal n2 <- useEscrow eID2 Spend
+    eID <- mint $ n1 + n2
     return eID
 
-  change eID n = do
-    m <- value eID
-    case m >= n of
-      True -> do
-        Coin m <- useEscrow eID Spend
-        amtID <- mint Spend n
-        remID <- mint Spend $ CoinValuation m - n
-        return $ pure (amtID, remID)
-      False -> return empty
+  change eID nV@(CoinValuation n) = do
+    ord <- valCompare eID nV
+    case ord of
+      EQ -> return $ pure (eID, empty)
+      GT -> do
+        CoinVal m <- useEscrow eID Spend
+        amtID <- mint n
+        remID <- mint $ m - n
+        return $ pure (amtID, pure remID)
+      LT -> return empty
 
   split eID weights = do
-    Coin n <- useEscrow eID Spend
+    CoinVal n <- useEscrow eID Spend
     let 
       s = sum weights
       (q, r) = n `quotRem` s
-    partIDs <- traverse (mint Spend . CoinValuation . (q *)) weights
-    remID <- mint Spend $ CoinValuation r
-    return (partIDs, remID)
+    partIDs <- traverse (mint . (q *)) weights
+    if r == 0
+    then return (partIDs, empty)
+    else do
+      remID <- mint r
+      return (partIDs, pure remID)
 
 -- | A contract to claim system rewards in exchange for Coin values.  The
 -- one-to-one exchange rate is of course an example and probably not
@@ -171,8 +187,8 @@ instance Currency Token Coin where
 -- destroys the reward token.  So this function can be seen as reifying
 -- rewards as a true currency, albeit one that cannot necessarily be used
 -- to claim rewards from anywhere else.
-reward :: (MonadTX m) => RewardEscrowID -> m (EscrowID Token Coin)
+reward :: (MonadTX m) => RewardEscrowID -> m Coin
 reward eID = do
   claimReward eID 
-  mint Spend 1 
+  mint 1 
 

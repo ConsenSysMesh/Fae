@@ -16,7 +16,6 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
-import Blockchain.Fae.Internal.MonadFae
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
@@ -69,7 +68,7 @@ type Inputs = [(ContractID, String)]
 -- its 'GetInputValues' instance.  The return value need not and can not
 -- contain escrows (or rather, the escrow IDs it contains will not be
 -- transferred anywhere).
-type Transaction a b = a -> FaeTX b
+type Transaction a b = a -> FaeM Naught b
 
 -- | This monad is a little different from 'FaeTX' in that it is built on
 -- 'FaeStorage', meaning it has direct access to the storage and also to
@@ -82,7 +81,8 @@ data TransactionException =
   NotEnoughInputs |
   TooManyInputs |
   BadInput ContractID |
-  OpenEscrows 
+  OpenEscrows |
+  InternalTXError String
   deriving (Typeable, Show)
 
 {- Typeclasses -}
@@ -151,6 +151,9 @@ instance (Typeable a) => GetInputValues [a] where
 -- | Default instance
 instance (Typeable a) => GetInputValues (Maybe a) where
   getInputValues = defaultGetInputValues
+instance (GetInputValues a) => GetInputValues (Versioned a) where
+  getInputValues l = (Versioned x, l') where
+    (x, l') = getInputValues l
 -- | Default instance
 instance (Typeable a, Typeable b) => GetInputValues (Either a b) where
   getInputValues = defaultGetInputValues
@@ -217,7 +220,7 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
   let 
     inputIDs = map fst inputArgs
     defaultIOs = flip map inputIDs $ \cID ->
-      (shorten cID, InputOutputVersions cID IntMap.empty Map.empty)
+      (shorten cID, InputOutputVersions (withoutNonce cID) IntMap.empty Map.empty)
     inputOrder = map fst defaultIOs
   liftFaeContract $ _getStorage . at txID ?= 
     TransactionEntry
@@ -228,8 +231,8 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
       signers,
       result = undefined :: a
     }
+  input <- handleAll (return . throw) $ makeInput isReward inputArgs
   (result, outputs) <- handleAll (\e -> return (throw e, throw e)) $ do
-    input <- makeInput isReward inputArgs
     (result, outputsL) <- hoistFaeContract $ listen $ getFae $ f input
     escrows <- use _escrowMap
     unless (Map.null escrows) $ throw OpenEscrows
@@ -248,7 +251,7 @@ makeInput isReward inputArgs = do
   where
     withReward 
       | isReward = \inputs -> do
-          eID <- newEscrow [] rewardEscrow
+          eID <- internalNewEscrow [] $ \Token -> internalSpend Reward
           return $ toDyn eID : inputs
       | otherwise = return 
 
@@ -264,11 +267,13 @@ runInputContract ::
   ContractID -> String ->
   ([Dynamic], VersionMap) -> TXStorageM ([Dynamic], VersionMap)
 runInputContract cID arg (results, vers) = do
-  let inputError e = return (throw e, throw e, vers)
-  (ioVersions, result, vers') <- handleAll inputError $ do
+  let inputError e = return (throw e, vers)
+  (result, vers') <- handleAll inputError $ do
     ConcreteContract fAbs <- liftFaeContract $ use $
       at cID . defaultLens (throw $ BadInput cID)
-    ((gAbsM, (result, vMap)), outputsL) <- 
+    -- This strictness is /so/ important.  It flushes out errors that would
+    -- otherwise be saved in future iterations of the contract.
+    ((!gAbsM, (!result, !vMap)), !outputsL) <- 
       hoistFaeContract $ listen $ fAbs (arg, vers)
     let 
       iRealID = withoutNonce cID
@@ -279,10 +284,10 @@ runInputContract cID arg (results, vers) = do
         | hasNonce cID = (fmap dynTypeRep vMap, vers `Map.union` vMap)
         | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
-    return (InputOutputVersions{..}, result, vers')
-  txID <- view _thisTXID
-  liftFaeContract $ _getStorage . at txID %= 
-    fmap (_inputOutputs . at (shorten cID) ?~ ioVersions)
+    txID <- view _thisTXID
+    liftFaeContract $ _getStorage . at txID %= 
+      fmap (_inputOutputs . at (shorten cID) ?~ InputOutputVersions{..})
+    return (result, vers')
   censor (const []) $ return (results |> result, vers')
 
 -- | Gets a single value from a single input

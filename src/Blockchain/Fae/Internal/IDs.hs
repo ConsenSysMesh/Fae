@@ -250,8 +250,7 @@ instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i m f) where
 
 -- | Take the hash of a contract ID.
 shorten :: ContractID -> ShortContractID
-shorten (cID :# n) = ShortContractID $ digest cID
-shorten cID = ShortContractID $ digest cID
+shorten = ShortContractID . digest . withoutNonce
 
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue

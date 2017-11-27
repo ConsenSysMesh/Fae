@@ -29,6 +29,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Char
 import Data.Dynamic
 import Data.List
+import Data.Ord
 import Data.Proxy
 import Data.Serialize (Serialize)
 import Data.String
@@ -228,6 +229,15 @@ instance Read Digest where
 instance Read EdPublicKey where
   readsPrec = readsPrecSer
 
+instance Ord EdPublicKey where
+  compare = compareSerialize
+
+instance Ord EdSecretKey where
+  compare = compareSerialize
+
+instance Ord EdSignature where
+  compare = compareSerialize
+
 -- | We want an 'IsString' instance for the convenience of transaction
 -- authors, who have to provide a contract ID that is, ultimately,
 -- a 'Digest'.
@@ -248,6 +258,10 @@ instance Show Digest where
   show (HashDigest x) = show x
 
 -- * Functions
+
+-- | Just compare the bytestrings lexicographically
+compareSerialize :: (Serialize a) => a -> a -> Ordering
+compareSerialize a b = compare (Ser.encode a) (Ser.encode b)
 
 -- | 'put' for 'Serialize' is easy to define: just convert to a bytestring,
 -- which is what 'PartialSerialize' allows us to do.

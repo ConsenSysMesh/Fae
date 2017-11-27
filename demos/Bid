@@ -1,0 +1,7 @@
+body = Bid
+keys
+  self = $key
+  seller = seller
+inputs
+  TransactionOutput $coinTX 0 :# 0 = ()
+  TransactionOutput $aucTX 0 = Just $coinVersion

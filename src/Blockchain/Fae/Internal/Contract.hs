@@ -6,9 +6,11 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-Everything in Fae is a contract, and this module defines contracts and their construction.
+Everything in Fae is a contract, and this module defines contracts and
+their construction.
 
-It may be a little confusing how a user-provided 'Contract' becomes the 'AbstractContract' stored by Fae.  This happens in three steps:
+It may be a little confusing how a user-provided 'Contract' becomes the
+'AbstractContract' stored by Fae.  This happens in three steps:
 
   - A 'Contract' is partially "compiled" to an 'InternalContract', which
   handles escrows in the first call and also makes the entire escrow
@@ -20,10 +22,12 @@ It may be a little confusing how a user-provided 'Contract' becomes the 'Abstrac
 
   - A 'ConcreteContract' is, finally, made into an 'AbstractContract',
   which handles conversion of its input and output types from and to
-  untyped 'String' and 'Dynamic', respectively.  It also resolves version IDs to 
-  their corresponding correctly-typed values.
+  untyped 'String' and 'Dynamic', respectively.  It also resolves version
+  IDs to their corresponding correctly-typed values.
 
-Each of these stages takes place in some @FaeContract s@ monad, but it is important to understand that in fact, there are /three/ different monad contexts occurring in the life cycle of a contract:
+Each of these stages takes place in some @FaeContract s@ monad, but it is
+important to understand that in fact, there are /three/ different monad
+contexts occurring in the life cycle of a contract:
 
   - The one inside the contract, in which the user-defined code is executed;
 
@@ -31,8 +35,14 @@ Each of these stages takes place in some @FaeContract s@ monad, but it is import
 
   - The one in which the contract is called.
 
-Information is passed among all of these in a manner controlled by the three steps shown above.  Escrows from the creating context are passed in via 'bearer' to the internal context; escrows from the return value (and for escrows themselves, also the argument) are passed via 'WithEscrows'; and the 'FaeRWT' stratum is shared between the internal context and the calling context.  The effect of the 'InternalContract' stage is to prevent escrows from being shared between the internal and calling contexts except as mediated by 'WithEscrows'.
-  
+Information is passed among all of these in a manner controlled by the
+three steps shown above.  Escrows from the creating context are passed in
+via 'bearer' to the internal context; escrows from the return value (and
+for escrows themselves, also the argument) are passed via 'WithEscrows';
+and the 'FaeRWT' stratum is shared between the internal context and the
+calling context.  The effect of the 'InternalContract' stage is to prevent
+escrows from being shared between the internal and calling contexts except
+as mediated by 'WithEscrows'.
 -}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Contract where
@@ -105,9 +115,15 @@ data TXData =
 type FaeContractT s m = Coroutine s (StateT Escrows (FaeRWT m))
 -- | The commonly used variant
 type FaeContract s = FaeContractT s Identity
--- | A "contract transformer", for use with the 'MonadContract' and
--- 'MonadTX' typeclasses.
+-- | A "contract transformer".  The useful one is 'ContractM', though, in
+-- "MonadFae".
 type ContractT m argType valType = argType -> m (WithEscrows valType)
+-- | This wrapper is necessary because 'Fae' and 'FaeTX' are monads that
+-- contract authors can actually use, and so we need to carefully limit the
+-- capabilities they are allowed.  It's here so we don't export it from
+-- "Fae".
+newtype FaeM s a = Fae { getFae :: FaeContract s a }
+  deriving (Functor, Applicative, Monad)
 
 -- | An internal representation of a contract, partway through full
 -- "compilation".  An 'InternalT' has its escrows hidden, because it will
@@ -235,9 +251,9 @@ makeContractAbstract (ConcreteContract f) = ConcreteContract $ \(argS, vers) -> 
   (gM, y) <- f x
   escrowMap <- use _escrowMap
   let 
-    g entID = 
+    h entID = 
       snd $ fromMaybe (throw $ BadEscrowID entID) $ Map.lookup entID escrowMap
-    vMap = versionMap g y
+    vMap = versionMap h y
   return (makeContractAbstract <$> gM, (toDyn y, vMap))
 
 -- | Because when we call an escrow, we actually know exactly what type was
@@ -298,6 +314,23 @@ internalSpend x = do
   -- nonterminating computations in them, which we want to be suffered by
   -- the originating contract and not by its victims.
   return $ WithEscrows escrowMap x
+
+-- | Because in "Transaction" we need to create a rewards escrow.
+internalNewEscrow :: 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType,
+    Functor s
+  ) =>
+  [BearsValue] -> 
+  ContractT (FaeContract (FaeRequest argType valType)) argType valType -> 
+  FaeContract s (EscrowID argType valType)
+internalNewEscrow eIDs f = do
+  entID <- use _nextID
+  -- modifies nextID
+  cAbs <- makeEscrowAbstract . makeConcrete <$> makeInternalT eIDs f
+  _escrowMap %= Map.insert entID (cAbs, entID) -- Initial version is entry ID
+  return $ EscrowID entID
 
 -- | A summary monad-running function.  You start with no escrows and the
 -- next escrow ID is the transaction ID.

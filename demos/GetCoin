@@ -1,0 +1,4 @@
+body = GetCoin
+reward = True
+keys
+  self = $key

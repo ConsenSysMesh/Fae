@@ -29,7 +29,6 @@ library
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.Lens
-    Blockchain.Fae.Internal.MonadFae
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Transaction

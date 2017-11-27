@@ -141,9 +141,7 @@ instance
   (Typeable argType, Typeable valType) => 
   Versionable (EscrowID argType valType) where
 
-  versions f eID@EscrowID{..} = (ver, Map.singleton ver $ toDyn eID) where
-    ver = f entID
-
+  versions f eID@EscrowID{..} = (f entID, Map.empty) 
   mapVersions _ eID = eID
 
 -- | /Not/ the generic instance, because that makes just a ton of useless
@@ -164,31 +162,31 @@ instance Versionable Void
 instance Versionable ()
 -- | Generic instance
 instance Versionable Bool
--- | Generic instance
+-- | Default instance
 instance Versionable Char where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Generic instance
+-- | Default instance
 instance Versionable Int where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Generic instance
+-- | Default instance
 instance Versionable Integer where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Generic instance
+-- | Default instance
 instance Versionable Float where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Generic instance
+-- | Default instance
 instance Versionable Double where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Generic instance
+-- | Default instance
 instance Versionable Natural where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Generic instance
+-- | Default instance
 instance Versionable PublicKey where
   versions = defaultVersions
   mapVersions = defaultMapVersions

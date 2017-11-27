@@ -18,12 +18,12 @@ module Blockchain.Fae.Contracts
     sell, redeem,
     -- * Possession
     -- $possession
-    signOver
+    signOver, deposit
   )
   where
 
 import Blockchain.Fae
-import Blockchain.Fae.Currency hiding (Token)
+import Blockchain.Fae.Currency
 
 import Control.Exception
 import Control.Monad
@@ -123,23 +123,24 @@ sell ::
   forall a m tok coin.
   (
     HasEscrowIDs a, Typeable a, Versionable a,
-    Currency tok coin, MonadTX m
+    Currency coin, MonadTX m
   ) =>
-  a -> Valuation tok coin -> PublicKey -> m ()
+  a -> Valuation coin -> PublicKey -> m ()
 sell x price seller = newContract [bearer x] sellC where
-  sellC :: Contract 
-            (Versioned (EscrowID tok coin))
-            (Either 
-              (Versioned (EscrowID tok coin)) 
-              (Versioned a, Versioned (EscrowID tok coin))
-            )
+  sellC :: 
+    Contract 
+      (Versioned coin)
+      (Either 
+        (Versioned coin) 
+        (Versioned a, Maybe (Versioned coin))
+      )
   sellC (Versioned payment) = do
     claimedSeller <- signer "seller"
     unless (claimedSeller == seller) $ 
       throw $ UnauthorizedSeller claimedSeller
     changeM <- change payment price
-    let (cost, remit) = fromMaybe (throw NotEnough) changeM
-    _ <- release $ Right (Versioned x, Versioned remit)
+    let (cost, remitM) = fromMaybe (throw NotEnough) changeM
+    _ <- release $ Right (Versioned x, Versioned <$> remitM)
     sender <- signer "self"
     unless (sender == seller) $
       throw $ NotOwner sender
@@ -189,6 +190,14 @@ signOver x owner = newContract [bearer x] signOverC where
     who <- signer "self"
     unless (owner == who) $ throw $ NotOwner who
     spend x
+
+-- | Sign over a value to a named owner.
+deposit ::
+  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
+  a -> String -> m ()
+deposit x name = do
+  owner <- signer name
+  signOver x owner
 
 data ContractsError =
   NotEnough | NotOwner PublicKey | UnauthorizedSeller PublicKey | BadToken |

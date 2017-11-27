@@ -6,15 +6,13 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-Fae does not have an associated currency, but it does provide a very minimal valuable to certain transactions that can be exchanged for currency or other derived values.
+Fae does not have an associated currency, but it does provide a very
+minimal valuable to certain transactions that can be exchanged for currency
+or other derived values.
 -}
 module Blockchain.Fae.Internal.Reward where
 
-import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.MonadFae
-import Blockchain.Fae.Internal.Storage
-
 import GHC.Generics
 
 -- * Types
@@ -30,18 +28,4 @@ type RewardEscrowID = EscrowID RewardToken Reward
 instance HasEscrowIDs RewardToken
 -- | For the 'RewardEscrowID' instance
 instance HasEscrowIDs Reward
-
--- * Functions
-
--- | How a reward is provided.  Users don't get this function, of course.
-rewardEscrow :: Contract RewardToken Reward
-rewardEscrow Token = spend Reward
-
--- | This function destroys a reward token, validating it in the process.
--- As the only interface to the `Reward` type, this /must/ be used by any
--- contract that intends to accept rewards as payment.
-claimReward :: (MonadTX m) => RewardEscrowID -> m ()
-claimReward eID = do
-  Reward <- useEscrow eID Token
-  return ()
 

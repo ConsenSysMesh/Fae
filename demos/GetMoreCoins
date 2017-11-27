@@ -1,0 +1,6 @@
+body = GetMoreCoins
+reward = True
+keys
+  self = $key
+inputs
+  TransactionOutput $txID 0 = ()

@@ -17,6 +17,8 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Versions
 
+import Control.DeepSeq
+
 import Control.Monad.IO.Class
 import Control.Monad.State
 
@@ -128,7 +130,7 @@ instance Ixed (StorageT c)
 -- indexing of a 'StorageT' so that we can look up contracts by ID, which
 -- requires descending to various levels into the maps.
 instance At (StorageT c) where
-  at cID@((_ :# n) :# m) = throw $ InvalidContractID cID
+  at cID@((_ :# _) :# _) = throw $ InvalidContractID cID
   at (cID :# n) = nonceAt cID . checkNonce cID (Just n)
   at cID = nonceAt cID . checkNonce cID Nothing
 
@@ -203,11 +205,9 @@ showTransaction txID = do
         \sID str -> "input " ++ show sID ++ "\n    " ++ str)
   where 
     displayException f x = liftIO $
-      catchAll (f <$> evaluate x) $ \e -> return $ "<exception> " ++ show e
-    showNonce iov = 
-      case iov of
-        InputOutputVersions{..} -> 
-          use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
+      catchAll (evaluate $ force $ f x) $ \e -> return $ "<exception> " ++ show e
+    showNonce InputOutputVersions{..} =
+      use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
     showOutputs os = "outputs: " ++ show (IntMap.keys os)
     showIOVersions nS InputOutputVersions{..} = intercalate "\n    " $
       [
