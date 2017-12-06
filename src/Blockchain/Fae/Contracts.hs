@@ -25,6 +25,7 @@ module Blockchain.Fae.Contracts
 import Blockchain.Fae
 import Blockchain.Fae.Currency
 
+import Control.DeepSeq
 import Control.Exception
 import Control.Monad
 import Control.Monad.State
@@ -49,6 +50,14 @@ import Numeric.Natural
 -- approving the swap; if either disagrees, both can get their offering
 -- back; if both agree, each one gets the other's.
 
+-- | The exceptions that can arise during a swap
+data TwoPartyException = 
+  NotAParty | MustVote | AlreadyVoted | CantVote | AlreadyGot
+  deriving (Show)
+                             
+-- | Of course
+instance Exception TwoPartyException
+
 -- | This contract accepts both offerings on creation; the intention is
 -- that it is created in a single transaction signed jointly by both
 -- parties, who withdraw their values from their respective "accounts".
@@ -57,6 +66,7 @@ twoPartySwap ::
     HasEscrowIDs a, HasEscrowIDs b, 
     Versionable a, Versionable b,
     Typeable a, Typeable b,
+    NFData a, NFData b,
     MonadTX m
   ) =>
   a -> b -> m ()
@@ -65,50 +75,53 @@ twoPartySwap x y = do
   partyB <- signer "partyB"
   newContract [bearer x, bearer y] $ twoPartySwapC partyA partyB x y
 
+-- | Semantic labels
+data Stages = Stage1 | Stage2
+
 -- | Both parts have two stages, so this contract has four iterations.
 twoPartySwapC :: 
   (HasEscrowIDs a, HasEscrowIDs b, Versionable a, Versionable b) =>
   PublicKey -> PublicKey -> 
   a -> b ->
-  Contract Bool (Maybe (Either (Versioned a) (Versioned b)))
-twoPartySwapC partyA partyB x y choice = do
-  values <- part1 choice
-  part2 values
+  Contract (Maybe Bool) (Maybe (Either (Versioned a) (Versioned b)))
+twoPartySwapC partyA partyB x y choice1 = do
+  values <- part1 Stage1 choice1
+  noChoice <- release Nothing
+  part2 Stage1 noChoice values
   
   where
     -- Every time this contract is called, we have to abort if the caller
     -- is not one of the two parties.
     getPartySigner = do
       who <- signer "self"
-      unless (who == partyA || who == partyB) $ throw $ NotAParty who
+      unless (who == partyA || who == partyB) $ throw NotAParty 
       return who
+    -- Convenient abbreviations
+    xRet = Left $ Versioned x
+    yRet = Right $ Versioned y
     -- Collect the votes and determine the payouts
-    part1 choice1 = do
-      --   stage 1
+    part1 _ Nothing = throw MustVote
+    part1 _ (Just False) = return (xRet, yRet)
+    part1 Stage1 (Just True) = do
       sender1 <- getPartySigner
       choice2 <- release Nothing
-      --   stage 2
       sender2 <- getPartySigner
-      --     Back to stage 1, so that 'sender1' can change their vote.
-      let 
-        xRet = Left $ Versioned x
-        yRet = Right $ Versioned y
-      if sender1 == sender2
-      then part1 choice2
-      else return $ if choice1 && choice2 then (yRet, xRet) else (xRet, yRet)
+      when (sender1 == sender2) $ throw AlreadyVoted
+      part1 Stage2 choice2
+    part1 Stage2 (Just True) = return (yRet, xRet)
     -- Accept requests to pay out and deliver appropriately.
-    part2 values = do
-      _ <- release Nothing -- Vote is ignored now
-      --   stage 1
+    part2 _ (Just _) _ = throw CantVote
+    part2 Stage1 Nothing (forA, forB) = do
       receiver1 <- getPartySigner
-      let getters = if receiver1 == partyA then (fst, snd) else (snd, fst)
-      _ <- release $ Just $ fst getters values -- Vote is ignored now
-      --   stage 2
+      let 
+        orderedValues
+          | receiver1 == partyA = (forA, forB)
+          | otherwise = (forB, forA)
+      noChoice <- release $ Just $ fst orderedValues
       receiver2 <- getPartySigner
-      --     /Not/ back to stage 1, since it's an error to get your value twice.
-      when (receiver1 == receiver2) $ throw $ AlreadyGot receiver2
-      spend $ Just $ snd getters values
-      -- Contract closed
+      when (receiver1 == receiver2) $ throw AlreadyGot 
+      part2 Stage2 noChoice orderedValues
+    part2 Stage2 Nothing (_, ret) = spend $ Just ret
 
 -- $vendor
 -- Direct sales are contracts in which the seller delivers the product
@@ -122,7 +135,7 @@ twoPartySwapC partyA partyB x y choice = do
 sell :: 
   forall a m tok coin.
   (
-    HasEscrowIDs a, Typeable a, Versionable a,
+    HasEscrowIDs a, Typeable a, Versionable a, NFData a,
     Currency coin, MonadTX m
   ) =>
   a -> Valuation coin -> PublicKey -> m ()
@@ -155,6 +168,7 @@ redeem ::
     HasEscrowIDs a, HasEscrowIDs b, 
     Versionable a, Versionable b, 
     Typeable a, Typeable b, 
+    NFData a, NFData b,
     Read b, MonadTX m
   ) =>
   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
@@ -182,7 +196,7 @@ redeem x valid seller = newContract [bearer x] redeemC where
 -- in which case it returns the value.
 signOver ::
   forall a m.
-  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
+  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
   a -> PublicKey -> m ()
 signOver x owner = newContract [bearer x] signOverC where
   signOverC :: Contract () a
@@ -193,16 +207,15 @@ signOver x owner = newContract [bearer x] signOverC where
 
 -- | Sign over a value to a named owner.
 deposit ::
-  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
+  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
   a -> String -> m ()
 deposit x name = do
   owner <- signer name
   signOver x owner
 
 data ContractsError =
-  NotEnough | NotOwner PublicKey | UnauthorizedSeller PublicKey | BadToken |
-  AlreadyGot PublicKey | NotAParty PublicKey
-  deriving (Typeable, Show)
+  NotEnough | NotOwner PublicKey | UnauthorizedSeller PublicKey | BadToken
+  deriving (Show)
 
 instance Exception ContractsError
 

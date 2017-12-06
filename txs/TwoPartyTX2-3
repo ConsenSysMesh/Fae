@@ -1,5 +1,5 @@
 body = TwoPartyTX2-3
 inputs
-  TransactionOutput $tx1 0 = True
+  TransactionOutput $tx1 0 = Just True
 keys
   self = $key

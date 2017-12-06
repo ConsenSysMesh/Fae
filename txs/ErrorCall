@@ -1,0 +1,3 @@
+body = ErrorCall
+inputs
+  TransactionOutput $tx 0 = ()

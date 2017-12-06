@@ -86,7 +86,7 @@ type EntryID = Digest
 -- that the contract receives and returns a particular kind of opaque
 -- value, e.g. a currency.
 newtype EscrowID argType valType = EscrowID { entID :: EntryID }
-  deriving (Generic)
+  deriving (Generic, NFData)
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
 -- this type is, abstractly, something within a contract that has economic
 -- value, in the sense that it is backed by a scarce resource contained in

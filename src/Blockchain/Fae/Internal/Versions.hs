@@ -16,6 +16,8 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 
+import Control.DeepSeq
+
 import Control.Monad
 import Control.Monad.State
 
@@ -109,6 +111,10 @@ class GRecords f where
 -- | Of course
 instance Exception VersionErrors
 
+instance (NFData a) => NFData (Versioned a) where
+  rnf (Versioned x) = x `deepseq` ()
+  rnf (VersionedID vID) = vID `deepseq` ()
+
 -- | Read 'Versioned' values as their version, which is a 'Digest'.
 -- Regardless of whether 'a' has a 'Read' instance, 'Versioned a' always
 -- does, though the version may fail to be resolved.
@@ -192,7 +198,7 @@ instance Versionable PublicKey where
   mapVersions = defaultMapVersions
 -- | Generic instance overlapping that for 'Foldable', since we actually do
 -- want to go inside a 'Maybe'.
-instance (Versionable a) => Versionable (Maybe a)
+instance (Typeable a, Versionable a) => Versionable (Maybe a)
 -- | Generic instance
 instance (Versionable a, Versionable b) => Versionable (a, b)
 -- | Generic instance

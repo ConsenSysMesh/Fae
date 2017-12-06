@@ -20,6 +20,7 @@ where
 import Blockchain.Fae
 
 import Control.Applicative
+import Control.DeepSeq
 
 import Control.Monad.Reader.Class
 
@@ -37,7 +38,7 @@ import Numeric.Natural
 -- "homomorphic" operations.  Note that no actual encryption needs to be
 -- involved.
 class 
-  (Versionable coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
+  (Versionable coin, NFData coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
   Currency coin where
 
   data Valuation coin

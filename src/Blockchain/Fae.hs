@@ -90,6 +90,8 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
 
+import Control.DeepSeq
+
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class
@@ -256,7 +258,8 @@ newContract ::
     HasEscrowIDs argType, HasEscrowIDs valType, 
     Versionable argType, Versionable valType,
     Typeable argType, Typeable valType, 
-    Read argType, MonadTX m
+    Read argType, NFData valType,
+    MonadTX m
   ) =>
   [BearsValue] -> Contract argType valType -> m ()
 newContract eIDs f = liftTX $ Fae $ do

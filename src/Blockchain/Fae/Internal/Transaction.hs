@@ -114,13 +114,12 @@ class GGetInputValues f where
 -- | Of course
 instance Exception TransactionException
 
--- | Empty types not only have no input values, it is insulting to suggest
--- that they might.
-instance GetInputValues Void where
-  getInputValues _ = (throw TooManyInputs, [])
 -- | Generic instance
-instance GetInputValues ()
--- | Generic instance
+instance GetInputValues Void 
+-- | Default instance
+instance GetInputValues () where
+  getInputValues = defaultGetInputValues
+-- | Default instance
 instance GetInputValues Bool where
   getInputValues = defaultGetInputValues
 -- | Default instance
@@ -176,6 +175,17 @@ instance
   ) => 
   GetInputValues (a, b, c)
 
+-- | Has no values; uses one value if available, so that 'Void' can be used
+-- as a black hole.
+instance GGetInputValues V1 where
+  gGetInputValues = do
+    modify safeTail
+    return $ throw TooManyInputs
+
+    where
+      safeTail [] = []
+      safeTail (x : rest) = rest
+
 -- | No values in a constructor with no records
 instance GGetInputValues U1 where
   gGetInputValues = return U1
@@ -196,7 +206,8 @@ instance (Typeable c) => GGetInputValues (K1 i c) where
   gGetInputValues = do
     s <- get
     case s of
-      [] -> throw NotEnoughInputs
+      -- This allows you to use only part of an input structure.
+      [] -> return $ K1 $ throw NotEnoughInputs
       l -> do
         let (x, rest) = defaultGetInputValues l
         put rest
@@ -231,8 +242,14 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
       signers,
       result = undefined :: a
     }
-  input <- handleAll (return . throw) $ makeInput isReward inputArgs
+  inputsL <- runInputContracts inputArgs
+  -- We have to handle exceptions because we don't want the inputs to get
+  -- rolled back.
   (result, outputs) <- handleAll (\e -> return (throw e, throw e)) $ do
+    (input, unused) <- getInputValues <$> withReward inputsL 
+    unless (null unused) $ throw TooManyInputs
+    -- We have to hoist because we don't want to give transaction authors
+    -- access to IO.
     (result, outputsL) <- hoistFaeContract $ listen $ getFae $ f input
     escrows <- use _escrowMap
     unless (Map.null escrows) $ throw OpenEscrows
@@ -241,13 +258,6 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
     _getStorage . at txID %= 
       fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
  
--- | Constructs the transaction's input argument object
-makeInput :: (GetInputValues input) => Bool -> Inputs -> TXStorageM input
-makeInput isReward inputArgs = do
-  inputsL <- runInputContracts inputArgs
-  (input, unused) <- hoistFaeContract $ getInputValues <$> withReward inputsL 
-  unless (null unused) $ throw TooManyInputs
-  return input
   where
     withReward 
       | isReward = \inputs -> do
@@ -267,14 +277,13 @@ runInputContract ::
   ContractID -> String ->
   ([Dynamic], VersionMap) -> TXStorageM ([Dynamic], VersionMap)
 runInputContract cID arg (results, vers) = do
-  let inputError e = return (throw e, vers)
-  (result, vers') <- handleAll inputError $ do
+  let inputError e = return (throw e, vers, throw e)
+  (result, vers', ioV) <- handleAll inputError $ do
     ConcreteContract fAbs <- liftFaeContract $ use $
       at cID . defaultLens (throw $ BadInput cID)
     -- This strictness is /so/ important.  It flushes out errors that would
     -- otherwise be saved in future iterations of the contract.
-    ((!gAbsM, (!result, !vMap)), !outputsL) <- 
-      hoistFaeContract $ listen $ fAbs (arg, vers)
+    ((!gAbsM, (!result, !vMap)), !outputsL) <- listen $ fAbs (arg, vers)
     let 
       iRealID = withoutNonce cID
       iOutputs = intMapList outputsL
@@ -284,10 +293,11 @@ runInputContract cID arg (results, vers) = do
         | hasNonce cID = (fmap dynTypeRep vMap, vers `Map.union` vMap)
         | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
-    txID <- view _thisTXID
-    liftFaeContract $ _getStorage . at txID %= 
-      fmap (_inputOutputs . at (shorten cID) ?~ InputOutputVersions{..})
-    return (result, vers')
+    return (result, vers', InputOutputVersions{..})
+  -- Nothing after this line should ever throw an exception
+  txID <- view _thisTXID
+  liftFaeContract $ _getStorage . at txID %= 
+    fmap (_inputOutputs . at (shorten cID) ?~ ioV)
   censor (const []) $ return (results |> result, vers')
 
 -- | Gets a single value from a single input
