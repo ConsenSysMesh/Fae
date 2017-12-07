@@ -1,5 +1,5 @@
-body = TwoPartyTX5
+body = TwoPartyTX4-5
 inputs
   TransactionOutput $tx1 0 = Nothing
 keys
-  self = key2
+  self = $key

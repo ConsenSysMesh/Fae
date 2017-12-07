@@ -1,5 +1,0 @@
-body = TwoPartyTX4
-inputs
-  TransactionOutput $tx1 0 = Nothing
-keys
-  self = key1
