@@ -76,7 +76,7 @@ module Blockchain.Fae
     -- * Opaque classes
     GetInputValues, HasEscrowIDs, Versionable, 
     -- * Re-exports
-    Natural, Typeable, Exception, Generic, Void, throw, evaluate
+    Natural, Typeable, Exception, Generic, NFData, Void, throw, evaluate
   ) where
 
 import Blockchain.Fae.Internal.Contract

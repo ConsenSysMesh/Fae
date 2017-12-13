@@ -1,4 +1,4 @@
-body = AuctionTX1
+body = Create
 keys
   self = seller
 others
