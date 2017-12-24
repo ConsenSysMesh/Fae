@@ -22,7 +22,7 @@ It may be a little confusing how a user-provided 'Contract' becomes the
 
   - A 'ConcreteContract' is, finally, made into an 'AbstractContract',
   which handles conversion of its input and output types from and to
-  untyped 'String' and 'Dynamic', respectively.  It also resolves version
+  untyped 'String' and 'BearsValue, respectively.  It also resolves version
   IDs to their corresponding correctly-typed values.
 
 Each of these stages takes place in some @FaeContract s@ monad, but it is
@@ -61,7 +61,6 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
-import Data.Dynamic
 import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Map (Map)
@@ -155,13 +154,14 @@ newtype ConcreteContract argType valType =
 -- | The type actually stored in the escrows map, because escrows can have
 -- any types of input and output.  Abstract escrows take arbitrary argument
 -- types.
-type AbstractEscrow = ConcreteContract Dynamic Dynamic
+type AbstractEscrow = ConcreteContract BearsValue BearsValue
 -- | The type actually stored in a 'TransactionEntry', because contracts
 -- can have any types of input and output.  Abstract contracts only take
 -- string inputs, which they have to parse into the argument type they
 -- expect.  This prevents malicious users from injecting their own code
 -- into transactions' contract calls.
-type AbstractContract = ConcreteContract (String, VersionMap) (Dynamic, VersionMap)
+type AbstractContract = 
+  ConcreteContract (String, VersionMap) (BearsValue, VersionMap)
 
 -- | Exception type
 data ContractException =
@@ -208,7 +208,7 @@ makeInternalT eIDs !f = do
 -- continuation.  It also correctly retrieves escrows from the argument and
 -- places the escrows of the return value into the local storage.
 makeConcrete ::
-  (HasEscrowIDs argType, HasEscrowIDs valType) =>
+  (HasEscrowIDs argType, Typeable argType) =>
   InternalContract argType valType ->
   ConcreteContract argType valType
 makeConcrete !f = ConcreteContract $ \x -> hoistFaeContract $ do
@@ -228,14 +228,17 @@ makeConcrete !f = ConcreteContract $ \x -> hoistFaeContract $ do
 -- return value.
 makeEscrowAbstract ::
   forall argType valType.
-  (Typeable argType, Typeable valType) =>
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType
+  ) =>
   ConcreteContract argType valType -> AbstractEscrow 
 makeEscrowAbstract (ConcreteContract !f) = ConcreteContract $ \xDyn -> do
   let 
-    x = fromDyn xDyn $
-      throw $ BadArgType (typeRep (Proxy @argType)) (dynTypeRep xDyn)
+    x = unBear xDyn $
+      throw $ BadArgType (typeRep (Proxy @argType)) (bearerType xDyn)
   (gM, y) <- f x
-  return (makeEscrowAbstract <$> gM, toDyn $ y)
+  return (makeEscrowAbstract <$> gM, bearer y)
 
 -- | An abstract contract needs to parse its input, clear the
 -- output type, and also resolve version IDs in the input and save new
@@ -261,19 +264,22 @@ makeContractAbstract (ConcreteContract !f) = ConcreteContract $ \(argS, vers) ->
     h entID = 
       snd $ fromMaybe (throw $ BadEscrowID entID) $ Map.lookup entID escrowMap
     vMap = versionMap h y
-  return (makeContractAbstract <$> gM, (toDyn $!! y, vMap))
+  return (makeContractAbstract <$> gM, (bearer $!! y, vMap))
 
 -- | Because when we call an escrow, we actually know exactly what type was
 -- given as its argument and expected as its result.
 unmakeAbstractEscrow ::
   forall argType valType.
-  (Typeable argType, Typeable valType) =>
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType
+  ) =>
   AbstractEscrow -> ConcreteContract argType valType
 unmakeAbstractEscrow (ConcreteContract f) = ConcreteContract $ \x -> do
-  (gAbsM, yDyn) <- f $ toDyn x
+  (gAbsM, yDyn) <- f $ bearer x
   let 
-    y = fromDyn yDyn $
-      throw $ BadValType (typeRep (Proxy @valType)) (dynTypeRep yDyn)
+    y = unBear yDyn $
+      throw $ BadValType (typeRep (Proxy @valType)) (bearerType yDyn)
   return (unmakeAbstractEscrow <$> gAbsM, y)
 
 -- | Retrieves backing escrows from value-bearing objects.
@@ -313,7 +319,7 @@ takeEscrow eID = do
 -- | Because we need to essentially 'spend' a value internally, and we
 -- haven't defined that function yet.
 internalSpend :: 
-  (HasEscrowIDs valType, MonadState Escrows m) => 
+  (HasEscrowIDs valType, Typeable valType, MonadState Escrows m) => 
   valType -> m (WithEscrows valType)
 internalSpend x = do
   Escrows{..} <- takeEscrows [bearer x]
@@ -336,7 +342,8 @@ internalNewEscrow eIDs f = do
   entID <- use _nextID
   -- modifies nextID
   cAbs <- makeEscrowAbstract . makeConcrete <$> makeInternalT eIDs f
-  _escrowMap %= Map.insert entID (cAbs, entID) -- Initial version is entry ID
+  -- Initial version is entry ID
+  _escrowMap %= Map.insert entID (cAbs, VersionID entID)
   return $ EscrowID entID
 
 -- | A summary monad-running function.  You start with no escrows and the

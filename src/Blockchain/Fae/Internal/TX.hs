@@ -41,6 +41,7 @@ import Control.Monad
 import Control.Monad.State
 
 import Data.List
+import Data.Map (Map)
 import qualified Data.Map as Map
 
 import GHC.Generics
@@ -58,9 +59,12 @@ data TX =
   {
     txID :: TransactionID,
     inputs :: Inputs,
-    pubKeys :: Signers
+    pubKeys :: Signers,
+    fallback :: [String]
   }
   deriving (Generic)
+
+newtype UnquotedString = UnquotedString String
 
 -- | This builds on 'FaeStorage' because the interpreter has to access the
 -- storage as part of 'runTransaction'.
@@ -74,6 +78,9 @@ instance Serialize TX
 instance Digestible TX
 -- | Default instance
 instance NFData TX
+
+instance Show UnquotedString where
+  show (UnquotedString s) = s
 
 -- * Functions
 
@@ -92,9 +99,15 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
     ]
   loadModules [txSrc]
   setImportsQ $ (txSrc, Just txSrc) : map (,Nothing) pkgModules 
-  run <- interpret ("runTransaction " ++ qualified "body") infer
+  run <- interpret runString infer
   lift $ run inputs txID pubKeys isReward 
   where
+    runString = intercalate " "
+      [
+        "runTransaction",
+        qualified "body", 
+        show $ map (UnquotedString . qualified) fallback
+      ]
     fixGHCErrors (WontCompile []) = error "Compilation error"
     fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
     fixGHCErrors (UnknownError e) = error e

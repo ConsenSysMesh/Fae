@@ -5,6 +5,5 @@ body :: Transaction RewardEscrowID Integer
 body rID = do
   eID <- reward rID
   v <- value eID
-  s <- signer "self"
-  signOver eID s
+  deposit eID "self"
   return $ toInteger v

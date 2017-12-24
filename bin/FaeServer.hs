@@ -102,8 +102,10 @@ serverApp txQueue request respond = do
       [ C8.unpack inputBS | ("input", inputBS) <- params ]
     inputs = fromMaybe (error "Couldn't parse inputs") $ 
       mapM readMaybe inputParams
+    fallback =
+      [ C8.unpack fallbackBS | ("fallback", fallbackBS) <- params ]
 
-  tx@TX{pubKeys, txID} <- nextTX keyNames inputs >>= evaluate . force
+  tx@TX{pubKeys, txID} <- nextTX keyNames inputs fallback >>= evaluate . force
   let (mainFileM, modules) = makeFilesMap files txID
   case mainFileM of
     Nothing -> respond $ buildResponse $ 
@@ -128,8 +130,8 @@ buildResponse = responseBuilder ok200 headers . stringUtf8 where
       (hContentType, "text/plain")
     ]
 
-nextTX :: [(String, String)] -> Inputs -> IO TX
-nextTX keyNames inputs = do
+nextTX :: [(String, String)] -> Inputs -> [String] -> IO TX
+nextTX keyNames inputs fallback = do
   signerNonces <- forM keyNames $ \(signer, keyName) -> do
     keyExists <- doesFileExist keyName
     unless keyExists $ do

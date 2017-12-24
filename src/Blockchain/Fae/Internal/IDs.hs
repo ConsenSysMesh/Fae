@@ -8,7 +8,7 @@ Stability: experimental
 
 There are several identifier types in Fae: two kinds of contract ID (one detailed, one convenient but lossy), transaction IDs, and escrow IDs.  In addition, the escrow IDs in particular have a lot of ritual surrounding them.
 -}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds, GADTs #-}
 module Blockchain.Fae.Internal.IDs where
 
 import Blockchain.Fae.Internal.Coroutine
@@ -21,12 +21,12 @@ import Control.DeepSeq
 import Control.Monad.Writer
 
 import Data.Char
-import Data.Functor.Identity
+import Data.Dynamic
 import qualified Data.Serialize as Ser
 import Data.List
 import Data.String
 import Data.Traversable
-import Data.Typeable
+import Data.Type.Equality
 import Data.Void
 
 import GHC.Generics
@@ -35,6 +35,7 @@ import GHC.TypeLits
 import Numeric.Natural
 
 import Text.ParserCombinators.ReadP
+import Type.Reflection
 
 -- * Types
 
@@ -90,8 +91,9 @@ newtype EscrowID argType valType = EscrowID { entID :: EntryID }
 -- | An existential type unifying the 'HasEscrowIDs' class.  A value of
 -- this type is, abstractly, something within a contract that has economic
 -- value, in the sense that it is backed by a scarce resource contained in
--- an escrow.
-data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
+-- an escrow.  This is a restricted form of 'Dynamic' bearing
+-- a 'HasEscrowIDs' constraint.
+data BearsValue = forall a. (HasEscrowIDs a, Typeable a) => BearsValue a
 
 -- | Exceptions for ID-related errors.
 data IDException =
@@ -253,12 +255,28 @@ shorten :: ContractID -> ShortContractID
 shorten = ShortContractID . digest . withoutNonce
 
 -- | Mark a value backed by escrows as such.
-bearer :: (HasEscrowIDs a) => a -> BearsValue
-bearer = BearsValue
+bearer :: (HasEscrowIDs a, Typeable a) => a -> BearsValue
+bearer = BearsValue 
+
+-- | Like 'fromDynamic'.
+unBearer :: forall a. (HasEscrowIDs a, Typeable a) => BearsValue -> Maybe a
+unBearer (BearsValue x)
+  | Just HRefl <- typeOf x `eqTypeRep` (typeRep :: TypeRep a) = Just x
+  | otherwise = Nothing
+
+-- | Like 'fromDyn'.
+unBear :: forall a. (HasEscrowIDs a, Typeable a) => BearsValue -> a -> a
+unBear (BearsValue x) x0 
+  | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
+  | otherwise = x0
+
+bearerType :: BearsValue -> SomeTypeRep
+bearerType (BearsValue x) = someTypeRep (Just x)
 
 -- | For making empty instances of 'HasEscrowIDs'
 defaultTraverseEscrowIDs :: EscrowIDTraversal a
-defaultTraverseEscrowIDs _ x = return x -- Not point-free to specialize forall
+-- Not point-free to specialize forall
+defaultTraverseEscrowIDs _ x = return x
 
 -- | Predicate for determining whether a required nonce was provided.
 hasNonce :: ContractID -> Bool

@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds, UndecidableInstances #-}
 {- |
 Module: Blockchain.Fae.Internal.Versions
 Description: The core 'Contract' type that underlies Fae
@@ -21,7 +21,6 @@ import Control.DeepSeq
 import Control.Monad
 import Control.Monad.State
 
-import Data.Dynamic
 import Data.Foldable
 
 import qualified Data.Map as Map
@@ -43,14 +42,16 @@ import Numeric.Natural
 -- * Types
 
 -- | For convenience
-type VersionID = Digest
+newtype VersionID = VersionID Digest 
+  deriving (NFData, Eq, Ord, Serialize)
 -- | The inverse to the map of subobjects to their versions.
-type VersionMap = Map VersionID Dynamic
+type VersionMap = Map VersionID BearsValue
 -- | For marking a contract input to be passed by version ID, or a contract
 -- output to be considered a single coherent unit.
 data Versioned a = 
   Versioned { getVersioned :: a } |
   VersionedID VersionID 
+  deriving (Generic)
 
 -- | Errors that can arise when dealing with versions.
 data VersionErrors =
@@ -64,7 +65,7 @@ data VersionErrors =
 
 -- | Types that can be versioned, meaning a unique identifier is calculated
 -- for it and all subobjects (stopping at 'Versioned' fields).
-class (Typeable a) => Versionable a where
+class (HasEscrowIDs a, Typeable a) => Versionable a where
   -- | Returns the map of all versions, including self.
   versionMap :: (EntryID -> VersionID) -> a -> VersionMap
   versionMap f x =
@@ -72,7 +73,7 @@ class (Typeable a) => Versionable a where
     -- the one we want, since the top-level object is not a record.
     let (ver, vers) = versions f x in
     -- Same comment as in @GRecords m (K1 i c)@
-    Map.insert ver (toDyn x) vers
+    Map.insert ver (bearer x) vers
 
   -- | Sort of the inverse of 'versionMap', this resolves all 'VersionedID'
   -- variants of 'Versioned' to 'Versioned' variants.
@@ -111,6 +112,13 @@ class GRecords f where
 -- | Of course
 instance Exception VersionErrors
 
+instance Read VersionID where
+  readsPrec n = map (_1 %~ VersionID) . readsPrec n
+
+instance Show VersionID where
+  show (VersionID ver) = show ver
+
+-- | Force the versioned value or version ID
 instance (NFData a) => NFData (Versioned a) where
   rnf (Versioned x) = x `deepseq` ()
   rnf (VersionedID vID) = vID `deepseq` ()
@@ -128,12 +136,13 @@ instance (Versionable a) => Versionable (Versioned a) where
     (ver, _) = versions f x 
 
   versionMap f (Versioned x) = versionMap f x
+  versionMap f (VersionedID ver) = throw $ UnresolvedVersionID ver
 
   mapVersions _ Versioned{} = throw $ UnexpectedResolvedVersion
   mapVersions vMap (VersionedID ver) =
     Versioned $ 
-    fromMaybe (throw $ BadVersionedType (dynTypeRep xDyn) (typeRep $ Proxy @a)) $ 
-    fromDynamic xDyn
+    fromMaybe (throw $ BadVersionedType (bearerType xDyn) (typeRep $ Proxy @a)) $ 
+    unBearer xDyn
     where xDyn = fromMaybe (throw $ BadVersionID ver) $ Map.lookup ver vMap
 
 -- | Pass through the 'Versioned' constructor
@@ -144,7 +153,10 @@ instance (HasEscrowIDs a) => HasEscrowIDs (Versioned a) where
 -- | This key base case actually uses the function argument to 'versions'
 -- by applying it to the escrow ID.
 instance 
-  (Typeable argType, Typeable valType) => 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType
+  ) => 
   Versionable (EscrowID argType valType) where
 
   versions f eID@EscrowID{..} = (f entID, Map.empty) 
@@ -155,11 +167,11 @@ instance
 -- we treat a list as though it were 'Versioned'.  We take 'Foldable' to be
 -- the class designating all things that are "like recursively nested
 -- constructors", e.g. cons-lists.
-instance {-# OVERLAPPABLE #-} 
-  (Versionable a, Functor t, Foldable t, Typeable t) => 
+instance {-# OVERLAPPABLE #-} -- Also undecidable
+  (Versionable a, Functor t, Foldable t, Typeable t, HasEscrowIDs (t a)) => 
   Versionable (t a) where
 
-  versions f x = (digest $ map (fst . versions f) $ toList x, Map.empty)
+  versions f x = (mkVersionID $ map (fst . versions f) $ toList x, Map.empty)
   mapVersions = fmap . mapVersions
 
 -- | Generic instance
@@ -211,7 +223,7 @@ instance GVersionable V1 where
 
 -- | Enumeration type has no version
 instance GVersionable U1 where
-  gVersions _ U1 = (digest (), Map.empty)
+  gVersions _ U1 = (mkVersionID (), Map.empty)
   gMapVersions _ U1 = U1
 
 -- | Sum type version equals summand version
@@ -231,16 +243,12 @@ instance
   (GVersionable f, KnownSymbol tSym, KnownSymbol mSym) => 
   GVersionable (M1 D (MetaData tSym mSym p nt) f) where
 
-  gVersions f (M1 x) =
-    let
-      (ver, vers) = gVersions f x
-      vID = digest (mName, tName, ver)
-    -- Same comment as for @M1 C@
-    in (vID, vers)
-
-    where
-      mName = symbolVal (Proxy @mSym)
-      tName = symbolVal (Proxy @tSym)
+  -- Same comment as for @M1 C@
+  gVersions f (M1 x) = (vID, vers) where
+    (ver, vers) = gVersions f x
+    vID = mkVersionID (mName, tName, ver)
+    mName = symbolVal (Proxy @mSym)
+    tName = symbolVal (Proxy @tSym)
 
   gMapVersions vMap (M1 x) = M1 $ gMapVersions vMap x
 
@@ -250,14 +258,11 @@ instance
   (GRecords f, KnownSymbol cSym) =>
   GVersionable (M1 C (MetaCons cSym x s) f) where
 
-  gVersions f (M1 x) = 
-    let 
-      vers = evalState (gRecords f x) 0
-      vID = digest (cName, Map.keys vers)
-    -- 'x' is only a representation type, so we don't put it in the map.
-    in (vID, vers)
-
-    where cName = symbolVal (Proxy @cSym)
+  -- 'x' is only a representation type, so we don't put it in the map.
+  gVersions f (M1 x) = (vID, vers) where 
+    vers = evalState (gRecords f x) 0
+    vID = mkVersionID (cName, Map.keys vers)
+    cName = symbolVal (Proxy @cSym)
 
   gMapVersions vMap (M1 x) = M1 $ gRMapVersions vMap x
 
@@ -290,11 +295,11 @@ instance (Versionable c) => GRecords (K1 i c) where
     modify (+ 1)
     -- The version as a record differs from the inherent version.  This
     -- is why we don't include self in 'versions' output.
-    let vID = digest (n, ver)
+    let vID = mkVersionID (n, ver)
     -- It's important that here, we have 'x' as its actual type, not as
-    -- @Rep c@, should 'c' be 'Generic'.  Therefore its 'Dynamic' is
+    -- @Rep c@, should 'c' be 'Generic'.  Therefore its 'BearsValue' is
     -- meaningful.
-    return $ Map.insert vID (toDyn x) vers
+    return $ Map.insert vID (bearer x) vers
 
   gRMapVersions vMap (K1 x) = K1 $ mapVersions vMap x
 
@@ -303,9 +308,13 @@ instance (Versionable c) => GRecords (K1 i c) where
 defaultVersions :: 
   (Digestible a) => 
   (EntryID -> VersionID) -> a -> (VersionID, VersionMap)
-defaultVersions _ x = (digest x, Map.empty)
+defaultVersions _ x = (mkVersionID x, Map.empty)
 
 -- | For default instances of 'Versionable'
 defaultMapVersions :: VersionMap -> a -> a
 defaultMapVersions _ = id
+
+-- | Utility
+mkVersionID :: (Digestible a) => a -> VersionID
+mkVersionID = VersionID . digest
 

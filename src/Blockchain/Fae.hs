@@ -192,7 +192,7 @@ deriving instance (Functor s) => MonadTX (FaeM s)
 -- value is passed with its backing escrows, maintaining its value.  Once
 -- a contract terminates with a 'spend', it is removed from storage.
 spend :: 
-  (HasEscrowIDs valType, MonadContract argType' valType' m) => 
+  (Typeable valType, HasEscrowIDs valType, MonadContract argType' valType' m) => 
   valType -> m (WithEscrows valType)
 spend = liftTX . Fae . internalSpend 
 
@@ -201,7 +201,7 @@ spend = liftTX . Fae . internalSpend
 -- `spend`ing an intermediate value, and awaiting its next call to
 -- continue with the arg that was passed.
 release :: 
-  (HasEscrowIDs valType, MonadContract argType valType m) => 
+  (Typeable valType, HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m argType
 release x = liftContract $ Fae $ do
   req <- internalSpend x
@@ -230,7 +230,7 @@ useEscrow EscrowID{..} x = liftTX $ Fae $ do
   -- it was created.  If the transaction is a known quantity, then this
   -- ensures that the version accurately reflects its effects and not those
   -- of some other, hidden, transaction.
-  let newVer = digest (ver, txID)
+  let newVer = mkVersionID (ver, txID)
   _escrowMap . at entID .= ((,newVer) . makeEscrowAbstract <$> gConcM)
   return y
 

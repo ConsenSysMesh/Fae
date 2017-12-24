@@ -110,7 +110,7 @@ executable faeServer
 
 executable curlTX
   buildable: True
-  hs-source-dirs: scripts
+  hs-source-dirs: bin
   main-is: CurlTX.hs
   build-depends:
     base,
@@ -118,6 +118,9 @@ executable curlTX
     fae,
     lens,
     process
+  default-language: Haskell2010
+  default-extensions:
+    RankNTypes
   
 -- test-suite fae-test
 --   type:                exitcode-stdio-1.0

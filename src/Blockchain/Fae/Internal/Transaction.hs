@@ -27,7 +27,6 @@ import Control.Monad.Writer
 
 import Control.Monad.Trans.Identity
 
-import Data.Dynamic
 import Data.Foldable
 import Data.Functor.Identity
 import Data.Maybe
@@ -81,7 +80,7 @@ data TransactionException =
   NotEnoughInputs |
   TooManyInputs |
   BadInput ContractID |
-  OpenEscrows |
+  BadFallbackCallers Signers |
   InternalTXError String
   deriving (Typeable, Show)
 
@@ -96,9 +95,9 @@ data TransactionException =
 -- do need to @instance GetInputValues a@ for any 'a' you choose
 -- to use.
 class GetInputValues a where
-  getInputValues :: [Dynamic] -> (a, [Dynamic])
+  getInputValues :: [BearsValue] -> (a, [BearsValue])
   default getInputValues :: 
-    (Generic a, GGetInputValues (Rep a)) => [Dynamic] -> (a, [Dynamic])
+    (Generic a, GGetInputValues (Rep a)) => [BearsValue] -> (a, [BearsValue])
   getInputValues = runState $ Gen.to <$> gGetInputValues
 
 -- | Generic helper class
@@ -107,7 +106,7 @@ class GGetInputValues f where
   -- 'getInputValues', because we need to walk through the list of dynamic
   -- inputs and progressively remove values from it.  At the same time, we
   -- need to know if there were leftovers.
-  gGetInputValues :: State [Dynamic] (f p)
+  gGetInputValues :: State [BearsValue] (f p)
 
 {- Instances -}
 
@@ -145,24 +144,36 @@ instance GetInputValues PublicKey where
   getInputValues = defaultGetInputValues
 -- | Lists are read as a single value, because it makes no sense to expect
 -- an indefinitely long input when they have to be given as literals.
-instance (Typeable a) => GetInputValues [a] where
+instance (HasEscrowIDs a, Typeable a) => GetInputValues [a] where
   getInputValues = defaultGetInputValues
 -- | Default instance
-instance (Typeable a) => GetInputValues (Maybe a) where
+instance (HasEscrowIDs a, Typeable a) => GetInputValues (Maybe a) where
   getInputValues = defaultGetInputValues
 instance (GetInputValues a) => GetInputValues (Versioned a) where
   getInputValues l = (Versioned x, l') where
     (x, l') = getInputValues l
 -- | Default instance
-instance (Typeable a, Typeable b) => GetInputValues (Either a b) where
+instance 
+  (
+    HasEscrowIDs a, HasEscrowIDs b,
+    Typeable a, Typeable b
+  ) => 
+  GetInputValues (Either a b) where
   getInputValues = defaultGetInputValues
 -- | Generic instance.
 instance 
-  (GetInputValues a, GetInputValues b, Typeable a, Typeable b) => 
+  (
+    GetInputValues a, GetInputValues b,
+    HasEscrowIDs a, HasEscrowIDs b,
+    Typeable a, Typeable b
+  ) => 
   GetInputValues (a, b)
 -- | Default instance
 instance 
-  (Typeable argType, Typeable valType) => 
+  (
+    HasEscrowIDs argType, HasEscrowIDs valType,
+    Typeable argType, Typeable valType
+  ) => 
   GetInputValues (EscrowID argType valType) where
 
   getInputValues = defaultGetInputValues
@@ -170,8 +181,8 @@ instance
 instance 
   (
     GetInputValues a, GetInputValues b, GetInputValues c, 
+    HasEscrowIDs a, HasEscrowIDs b, HasEscrowIDs c,
     Typeable a, Typeable b, Typeable c
-
   ) => 
   GetInputValues (a, b, c)
 
@@ -202,7 +213,7 @@ instance (GGetInputValues f, GGetInputValues g) => GGetInputValues (f :*: g) whe
 
 -- | For a nested type, we peel off one input and fix its type.  We do
 -- /not/ do a recursive call.
-instance (Typeable c) => GGetInputValues (K1 i c) where
+instance (HasEscrowIDs c, Typeable c) => GGetInputValues (K1 i c) where
   gGetInputValues = do
     s <- get
     case s of
@@ -224,16 +235,17 @@ instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
 runTransaction :: 
   forall a inputs.
   (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
-  Transaction inputs a -> Inputs -> 
-  TransactionID -> Signers -> Bool -> 
+  Transaction inputs a -> [Transaction inputs ()] -> 
+  Inputs -> TransactionID -> Signers -> Bool ->
   FaeStorage ()
-runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $ do
+runTransaction f fallback inputArgs txID signers isReward = 
+ runFaeContract txID signers $ do -- TXStorageM
   let 
     inputIDs = map fst inputArgs
     defaultIOs = flip map inputIDs $ \cID ->
       (shorten cID, InputOutputVersions (withoutNonce cID) IntMap.empty Map.empty)
     inputOrder = map fst defaultIOs
-  liftFaeContract $ _getStorage . at txID ?= 
+  liftFaeContract $ txStorage ?= 
     TransactionEntry
     {
       inputOutputs = Map.fromList defaultIOs,
@@ -242,32 +254,47 @@ runTransaction f inputArgs txID signers isReward = runFaeContract txID signers $
       signers,
       result = undefined :: a
     }
+  -- Modifies inputOutputs
   inputsL <- runInputContracts inputArgs
+  (result, outputs) <- doTX inputsL fallback isReward f
+  liftFaeContract $ txStorage %= 
+    -- Keep inputOutputs, set result and outputs
+    -- Can't use a record update because of existential quantification
+    fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
+
+  where txStorage = _getStorage . at txID
+ 
+doTX :: 
+  (HasEscrowIDs inputs, GetInputValues inputs) => 
+  [BearsValue] -> [Transaction inputs ()] -> Bool -> 
+  Transaction inputs a -> TXStorageM (a, Outputs)
+doTX inputsL fallback isReward f = 
   -- We have to handle exceptions because we don't want the inputs to get
   -- rolled back.
-  (result, outputs) <- handleAll (\e -> return (throw e, throw e)) $ do
+  handleAll (\e -> return (throw e, throw e)) $ do
     (input, unused) <- getInputValues <$> withReward inputsL 
     unless (null unused) $ throw TooManyInputs
-    -- We have to hoist because we don't want to give transaction authors
-    -- access to IO.
-    (result, outputsL) <- hoistFaeContract $ listen $ getFae $ f input
-    escrows <- use _escrowMap
-    unless (Map.null escrows) $ throw OpenEscrows
-    return (result, intMapList outputsL)
-  liftFaeContract $ 
-    _getStorage . at txID %= 
-      fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
- 
+    -- We have to hoist so that transactions can be pure
+    (result, outputsL) <- listen $ catchAll 
+      (hoistFaeContract $! getFae $ f input)
+      (\e -> doFallback fallback input >> return (throw e))
+    censor (const []) $ return (result, intMapList outputsL)
+
   where
     withReward 
-      | isReward = \inputs -> do
+      | isReward = \inputsL -> do
           eID <- internalNewEscrow [] $ \Token -> internalSpend Reward
-          return $ toDyn eID : inputs
+          return $ bearer eID : inputsL
       | otherwise = return 
+
+-- | Performs all fallback transactions, ignoring errors.
+doFallback :: [Transaction inputs ()] -> inputs -> TXStorageM ()
+doFallback fallback input = forM_ fallback $ 
+  \tx -> handleAll (const $ return ()) $ hoistFaeContract $ getFae $ tx input
 
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
-runInputContracts :: Inputs -> TXStorageM [Dynamic]
+runInputContracts :: Inputs -> TXStorageM [BearsValue]
 runInputContracts = fmap fst .
   foldl' (>>=) (return ([], Map.empty)) .
   map (uncurry runInputContract) 
@@ -275,7 +302,7 @@ runInputContracts = fmap fst .
 -- | Runs a single input contract.
 runInputContract ::
   ContractID -> String ->
-  ([Dynamic], VersionMap) -> TXStorageM ([Dynamic], VersionMap)
+  ([BearsValue], VersionMap) -> TXStorageM ([BearsValue], VersionMap)
 runInputContract cID arg (results, vers) = do
   let inputError e = return (throw e, vers, throw e)
   (result, vers', ioV) <- handleAll inputError $ do
@@ -290,7 +317,7 @@ runInputContract cID arg (results, vers) = do
       -- Only nonce-protected contract calls are allowed to return
       -- versioned values.
       (iVersions, vers')
-        | hasNonce cID = (fmap dynTypeRep vMap, vers `Map.union` vMap)
+        | hasNonce cID = (fmap bearerType vMap, vers `Map.union` vMap)
         | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
     return (result, vers', InputOutputVersions{..})
@@ -302,8 +329,8 @@ runInputContract cID arg (results, vers) = do
 
 -- | Gets a single value from a single input
 defaultGetInputValues :: 
-  forall a. (Typeable a) => [Dynamic] -> (a, [Dynamic])
+  forall a. (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
 defaultGetInputValues (xDyn : rest) = (x, rest) where
-  x = fromDyn xDyn $ throw $ BadArgType (typeOf x) (dynTypeRep xDyn)
+  x = unBear xDyn $ throw $ BadArgType (typeOf x) (bearerType xDyn)
 defaultGetInputValues [] = throw NotEnoughInputs
 
