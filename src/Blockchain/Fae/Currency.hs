@@ -1,3 +1,4 @@
+{-# LANGUAGE Trustworthy #-}
 {-|
 Module: Blockchain.Fae.Currency
 Description: A typeclass for currency escrows in Fae

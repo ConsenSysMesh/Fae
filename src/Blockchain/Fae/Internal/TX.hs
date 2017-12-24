@@ -47,6 +47,7 @@ import qualified Data.Map as Map
 import GHC.Generics
 
 import Language.Haskell.Interpreter as Int 
+import Language.Haskell.Interpreter.Unsafe as Int 
 
 import System.FilePath
 
@@ -91,14 +92,10 @@ instance Show UnquotedString where
 -- of other transactions.  The first transaction is very slow because the
 -- interpreter has to initialize, but subsequent ones are acceptably fast.
 interpretTX :: Bool -> TX -> FaeInterpret ()
-interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
-  Int.set 
-    [
-      languageExtensions := languageExts,
-      searchPath := thisTXPath
-    ]
+interpretTX isReward TX{..} = handle fixGHCErrors $ do
+  Int.set [searchPath := thisTXPath]
   loadModules [txSrc]
-  setImportsQ $ (txSrc, Just txSrc) : map (,Nothing) pkgModules 
+  setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]
   run <- interpret runString infer
   lift $ run inputs txID pubKeys isReward 
   where
@@ -114,31 +111,6 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
     fixGHCErrors (NotAllowed e) = error e
     fixGHCErrors (GhcException e) = error e
     txSrc = "Blockchain.Fae.Transactions.TX" ++ show txID
-    pkgModules = 
-      [
-        "Blockchain.Fae.Internal",
-        "Data.Dynamic",
-        "Data.Map"
-      ]
-    languageExts =
-      [
-        BangPatterns,
-        DeriveDataTypeable,
-        DeriveGeneric,
-        FlexibleContexts,
-        FlexibleInstances,
-        FunctionalDependencies,
-        GeneralizedNewtypeDeriving,
-        MultiParamTypeClasses,
-        MultiWayIf,
-        NamedFieldPuns,
-        OverloadedStrings,
-        PatternGuards,
-        RecordWildCards,
-        StandaloneDeriving,
-        TupleSections,
-        TypeApplications
-      ]
     thisTXPath = 
       [
         ".",
@@ -149,9 +121,50 @@ interpretTX isReward TX{..} = handle (liftIO . fixGHCErrors) $ do
 
 -- | Runs the interpreter.
 runFaeInterpret :: FaeInterpret a -> IO a
-runFaeInterpret = 
-  fmap (either throw id) .
-  flip evalStateT (Storage Map.empty) . 
-  getFaeStorage . 
-  runInterpreter
+runFaeInterpret x = 
+  fmap (either throw id) $
+  flip evalStateT (Storage Map.empty) $
+  getFaeStorage $
+  runInterpreter $ do
+    Int.set [languageExtensions := languageExts]
+    mapM_ Int.unsafeSetGhcOption $
+      "-fpackage-trust" :
+-- For some reason, this makes the interpreter hang.  Unfortunate, as it
+-- rather weakens the trust situation not to have it.
+--      "-distrust-all" :
+      map ("-trust " ++) trustedPackages
+    x
+
+  where
+    languageExts =
+      [
+        BangPatterns,
+        DeriveDataTypeable,
+        DeriveGeneric,
+        FlexibleContexts,
+        FlexibleInstances,
+        FunctionalDependencies,
+        MultiParamTypeClasses,
+        MultiWayIf,
+        NamedFieldPuns,
+        OverloadedStrings,
+        PatternGuards,
+        RecordWildCards,
+        Safe,
+        StandaloneDeriving,
+        TupleSections,
+        TypeApplications
+      ]
+    trustedPackages =
+      [
+        "array",
+        "base",
+        -- not binary,
+        "bytestring",
+        "containers",
+        "fae",
+        "filepath",
+        "transformers",
+        "pretty"
+      ]
 

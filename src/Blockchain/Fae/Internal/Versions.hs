@@ -45,7 +45,7 @@ import Numeric.Natural
 newtype VersionID = VersionID Digest 
   deriving (NFData, Eq, Ord, Serialize)
 -- | The inverse to the map of subobjects to their versions.
-type VersionMap = Map VersionID BearsValue
+newtype VersionMap = VersionMap { getVersionMap :: Map VersionID BearsValue }
 -- | For marking a contract input to be passed by version ID, or a contract
 -- output to be considered a single coherent unit.
 data Versioned a = 
@@ -71,9 +71,9 @@ class (HasEscrowIDs a, Typeable a) => Versionable a where
   versionMap f x =
     -- Unlike in @GRecords m (K1 i c)@, the inherent version is actually
     -- the one we want, since the top-level object is not a record.
-    let (ver, vers) = versions f x in
+    let (ver, VersionMap vers) = versions f x in
     -- Same comment as in @GRecords m (K1 i c)@
-    Map.insert ver (bearer x) vers
+    VersionMap $ Map.insert ver (bearer x) vers
 
   -- | Sort of the inverse of 'versionMap', this resolves all 'VersionedID'
   -- variants of 'Versioned' to 'Versioned' variants.
@@ -132,14 +132,14 @@ instance Read (Versioned a) where
 -- | This instance enforces 'Versioned's as being opaque, unified types.
 -- Ideally this designation should be accompanied by actual data hiding.
 instance (Versionable a) => Versionable (Versioned a) where
-  versions f (Versioned x) = (ver, Map.empty) where
+  versions f (Versioned x) = (ver, emptyVersionMap) where
     (ver, _) = versions f x 
 
   versionMap f (Versioned x) = versionMap f x
   versionMap f (VersionedID ver) = throw $ UnresolvedVersionID ver
 
   mapVersions _ Versioned{} = throw $ UnexpectedResolvedVersion
-  mapVersions vMap (VersionedID ver) =
+  mapVersions (VersionMap vMap) (VersionedID ver) =
     Versioned $ 
     fromMaybe (throw $ BadVersionedType (bearerType xDyn) (typeRep $ Proxy @a)) $ 
     unBearer xDyn
@@ -159,7 +159,7 @@ instance
   ) => 
   Versionable (EscrowID argType valType) where
 
-  versions f eID@EscrowID{..} = (f entID, Map.empty) 
+  versions f eID@EscrowID{..} = (f entID, emptyVersionMap) 
   mapVersions _ eID = eID
 
 -- | /Not/ the generic instance, because that makes just a ton of useless
@@ -171,7 +171,7 @@ instance {-# OVERLAPPABLE #-} -- Also undecidable
   (Versionable a, Functor t, Foldable t, Typeable t, HasEscrowIDs (t a)) => 
   Versionable (t a) where
 
-  versions f x = (mkVersionID $ map (fst . versions f) $ toList x, Map.empty)
+  versions f x = (mkVersionID $ map (fst . versions f) $ toList x, emptyVersionMap)
   mapVersions = fmap . mapVersions
 
 -- | Generic instance
@@ -218,12 +218,12 @@ instance (Versionable a, Versionable b) => Versionable (Either a b)
 
 -- | No type has no version
 instance GVersionable V1 where
-  gVersions _ _ = (undefined, Map.empty)
+  gVersions _ _ = (undefined, emptyVersionMap)
   gMapVersions _ _ = undefined
 
 -- | Enumeration type has no version
 instance GVersionable U1 where
-  gVersions _ U1 = (mkVersionID (), Map.empty)
+  gVersions _ U1 = (mkVersionID (), emptyVersionMap)
   gMapVersions _ U1 = U1
 
 -- | Sum type version equals summand version
@@ -259,8 +259,8 @@ instance
   GVersionable (M1 C (MetaCons cSym x s) f) where
 
   -- 'x' is only a representation type, so we don't put it in the map.
-  gVersions f (M1 x) = (vID, vers) where 
-    vers = evalState (gRecords f x) 0
+  gVersions f (M1 x) = (vID, versM) where 
+    versM@(VersionMap vers) = evalState (gRecords f x) 0
     vID = mkVersionID (cName, Map.keys vers)
     cName = symbolVal (Proxy @cSym)
 
@@ -268,12 +268,12 @@ instance
 
 -- | Empty type has no records
 instance GRecords V1 where
-  gRecords _ _ = return Map.empty
+  gRecords _ _ = return emptyVersionMap
   gRMapVersions _ _ = undefined
 
 -- | Type with no fields has no records
 instance GRecords U1 where
-  gRecords _ U1 = return Map.empty
+  gRecords _ U1 = return emptyVersionMap
   gRMapVersions _ U1 = U1
 
 -- | We completely ignore record selector metadata because we generate the
@@ -284,13 +284,13 @@ instance (GRecords f) => GRecords (M1 S md f) where
 
 -- | Product type records are the concatenation of the factor records.
 instance (GRecords f, GRecords g) => GRecords (f :*: g) where
-  gRecords f (x :*: y) = liftM2 Map.union (gRecords f x) (gRecords f y)
+  gRecords f (x :*: y) = liftM2 vUnion (gRecords f x) (gRecords f y)
   gRMapVersions vMap (x :*: y) = gRMapVersions vMap x :*: gRMapVersions vMap y
 
 -- | Recursive type is a record in itself.
 instance (Versionable c) => GRecords (K1 i c) where
   gRecords f (K1 x) = do
-    let (ver, vers) = versions f x
+    let (ver, VersionMap vers) = versions f x
     n <- get
     modify (+ 1)
     -- The version as a record differs from the inherent version.  This
@@ -299,7 +299,7 @@ instance (Versionable c) => GRecords (K1 i c) where
     -- It's important that here, we have 'x' as its actual type, not as
     -- @Rep c@, should 'c' be 'Generic'.  Therefore its 'BearsValue' is
     -- meaningful.
-    return $ Map.insert vID (bearer x) vers
+    return $ VersionMap $ Map.insert vID (bearer x) vers
 
   gRMapVersions vMap (K1 x) = K1 $ mapVersions vMap x
 
@@ -308,11 +308,19 @@ instance (Versionable c) => GRecords (K1 i c) where
 defaultVersions :: 
   (Digestible a) => 
   (EntryID -> VersionID) -> a -> (VersionID, VersionMap)
-defaultVersions _ x = (mkVersionID x, Map.empty)
+defaultVersions _ x = (mkVersionID x, emptyVersionMap)
 
 -- | For default instances of 'Versionable'
 defaultMapVersions :: VersionMap -> a -> a
 defaultMapVersions _ = id
+
+-- | For convenience
+emptyVersionMap :: VersionMap
+emptyVersionMap = VersionMap Map.empty
+
+-- | For convenience
+vUnion :: VersionMap -> VersionMap -> VersionMap
+vUnion (VersionMap m1) (VersionMap m2) = VersionMap $ Map.union m1 m2
 
 -- | Utility
 mkVersionID :: (Digestible a) => a -> VersionID

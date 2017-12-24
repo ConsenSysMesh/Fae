@@ -85,7 +85,8 @@ data InputOutputVersionsT c =
 -- been called, used for security.
 type OutputsT c = IntMap (c, Int)
 -- | Transactions can have many named signatories.
-type Signers = Map String PublicKey
+newtype Signers = Signers { getSigners :: Map String PublicKey }
+  deriving (Serialize, NFData)
 -- | The storage monad is just a state monad.  It has to be over 'IO' both
 -- because we need to catch exceptions, and because the interpreter has to
 -- be in a 'MonadIO'.
@@ -111,6 +112,7 @@ data StorageException =
 
 -- * Template Haskell
 
+makeLenses ''Signers
 makeLenses ''StorageT
 makeLenses ''TransactionEntryT
 makeLenses ''InputOutputVersionsT
@@ -219,7 +221,8 @@ showTransaction txID = do
       intercalate "\n    " .
       ("signers:" :) .
       map (\(name, key) -> name ++ ": " ++ show key) .
-      Map.toList 
+      Map.toList .
+      getSigners
     prettyVersions =
       intercalate "\n      " .
       ("versions:" :) .

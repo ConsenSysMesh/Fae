@@ -1,3 +1,4 @@
+{-# LANGUAGE Unsafe #-}
 {- |
 Module: Blockchain.Fae.FrontEnd
 Description: The API for implementors of a Fae front-end

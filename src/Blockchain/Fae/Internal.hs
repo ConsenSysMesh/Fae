@@ -1,3 +1,4 @@
+{-# LANGUAGE Unsafe #-}
 {- |
 Module: Blockchain.Fae.Internal
 Description: Omnibus module for all Fae internals

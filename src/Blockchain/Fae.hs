@@ -1,4 +1,4 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, Trustworthy #-}
 {- |
 Module: Blockchain.Fae
 Description: A functional smart contract system
@@ -66,7 +66,7 @@ module Blockchain.Fae
     Contract, ContractM, ContractID(..), Fae, MonadContract,
     EscrowID, BearsValue, RewardEscrowID, 
     spend, release, useEscrow, newEscrow, newContract,
-    lookupSigner, signer, claimReward, bearer, 
+    lookupSigner, signer, Blockchain.Fae.signers, claimReward, bearer, 
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
     -- the escrow-backed values they expect, contract outputs are
@@ -102,6 +102,7 @@ import Data.Maybe
 import Data.Sequence (Seq)
 import Data.Typeable
 
+import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Control.Exception (Exception, throw, evaluate)
@@ -268,11 +269,15 @@ newContract eIDs f = liftTX $ Fae $ do
 
 -- | Looks up a named signatory, maybe. 
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
-lookupSigner s = liftTX $ Fae $ view $ _txSigners . at s
+lookupSigner s = liftTX $ Fae $ view $ _txSigners . _getSigners . at s
 
 -- | Looks up a named signatory, or throws if not found.
 signer :: (MonadTX m) => String -> m PublicKey
 signer s = fromMaybe (throw $ MissingSigner s) <$> lookupSigner s
+
+-- | Returns the map of all signatories.
+signers :: (MonadTX m) => m (Map String PublicKey)
+signers = fmap getSigners $ liftTX $ Fae $ view _txSigners
 
 -- | This function destroys a reward token, validating it in the process.
 -- As the only interface to the `Reward` type, this /must/ be used by any

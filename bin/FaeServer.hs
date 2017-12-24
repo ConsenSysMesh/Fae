@@ -111,7 +111,8 @@ serverApp txQueue request respond = do
     Nothing -> respond $ buildResponse $ 
       intercalate "\n" $ 
       map (\(x,y) -> x ++ ": " ++ show y) $
-      Map.toList pubKeys
+      Map.toList $
+      getSigners pubKeys
     Just mainFile -> do
       writeModules mainFile modules txID
 
@@ -143,7 +144,7 @@ nextTX keyNames inputs fallback = do
     let Just pubKey = public privKey
     return (signer, (pubKey, nonce))
   let 
-    pubKeys = fmap fst $ Map.fromList signerNonces
+    pubKeys = Signers $ fmap fst $ Map.fromList signerNonces
     txID = ShortContractID $ digest signerNonces
   return TX{..}
 

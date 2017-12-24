@@ -1,3 +1,4 @@
+{-# LANGUAGE Trustworthy #-}
 {- |
 Module: Blockchain.Fae.Contracts
 Description: A contract library for Fae

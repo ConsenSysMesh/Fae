@@ -80,7 +80,6 @@ data TransactionException =
   NotEnoughInputs |
   TooManyInputs |
   BadInput ContractID |
-  BadFallbackCallers Signers |
   InternalTXError String
   deriving (Typeable, Show)
 
@@ -296,7 +295,7 @@ doFallback fallback input = forM_ fallback $
 -- progressively increasing set of outputs.
 runInputContracts :: Inputs -> TXStorageM [BearsValue]
 runInputContracts = fmap fst .
-  foldl' (>>=) (return ([], Map.empty)) .
+  foldl' (>>=) (return ([], emptyVersionMap)) .
   map (uncurry runInputContract) 
 
 -- | Runs a single input contract.
@@ -317,7 +316,7 @@ runInputContract cID arg (results, vers) = do
       -- Only nonce-protected contract calls are allowed to return
       -- versioned values.
       (iVersions, vers')
-        | hasNonce cID = (fmap bearerType vMap, vers `Map.union` vMap)
+        | hasNonce cID = (fmap bearerType $ getVersionMap vMap, vers `vUnion` vMap)
         | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
     return (result, vers', InputOutputVersions{..})
