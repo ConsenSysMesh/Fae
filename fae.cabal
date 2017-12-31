@@ -108,20 +108,26 @@ executable faeServer
     ScopedTypeVariables
     TypeApplications
 
-executable curlTX
+executable postTX
   buildable: True
   hs-source-dirs: bin
-  main-is: CurlTX.hs
+  main-is: PostTX.hs
   build-depends:
     base,
+    bytestring,
     directory,
     fae,
+    http-client,
     lens,
     process
   default-language: Haskell2010
   default-extensions:
     RankNTypes
-  
+    RecordWildCards
+    NamedFieldPuns
+    OverloadedStrings
+    TupleSections
+
 -- test-suite fae-test
 --   type:                exitcode-stdio-1.0
 --   hs-source-dirs:      test

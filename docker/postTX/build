@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+POSTTX=$(stack path --local-install-root)/bin/postTX
+LIBS="$CLIBS $(ldd $POSTTX | tail -n +2 | awk '{print $3;}')"
+LIBS=$(echo $LIBS | xargs -n1 | sort -u | xargs)
+LDSO=$(ldd $POSTTX | tail -n 1 | awk '{print $1;}')
+BLDSO=$(basename $LDSO)
+RM="postTX $BLDSO $(xargs -n1 basename <<<$LIBS)"
+
+stack build
+cp $POSTTX $LIBS $LDSO .
+cp ../../txs/HelloWorldTX{,.hs} .
+docker build --build-arg LDSO=$BLDSO -t posttx . || true
+rm $RM Hello*

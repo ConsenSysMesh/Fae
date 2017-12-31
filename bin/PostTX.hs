@@ -1,11 +1,14 @@
-{-# LANGUAGE RecordWildCards, NamedFieldPuns, TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell #-}
 import Prelude hiding (readList)
 import Blockchain.Fae (ContractID)
 import Control.Lens
 import Data.Bifunctor
+import qualified Data.ByteString.Lazy.Char8 as LC8
 import Data.Char
 import Data.List
 import Data.Maybe
+import Network.HTTP.Client
+import Network.HTTP.Client.MultipartFormData
 import System.Directory
 import System.Environment
 import System.Process
@@ -13,7 +16,7 @@ import System.Process
 data TXData =
   TXData
   {
-    _body :: Maybe String,
+    _bodyM :: Maybe String,
     _others :: [String],
     _fallback :: [String],
     _inputs :: [(ContractID, String)],
@@ -30,7 +33,7 @@ main = do
     (txSpec, host, fake) = 
       (\triple -> triple 
         & _1 %~ fromMaybe "TX" 
-        & _2 %~ fromMaybe "localhost:27182"
+        & _2 %~ fromMaybe "0.0.0.0:27182"
       ) $
       (\l x g -> foldl g x l) args (Nothing, Nothing, False) $ \st arg -> 
         case arg of
@@ -42,36 +45,44 @@ main = do
   txData <- readData specLines 
     TXData
     {
-      _body = Nothing, 
+      _bodyM = Nothing, 
       _others = [], 
       _fallback = [],
       _inputs = [],
       _keys = [], 
       _reward = False
     } 
-  case _body txData of
+  case _bodyM txData of
     Nothing -> error "Missing body filename"
     Just _ -> return ()
-  runCurl host fake txData
+  postTX host fake txData
 
-runCurl :: String -> Bool -> TXData -> IO ()
-runCurl host fake TXData{..} = callProcess "curl" $ args ++ [host] where
-  args = ("-F" :) . intersperse "-F" $ 
-    (if fake then ("fake=True" :) else ("fake=False" :)) $
-    (if _reward then ("reward=True" :) else ("reward=False" :)) $
-    bodyArg : fallbackArgs ++ inputArgs ++ othersArgs ++ keysArgs
-  bodyArg = "body=@" ++ fromJust _body ++ ".hs"
-  fallbackArgs = map ("fallback=" ++) _fallback
-  inputArgs = map (\p -> "input=" ++ show p) _inputs
-  othersArgs = map (\file -> "other=@" ++ file ++ ".hs") _others
-  keysArgs = map (\(signer, key) -> "key=" ++ signer ++ ":" ++ key) _keys
+postTX :: String -> Bool -> TXData -> IO ()
+postTX host fake TXData{..} = do
+  manager <- newManager defaultManagerSettings
+  request <- flip formDataBody requestURL $
+    partFileSource "body" (maybe (error "Missing body") (++ ".hs") _bodyM) :
+    fmap (partFileSource "other" . (++ ".hs")) _others ++
+    (fmap (uncurry partLBS) $
+      fakeArg : rewardArg : fallbackArgs ++ inputArgs ++ keysArgs)
+  response <- httpLbs request manager
+  LC8.putStrLn $ responseBody response
+
+  where
+    requestURL = fromMaybe (error $ "Bad host string: " ++ host) $ 
+      parseRequest $ "http://" ++ host
+    fakeArg = ("fake", ) $ if fake then "True" else "False"
+    rewardArg = ("reward", ) $ if _reward then "True" else "False"
+    fallbackArgs = map (("fallback",) . LC8.pack) _fallback
+    inputArgs = map (("input", ) . LC8.pack . show) _inputs
+    keysArgs = map (\(signer, key) -> ("key", LC8.pack $ signer ++ ":" ++ key)) _keys
 
 readData :: [String] -> TXData -> IO TXData
 readData [] txData = return txData
 readData (line1 : rest) txData =
   case breakEquals line1 of
     ("", Nothing) -> readData rest txData
-    ("body", _body@Just{}) -> readData rest txData{_body} 
+    ("body", _bodyM) -> readData rest txData{_bodyM} 
     ("reward", Just rewardS) -> 
       let _reward = read rewardS in
       readData rest txData{_reward} 
