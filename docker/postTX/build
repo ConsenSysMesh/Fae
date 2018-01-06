@@ -1,14 +1,19 @@
 #!/bin/bash
 set -e
-POSTTX=$(stack path --local-install-root)/bin/postTX
-LIBS="$CLIBS $(ldd $POSTTX | tail -n +2 | awk '{print $3;}')"
-LIBS=$(echo $LIBS | xargs -n1 | sort -u | xargs)
-LDSO=$(ldd $POSTTX | tail -n 1 | awk '{print $1;}')
-BLDSO=$(basename $LDSO)
-RM="postTX $BLDSO $(xargs -n1 basename <<<$LIBS)"
+
+exeName=postTX
+imgName=posttx # lowercase
+
+exePath=$(stack path --local-install-root)/bin/$exeName
+libs=$(ldd $exePath | tail -n +2 | awk '{print $3;}' | xargs -n1 | sort -u | xargs)
+ldSO=$(ldd $exePath | tail -n 1 | awk '{print $1;}')
+ldSODir=$(dirname $ldSO)
 
 stack build
-cp $POSTTX $LIBS $LDSO .
-cp ../../txs/HelloWorldTX{,.hs} .
-docker build --build-arg LDSO=$BLDSO -t posttx . || true
-rm $RM Hello*
+mkdir -p bin/ lib/
+cp -aL $exePath bin/
+cp -aL $libs lib/
+cp -aL --parents $ldSO .
+{ docker build -t $imgName . ; s=$?; } || true
+rm -r ./bin ./lib ./$ldSODir
+exit $s
