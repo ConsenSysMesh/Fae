@@ -18,4 +18,4 @@ We provide an [implementation](src/) of this system in Haskell, for which we hav
 permission, you can also read [the white
 paper](https://consensys.quip.com/QsIxAHHGHz6W/Functional-principles-of-contract-design),
 which explains the rationale for the design from legal, algorithmic, and
-security perspectives.
+security perspectives.  As of version 0.9.9.9, there are [docker images](https://hub.docker.com/r/ryancreich/fae/tags/) for the two executables `faeServer` and `postTX` that comprise a playground environment; contact me for access as the repository is private.
