@@ -1,4 +1,4 @@
-REM @ECHO OFF
+@ECHO OFF
 
 IF %* == "" (
   echo "Must supply a transaction spec file name" >&2
@@ -6,16 +6,14 @@ IF %* == "" (
 )
 
 SET fulltxfile=%~f1
-
+SET imgName=fae:postTX
 IF defined FAE_REPO (
-  SET container=%FAE_REPO%/posttx
-) ELSE (
-  SET container=posttx
-)
+  SET container=%FAE_REPO%/%imgName%
+) 
 
 docker run ^
   --rm ^
   --network host ^
   --mount type=bind,src=%fulltxfile%,dst=/txs/%1,readonly ^
-  %container% %*
+  %imgName% %*
 

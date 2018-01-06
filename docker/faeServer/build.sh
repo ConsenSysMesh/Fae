@@ -25,7 +25,7 @@ mkdir -p $STACK_ROOT
 GIT_SSH_COMMAND="ssh -i /root/.ssh/id_rsa"\
   git clone git@github.com:ConsenSys/Fae.git $FAE_HOME
 cd $FAE_HOME
-stack --local-bin-path /usr/bin install
+stack --local-bin-path /usr/bin install :faeServer
 
 cat >/usr/bin/faeServer.sh <<EOF
 #!/bin/bash

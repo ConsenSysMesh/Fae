@@ -2,18 +2,10 @@
 set -e
 
 exeName=postTX
-imgName=posttx # lowercase
+imgName=fae:$exeName
 
-exePath=$(stack path --local-install-root)/bin/$exeName
-libs=$(ldd $exePath | tail -n +2 | awk '{print $3;}' | xargs -n1 | sort -u | xargs)
-ldSO=$(ldd $exePath | tail -n 1 | awk '{print $1;}')
-ldSODir=$(dirname $ldSO)
-
-stack build
-mkdir -p bin/ lib/
-cp -aL $exePath bin/
-cp -aL $libs lib/
-cp -aL --parents $ldSO .
+mkdir -p bin/
+stack --local-bin-path $PWD/bin install :$exeName
 { docker build -t $imgName . ; s=$?; } || true
-rm -r ./bin ./lib ./$ldSODir
+rm -r ./bin
 exit $s

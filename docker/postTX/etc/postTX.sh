@@ -3,9 +3,9 @@ if [[ $# -eq 0 ]]
 then echo >&2 "Must supply a transaction spec file name"; exit 1
 fi
 
+imgName=fae:postTX
 if [[ -n $FAE_REPO ]]
-then container=$FAE_REPO/posttx
-else container=posttx
+then imgName=$FAE_REPO/$imgName
 fi
 
 cd $(dirname $1)
@@ -16,5 +16,5 @@ docker run \
   --rm \
   --network host \
   --mount type=bind,src=$PWD,dst=/txs/,readonly \
-  $container $txfile $@
+  $imgName $txfile $@
 

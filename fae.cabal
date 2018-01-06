@@ -81,7 +81,7 @@ executable faeServer
   buildable: True
   hs-source-dirs:      bin
   main-is:             FaeServer.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   build-depends:       
     base, 
     bytestring,
@@ -112,6 +112,8 @@ executable postTX
   buildable: True
   hs-source-dirs: bin
   main-is: PostTX.hs
+  ld-options: -static
+  ghc-options: -fPIC
   build-depends:
     base,
     bytestring,

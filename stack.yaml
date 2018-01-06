@@ -43,7 +43,7 @@ extra-deps:
   - cryptonite-0.24
 
 ghc-options:
-  "$everything": -dynamic -optl-pthread
+  "$everything": -dynamic-too -optl-pthread
   cryptonite: -opta-Wa,-mrelax-relocations=no
 
 # Override default flag values for local packages and extra-deps
