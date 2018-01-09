@@ -1,4 +1,7 @@
+{-# LANGUAGE Trustworthy #-}
 module Auction where
+
+import System.IO.Unsafe
   
 import Blockchain.Fae
 import Blockchain.Fae.Currency
@@ -37,7 +40,7 @@ auction x bid0 maxBids = do
   newContract [bearer x] $ flip evalStateT state0 . auctionC x
 
 auctionC ::
-  (HasEscrowIDs a, Currency coin) =>
+  (Typeable a, HasEscrowIDs a, Currency coin) =>
   a -> 
   ContractM (StateT (AuctionState coin)) 
     (Maybe (Versioned coin))
@@ -50,7 +53,7 @@ auctionC x bidM = do
   remitStage next
   
 bidStage :: 
-  (Currency coin, HasEscrowIDs a) => 
+  (Typeable a, Currency coin, HasEscrowIDs a) => 
   Maybe (Versioned coin) ->
   StateT 
     (AuctionState coin) 
@@ -88,7 +91,7 @@ bidStage (Just (Versioned inc)) = do
     Map.delete bidder bids
 
 remitStage ::
-  (Currency coin, HasEscrowIDs a) => 
+  (Typeable a, Currency coin, HasEscrowIDs a) => 
   ContractM 
     (StateT (AuctionState coin)) 
     (Maybe (Versioned coin)) 
