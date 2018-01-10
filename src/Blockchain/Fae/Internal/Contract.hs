@@ -163,24 +163,12 @@ type AbstractEscrow = ConcreteContract BearsValue BearsValue
 type AbstractContract = 
   ConcreteContract (String, VersionMap) (BearsValue, VersionMap)
 
--- | Exception type
-data ContractException =
-  BadInputParse String TypeRep |
-  BadArgType TypeRep TypeRep | 
-  BadValType TypeRep TypeRep |
-  BadEscrowID EntryID |
-  MissingSigner String
-  deriving (Typeable, Show)
-
 -- * Template Haskell
 
 makeLenses ''Escrows
 makeLenses ''TXData
 
 {- Instances -}
-
--- | Of course
-instance Exception ContractException
 
 -- * Functions
 

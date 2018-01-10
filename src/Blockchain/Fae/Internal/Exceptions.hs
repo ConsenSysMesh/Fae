@@ -16,6 +16,67 @@ module Blockchain.Fae.Internal.Exceptions
     T.Typeable
   ) where
 
+import Blockchain.Fae.Internal.IDs.Types
 import qualified Control.Exception as Ex
 import Control.Monad.Catch
 import Data.Typeable as T
+
+-- * Types
+--
+-- | Exceptions for ID-related errors.
+data IDException =
+  InvalidContractID ContractID
+
+-- | Exceptions for storage-related errors.
+data StorageException =
+  BadTransactionID TransactionID |
+  BadInputID ShortContractID |
+  BadNonce ContractID Int Int |
+  InvalidNonceAt ContractID
+
+-- | Exceptions for contract-related errors
+data ContractException =
+  BadInputParse String TypeRep |
+  BadArgType TypeRep TypeRep | 
+  BadValType TypeRep TypeRep |
+  BadEscrowID EntryID |
+  MissingSigner String
+
+-- | Exception type
+data TransactionException =
+  NotEnoughInputs |
+  TooManyInputs |
+  BadInput ContractID
+
+-- * Instances
+
+instance Show IDException where
+  show (InvalidContractID cID) = "Invalid contract ID: " ++ show cID
+
+instance Show StorageException where
+  show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
+  show (BadInputID sID) = "No input contract with short ID: " ++ show sID
+  show (BadNonce cID bad good) = 
+    "Contract " ++ show cID ++ " has nonce " ++ show good ++ "; got: " ++ show bad
+  show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ show cID
+
+instance Show ContractException where
+  show (BadInputParse input inputType) = 
+    "Unable to parse '" ++ show input ++ "' as type: " ++ show inputType
+  show (BadArgType bad good) = 
+    "Expected argument type: " ++ show good ++ "; got: " ++ show bad
+  show (BadValType bad good) =
+    "Expected value type: " ++ show good ++ "; got: " ++ show bad
+  show (BadEscrowID eID) = "No escrow found in this contract with ID: " ++ show eID
+  show (MissingSigner name) = "No signer named " ++ show name
+
+instance Show TransactionException where
+  show NotEnoughInputs = "Transaction expected more inputs"
+  show TooManyInputs = "Transaction expected fewer inputs"
+  show (BadInput cID) = "No input contract with ID: " ++ show cID
+
+instance Exception IDException
+instance Exception StorageException
+instance Exception ContractException
+instance Exception TransactionException
+

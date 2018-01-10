@@ -75,14 +75,6 @@ type Transaction a b = a -> FaeM Naught b
 -- contracts.
 type TXStorageM = FaeContractT Naught FaeStorage
 
--- | Exception type
-data TransactionException =
-  NotEnoughInputs |
-  TooManyInputs |
-  BadInput ContractID |
-  InternalTXError String
-  deriving (Typeable, Show)
-
 {- Typeclasses -}
 
 -- | This class controls how a type is constructed from
@@ -108,9 +100,6 @@ class GGetInputValues f where
   gGetInputValues :: State [BearsValue] (f p)
 
 {- Instances -}
-
--- | Of course
-instance Exception TransactionException
 
 -- | Generic instance
 instance GetInputValues Void 
@@ -330,6 +319,6 @@ runInputContract cID arg (results, vers) = do
 defaultGetInputValues :: 
   forall a. (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
 defaultGetInputValues (xDyn : rest) = (x, rest) where
-  x = unBear xDyn $ throw $ BadArgType (typeOf x) (bearerType xDyn)
+  x = unBear xDyn $ throw $ BadArgType (bearerType xDyn) (typeOf x) 
 defaultGetInputValues [] = throw NotEnoughInputs
 

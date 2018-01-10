@@ -101,15 +101,6 @@ newtype FaeStorageT c a = FaeStorage {getFaeStorage :: StateT (StorageT c) IO a}
 -- | Just making it easier to use this monad.
 deriving instance MonadState (StorageT c) (FaeStorageT c)
 
--- | Exceptions for storage-related errors.
-data StorageException =
-  BadTransactionID TransactionID |
-  BadContractID ContractID |
-  BadInputID ShortContractID |
-  BadNonce ContractID Int Int |
-  InvalidNonceAt ContractID
-  deriving (Typeable, Show)
-
 -- * Template Haskell
 
 makeLenses ''Signers
@@ -118,9 +109,6 @@ makeLenses ''TransactionEntryT
 makeLenses ''InputOutputVersionsT
 
 {- Instances -}
-
--- | Of course
-instance Exception StorageException
 
 -- | For the 'At' instance
 type instance Index (StorageT c) = ContractID
@@ -140,7 +128,6 @@ instance At (StorageT c) where
 
 -- | Like 'at', but retaining the nonce
 nonceAt :: ContractID -> Lens' (StorageT c) (Maybe (c, Int))
-nonceAt cID@(JustTransaction txID) = throw (BadContractID cID)
 nonceAt cID@(TransactionOutput txID i) =
   _getStorage .
   at txID .
@@ -166,7 +153,7 @@ checkNonce cID (Just n) = lens (fmap $ \(x, m) -> f m x) checkNonceSetter where
   checkNonceSetter xM@(Just (_, m)) yM = f m $ nonceSetter xM yM
   checkNonceSetter Nothing yM = nonceSetter Nothing yM
   f :: Int -> b -> b
-  f m x = if m == n then x else throw $ BadNonce cID m n
+  f m x = if m == n then x else throw $ BadNonce cID n m
 
 -- | Updating a contract entry nonce-correctly
 nonceSetter :: Maybe (a, Int) -> Maybe a -> Maybe (a, Int)
@@ -198,7 +185,7 @@ showTransaction txID = do
     iovS <- displayException (showIOVersions n) iov
     return (sID, iovS)
   return $ 
-    intercalate "\n  " $
+    (++ "\n") $ intercalate "\n  " $
       ("Transaction " ++ show txID) :
       ("result: " ++ resultSafe) :
       ("outputs: " ++ outputsSafe) :
