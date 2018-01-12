@@ -130,6 +130,9 @@ instance GetInputValues Natural where
 -- | Default instance
 instance GetInputValues PublicKey where
   getInputValues = defaultGetInputValues
+-- | Default instance
+instance (HasEscrowIDs a, Typeable a) => GetInputValues (Identity a) where
+  getInputValues = defaultGetInputValues
 -- | Lists are read as a single value, because it makes no sense to expect
 -- an indefinitely long input when they have to be given as literals.
 instance (HasEscrowIDs a, Typeable a) => GetInputValues [a] where
@@ -137,6 +140,7 @@ instance (HasEscrowIDs a, Typeable a) => GetInputValues [a] where
 -- | Default instance
 instance (HasEscrowIDs a, Typeable a) => GetInputValues (Maybe a) where
   getInputValues = defaultGetInputValues
+-- | Treats 'Versioned' like a newtype even though it's not.
 instance (GetInputValues a) => GetInputValues (Versioned a) where
   getInputValues l = (Versioned x, l') where
     (x, l') = getInputValues l
