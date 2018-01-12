@@ -14,6 +14,7 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens hiding (from, to)
 
 import Control.DeepSeq
+import Data.Serialize
 import Data.String
 import GHC.Generics
 import Text.ParserCombinators.ReadP
@@ -51,6 +52,9 @@ type BlockID = Digest
 
 -- | For simplicity
 type EntryID = Digest
+-- | For convenience
+newtype VersionID = VersionID Digest 
+  deriving (NFData, Eq, Ord, Serialize)
 
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
@@ -83,5 +87,14 @@ instance Read ShortContractID where
 -- strings.  This should be inverse to the 'Read' instance.
 instance Show ShortContractID where
   show (ShortContractID dig) = show dig
+
+-- |
+instance Read VersionID where
+  readsPrec n = map (_1 %~ VersionID) . readsPrec n
+
+-- |
+instance Show VersionID where
+  show (VersionID ver) = show ver
+
 
 

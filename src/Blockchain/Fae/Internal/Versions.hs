@@ -41,9 +41,6 @@ import Numeric.Natural
 
 -- * Types
 
--- | For convenience
-newtype VersionID = VersionID Digest 
-  deriving (NFData, Eq, Ord, Serialize)
 -- | The inverse to the map of subobjects to their versions.
 newtype VersionMap = VersionMap { getVersionMap :: Map VersionID BearsValue }
 -- | For marking a contract input to be passed by version ID, or a contract
@@ -52,14 +49,6 @@ data Versioned a =
   Versioned { getVersioned :: a } |
   VersionedID VersionID 
   deriving (Generic)
-
--- | Errors that can arise when dealing with versions.
-data VersionErrors =
-  BadVersionID VersionID |
-  BadVersionedType TypeRep TypeRep |
-  UnresolvedVersionID VersionID |
-  UnexpectedResolvedVersion
-  deriving (Show, Typeable)
 
 -- * Type classes
 
@@ -109,15 +98,6 @@ class GRecords f where
 
 {- Instances -}
 
--- | Of course
-instance Exception VersionErrors
-
-instance Read VersionID where
-  readsPrec n = map (_1 %~ VersionID) . readsPrec n
-
-instance Show VersionID where
-  show (VersionID ver) = show ver
-
 -- | Force the versioned value or version ID
 instance (NFData a) => NFData (Versioned a) where
   rnf (Versioned x) = x `deepseq` ()
@@ -141,7 +121,8 @@ instance (Versionable a) => Versionable (Versioned a) where
   mapVersions _ Versioned{} = throw $ UnexpectedResolvedVersion
   mapVersions (VersionMap vMap) (VersionedID ver) =
     Versioned $ 
-    fromMaybe (throw $ BadVersionedType (bearerType xDyn) (typeRep $ Proxy @a)) $ 
+    fromMaybe 
+      (throw $ BadVersionedType ver (bearerType xDyn) (typeRep $ Proxy @a)) $ 
     unBearer xDyn
     where xDyn = fromMaybe (throw $ BadVersionID ver) $ Map.lookup ver vMap
 

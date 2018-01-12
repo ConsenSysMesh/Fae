@@ -27,6 +27,13 @@ import Data.Typeable as T
 data IDException =
   InvalidContractID ContractID
 
+-- | Exceptions for version-related errors.
+data VersionException =
+  BadVersionID VersionID |
+  BadVersionedType VersionID TypeRep TypeRep |
+  UnresolvedVersionID VersionID |
+  UnexpectedResolvedVersion
+
 -- | Exceptions for storage-related errors.
 data StorageException =
   BadTransactionID TransactionID |
@@ -34,7 +41,7 @@ data StorageException =
   BadNonce ContractID Int Int |
   InvalidNonceAt ContractID
 
--- | Exceptions for contract-related errors
+-- | Exceptions for contract-related errors.
 data ContractException =
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
@@ -42,7 +49,7 @@ data ContractException =
   BadEscrowID EntryID |
   MissingSigner String
 
--- | Exception type
+-- | Exceptions for transaction-related errors.
 data TransactionException =
   NotEnoughInputs |
   TooManyInputs |
@@ -52,6 +59,16 @@ data TransactionException =
 
 instance Show IDException where
   show (InvalidContractID cID) = "Invalid contract ID: " ++ show cID
+
+instance Show VersionException where
+  show (BadVersionID vID) = "No version found with ID: " ++ show vID
+  show (BadVersionedType vID bad good) = 
+    "For value with version ID: " ++ show vID ++ 
+    "; expected type: " ++ show good ++ 
+    "; got: " ++ show bad
+  show (UnresolvedVersionID vID) = "Unresolved version ID: " ++ show vID
+  show (UnexpectedResolvedVersion) = 
+    "Found a resolved version where version ID was expected."
 
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
@@ -76,6 +93,7 @@ instance Show TransactionException where
   show (BadInput cID) = "No input contract with ID: " ++ show cID
 
 instance Exception IDException
+instance Exception VersionException
 instance Exception StorageException
 instance Exception ContractException
 instance Exception TransactionException
