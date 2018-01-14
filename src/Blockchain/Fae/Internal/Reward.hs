@@ -24,8 +24,3 @@ data RewardToken = Token deriving (Generic)
 -- | The escrow ID of a reward token provided by the system.
 type RewardEscrowID = EscrowID RewardToken Reward 
 
--- | For the 'RewardEscrowID' instance
-instance HasEscrowIDs RewardToken
--- | For the 'RewardEscrowID' instance
-instance HasEscrowIDs Reward
-

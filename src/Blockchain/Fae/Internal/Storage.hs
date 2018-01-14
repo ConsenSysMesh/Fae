@@ -185,7 +185,7 @@ showTransaction txID = do
     iovS <- displayException (showIOVersions n) iov
     return (sID, iovS)
   return $ 
-    (++ "\n") $ intercalate "\n  " $
+    intercalate "\n  " $
       ("Transaction " ++ show txID) :
       ("result: " ++ resultSafe) :
       ("outputs: " ++ outputsSafe) :

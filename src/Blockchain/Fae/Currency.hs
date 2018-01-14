@@ -105,8 +105,6 @@ class
 -- | This opaque type is the value of our sample currency.
 newtype CoinVal = CoinVal Natural deriving (Generic)
 
-instance HasEscrowIDs CoinVal
-
 -- @Spend@ exists so that we can get close the escrow and get its
 -- contents.  @UnsafePeek@ skips the closing part, and is therefore
 -- economically dangerous, since it breaks conservation of value.  We must
@@ -124,8 +122,6 @@ instance HasEscrowIDs CoinVal
 -- functions are given access to its constructors, since otherwise,
 -- a malicious user could create their own coins.
 data Token = Spend | UnsafePeek deriving (Generic)
-
-instance HasEscrowIDs Token
 
 -- | This is the actual currency; no user ever looks inside directly.
 type Coin = EscrowID Token CoinVal

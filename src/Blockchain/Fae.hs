@@ -83,6 +83,8 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Coroutine
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.GenericInstances
+import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Reward

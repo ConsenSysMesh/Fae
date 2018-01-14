@@ -67,19 +67,9 @@ class (HasEscrowIDs a, Typeable a) => Versionable a where
   -- | Sort of the inverse of 'versionMap', this resolves all 'VersionedID'
   -- variants of 'Versioned' to 'Versioned' variants.
   mapVersions :: VersionMap -> a -> a
-  default 
-    mapVersions :: 
-      (Generic a, GVersionable (Rep a)) => 
-      VersionMap -> a -> a
-  mapVersions vMap = Gen.to . gMapVersions vMap . Gen.from where
 
   -- | Returns the version and the map of all strictly sub-versions.
   versions :: (EntryID -> VersionID) -> a -> (VersionID, VersionMap)
-  default 
-    versions :: 
-      (Generic a, GVersionable (Rep a)) => 
-      (EntryID -> VersionID) -> a -> (VersionID, VersionMap)
-  versions f = gVersions f . Gen.from
 
 -- | The one-parameter analogue of 'Versionable', for 'Generic' instances.
 -- The default instance is not to have a version.
@@ -155,12 +145,6 @@ instance {-# OVERLAPPABLE #-} -- Also undecidable
   versions f x = (mkVersionID $ map (fst . versions f) $ toList x, emptyVersionMap)
   mapVersions = fmap . mapVersions
 
--- | Generic instance
-instance Versionable Void
--- | Generic instance
-instance Versionable ()
--- | Generic instance
-instance Versionable Bool
 -- | Default instance
 instance Versionable Char where
   versions = defaultVersions
@@ -189,13 +173,6 @@ instance Versionable Natural where
 instance Versionable PublicKey where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Generic instance overlapping that for 'Foldable', since we actually do
--- want to go inside a 'Maybe'.
-instance (Typeable a, Versionable a) => Versionable (Maybe a)
--- | Generic instance
-instance (Versionable a, Versionable b) => Versionable (a, b)
--- | Generic instance
-instance (Versionable a, Versionable b) => Versionable (Either a b)
 
 -- | No type has no version
 instance GVersionable V1 where

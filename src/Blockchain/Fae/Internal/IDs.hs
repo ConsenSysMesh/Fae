@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds, GADTs #-}
 {- |
 Module: Blockchain.Fae.Internal.IDs
 Description: Functions on identifier types
@@ -8,7 +9,6 @@ Stability: experimental
 
 This module re-exports "Blockchain.Fae.Internal.IDs.Types" and provides some instances and functions for constructing and manipulating its types.
 -}
-{-# LANGUAGE DataKinds, GADTs #-}
 module Blockchain.Fae.Internal.IDs 
   (
     module Blockchain.Fae.Internal.IDs,
@@ -79,11 +79,6 @@ class HasEscrowIDs a where
   -- | Like 'traverse' from 'Traversable', except that it only covers the
   -- escrow IDs, which may be of heterogeneous types.
   traverseEscrowIDs :: EscrowIDTraversal a
-  default 
-    traverseEscrowIDs :: 
-      (Generic a, GHasEscrowIDs (Rep a)) => 
-      EscrowIDTraversal a
-  traverseEscrowIDs f x = to <$> gTraverseEscrowIDs f (from x)
 
 -- | Generic backend for 'HasEscrowIDs'
 class GHasEscrowIDs f where
@@ -104,12 +99,6 @@ instance
   -- Not point-free; we need to specialize the forall.
   traverseEscrowIDs f eID = f eID
 
--- | Default instance.
-instance HasEscrowIDs Void 
--- | Default instance
-instance HasEscrowIDs () 
--- | Default instance
-instance HasEscrowIDs Bool
 -- | Default instance
 instance HasEscrowIDs Char where
   traverseEscrowIDs = defaultTraverseEscrowIDs
@@ -137,12 +126,6 @@ instance {-# OVERLAPPABLE #-}
   (Traversable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
 
   traverseEscrowIDs g = traverse (traverseEscrowIDs g)
--- | Default instance.
-instance (HasEscrowIDs a) => HasEscrowIDs (Maybe a)
--- | Default instance.
-instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (a, b)
--- | Default instance.
-instance (HasEscrowIDs a, HasEscrowIDs b) => HasEscrowIDs (Either a b)
 
 -- Boring Generic boilerplate
 

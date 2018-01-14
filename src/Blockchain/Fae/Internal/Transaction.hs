@@ -12,34 +12,21 @@ module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Coroutine
-import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.GenericInstances
+import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
 
-import Control.Monad
-import Control.Monad.Reader
-import Control.Monad.State
 import Control.Monad.Writer
 
-import Control.Monad.Trans.Identity
-
 import Data.Foldable
-import Data.Functor.Identity
-import Data.Maybe
-import Data.Typeable
-import Data.Void
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
-
-import GHC.Generics hiding (to)
-import qualified GHC.Generics as Gen (to)
-
-import Numeric.Natural
 
 -- * Types
 
@@ -75,158 +62,16 @@ type Transaction a b = a -> FaeM Naught b
 -- contracts.
 type TXStorageM = FaeContractT Naught FaeStorage
 
-{- Typeclasses -}
-
--- | This class controls how a type is constructed from
--- a heterogeneously-typed list of input return values.  Its default
--- instance, for any 'Generic' type, simply assigns each field of a product
--- type from successive values in the list, failing if they don't all match
--- or there are extras on one side.  For the moment, the member function is
--- not exported, so you can't write your own implementations; however, you
--- do need to @instance GetInputValues a@ for any 'a' you choose
--- to use.
-class GetInputValues a where
-  getInputValues :: [BearsValue] -> (a, [BearsValue])
-  default getInputValues :: 
-    (Generic a, GGetInputValues (Rep a)) => [BearsValue] -> (a, [BearsValue])
-  getInputValues = runState $ Gen.to <$> gGetInputValues
-
--- | Generic helper class
-class GGetInputValues f where
-  -- | This is in the 'State' monad, rather than having the same signature as
-  -- 'getInputValues', because we need to walk through the list of dynamic
-  -- inputs and progressively remove values from it.  At the same time, we
-  -- need to know if there were leftovers.
-  gGetInputValues :: State [BearsValue] (f p)
-
-{- Instances -}
-
--- | Generic instance
-instance GetInputValues Void 
--- | Default instance
-instance GetInputValues () where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues Bool where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues Char where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues Int where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues Integer where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues Float where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues Double where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues Natural where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance GetInputValues PublicKey where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance (HasEscrowIDs a, Typeable a) => GetInputValues (Identity a) where
-  getInputValues = defaultGetInputValues
--- | Lists are read as a single value, because it makes no sense to expect
--- an indefinitely long input when they have to be given as literals.
-instance (HasEscrowIDs a, Typeable a) => GetInputValues [a] where
-  getInputValues = defaultGetInputValues
--- | Default instance
-instance (HasEscrowIDs a, Typeable a) => GetInputValues (Maybe a) where
-  getInputValues = defaultGetInputValues
--- | Treats 'Versioned' like a newtype even though it's not.
-instance (GetInputValues a) => GetInputValues (Versioned a) where
-  getInputValues l = (Versioned x, l') where
-    (x, l') = getInputValues l
--- | Default instance
-instance 
-  (
-    HasEscrowIDs a, HasEscrowIDs b,
-    Typeable a, Typeable b
-  ) => 
-  GetInputValues (Either a b) where
-  getInputValues = defaultGetInputValues
--- | Generic instance.
-instance 
-  (
-    GetInputValues a, GetInputValues b,
-    HasEscrowIDs a, HasEscrowIDs b,
-    Typeable a, Typeable b
-  ) => 
-  GetInputValues (a, b)
--- | Default instance
-instance 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) => 
-  GetInputValues (EscrowID argType valType) where
-
-  getInputValues = defaultGetInputValues
--- | Generic instance.
-instance 
-  (
-    GetInputValues a, GetInputValues b, GetInputValues c, 
-    HasEscrowIDs a, HasEscrowIDs b, HasEscrowIDs c,
-    Typeable a, Typeable b, Typeable c
-  ) => 
-  GetInputValues (a, b, c)
-
--- | Has no values; uses one value if available, so that 'Void' can be used
--- as a black hole.
-instance GGetInputValues V1 where
-  gGetInputValues = do
-    modify safeTail
-    return $ throw TooManyInputs
-
-    where
-      safeTail [] = []
-      safeTail (x : rest) = rest
-
--- | No values in a constructor with no records
-instance GGetInputValues U1 where
-  gGetInputValues = return U1
-
--- | We only allow product types to have input values, because how would
--- one choose between different branches of a sum type?  Non-algebraic
--- types are out of luck because we don't expose the methods of
--- 'GetInputValues' to be implemented manually.
-instance (GGetInputValues f, GGetInputValues g) => GGetInputValues (f :*: g) where
-  gGetInputValues = do
-    l <- gGetInputValues
-    r <- gGetInputValues
-    return $ l :*: r
-
--- | For a nested type, we peel off one input and fix its type.  We do
--- /not/ do a recursive call.
-instance (HasEscrowIDs c, Typeable c) => GGetInputValues (K1 i c) where
-  gGetInputValues = do
-    s <- get
-    case s of
-      -- This allows you to use only part of an input structure.
-      [] -> return $ K1 $ throw NotEnoughInputs
-      l -> do
-        let (x, rest) = defaultGetInputValues l
-        put rest
-        return $ K1 x
-
--- | Just ignore metadata for this one.
-instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
-  gGetInputValues = M1 <$> gGetInputValues
-
 -- * Functions
 
 -- | Runs a transaction on its inputs, with some basic information about
 -- the context.
 runTransaction :: 
   forall a inputs.
-  (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
+  (
+    GetInputValues inputs, HasEscrowIDs inputs, Typeable inputs, 
+    Typeable a, Show a
+  ) =>
   Transaction inputs a -> [Transaction inputs ()] -> 
   Inputs -> TransactionID -> Signers -> Bool ->
   FaeStorage ()
@@ -257,14 +102,14 @@ runTransaction f fallback inputArgs txID signers isReward =
   where txStorage = _getStorage . at txID
  
 doTX :: 
-  (HasEscrowIDs inputs, GetInputValues inputs) => 
+  (HasEscrowIDs inputs, GetInputValues inputs, Typeable inputs) => 
   [BearsValue] -> [Transaction inputs ()] -> Bool -> 
   Transaction inputs a -> TXStorageM (a, Outputs)
 doTX inputsL fallback isReward f = 
   -- We have to handle exceptions because we don't want the inputs to get
   -- rolled back.
   handleAll (\e -> return (throw e, throw e)) $ do
-    (input, unused) <- getInputValues <$> withReward inputsL 
+    (input, unused) <- getInputValues <$> withReward inputsL
     unless (null unused) $ throw TooManyInputs
     -- We have to hoist so that transactions can be pure
     (result, outputsL) <- listen $ catchAll 
@@ -318,11 +163,4 @@ runInputContract cID arg (results, vers) = do
   liftFaeContract $ _getStorage . at txID %= 
     fmap (_inputOutputs . at (shorten cID) ?~ ioV)
   censor (const []) $ return (results |> result, vers')
-
--- | Gets a single value from a single input
-defaultGetInputValues :: 
-  forall a. (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
-defaultGetInputValues (xDyn : rest) = (x, rest) where
-  x = unBear xDyn $ throw $ BadArgType (bearerType xDyn) (typeOf x) 
-defaultGetInputValues [] = throw NotEnoughInputs
 
