@@ -16,8 +16,7 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 
-import Control.DeepSeq
-
+import Control.Applicative
 import Control.Monad
 import Control.Monad.State
 
@@ -88,10 +87,22 @@ class GRecords f where
 
 {- Instances -}
 
--- | Force the versioned value or version ID
-instance (NFData a) => NFData (Versioned a) where
-  rnf (Versioned x) = x `deepseq` ()
-  rnf (VersionedID vID) = vID `deepseq` ()
+instance Foldable Versioned where
+  foldr f y0 (Versioned x) = f x y0
+  foldr _ y0 _ = y0
+
+instance Functor Versioned where
+  fmap f (Versioned x) = Versioned (f x)
+  fmap _ (VersionedID v) = VersionedID v
+
+instance Applicative Versioned where
+  pure = Versioned
+  (Versioned f) <*> (Versioned x) = Versioned (f x)
+  _ <*> (VersionedID v) = VersionedID v
+
+instance Traversable Versioned where
+  traverse f (Versioned x) = Versioned <$> f x
+  traverse _ (VersionedID v) = pure $ VersionedID v
 
 -- | Read 'Versioned' values as their version, which is a 'Digest'.
 -- Regardless of whether 'a' has a 'Read' instance, 'Versioned a' always
@@ -145,31 +156,35 @@ instance {-# OVERLAPPABLE #-} -- Also undecidable
   versions f x = (mkVersionID $ map (fst . versions f) $ toList x, emptyVersionMap)
   mapVersions = fmap . mapVersions
 
--- | Default instance
+-- | 
 instance Versionable Char where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Default instance
+-- | 
+instance Versionable Word where
+  versions = defaultVersions
+  mapVersions = defaultMapVersions
+-- | 
 instance Versionable Int where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Default instance
+-- | 
 instance Versionable Integer where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Default instance
+-- | 
 instance Versionable Float where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Default instance
+-- | 
 instance Versionable Double where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Default instance
+-- | 
 instance Versionable Natural where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | Default instance
+-- | 
 instance Versionable PublicKey where
   versions = defaultVersions
   mapVersions = defaultMapVersions

@@ -99,25 +99,28 @@ instance
   -- Not point-free; we need to specialize the forall.
   traverseEscrowIDs f eID = f eID
 
--- | Default instance
+-- | 
 instance HasEscrowIDs Char where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | Default instance
+-- | 
+instance HasEscrowIDs Word where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | 
 instance HasEscrowIDs Int where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | Default instance
+-- | 
 instance HasEscrowIDs Integer where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | Default instance
+-- | 
 instance HasEscrowIDs Float where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | Default instance
+-- | 
 instance HasEscrowIDs Double where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | Default instance
+-- | 
 instance HasEscrowIDs Natural where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | Default instance
+-- | 
 instance HasEscrowIDs PublicKey where
   traverseEscrowIDs = defaultTraverseEscrowIDs
 -- | This is just natural, though it can probably be covered in most

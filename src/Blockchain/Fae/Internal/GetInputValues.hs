@@ -58,6 +58,8 @@ defaultGetInputValues [] = throw NotEnoughInputs
 -- | Instance for non-Generic type
 instance GetInputValues Char
 -- | Instance for non-Generic type
+instance GetInputValues Word
+-- | Instance for non-Generic type
 instance GetInputValues Int
 -- | Instance for non-Generic type
 instance GetInputValues Integer
@@ -76,21 +78,13 @@ instance
     Typeable argType, Typeable valType
   ) => 
   GetInputValues (EscrowID argType valType)
--- | Treats 'Versioned' like a newtype even though it's not.
-instance (GetInputValues a) => GetInputValues (Versioned a) where
-  getInputValues l = (Versioned x, l') where
-    (x, l') = getInputValues l
 
--- | Has no values; uses one value if available, so that 'Void' can be used
--- as a black hole.
+-- | Takes no values, but absorbs the entire list.  Useful for transactions
+-- that don't use their input contracts.
 instance GGetInputValues V1 where
   gGetInputValues = do
-    modify safeTail
+    put []
     return $ throw TooManyInputs
-
-    where
-      safeTail [] = []
-      safeTail (x : rest) = rest
 
 -- | We only allow product types to have input values, because how would
 -- one choose between different branches of a sum type?  Non-algebraic

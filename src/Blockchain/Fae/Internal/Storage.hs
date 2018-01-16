@@ -15,9 +15,8 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.NFData
 import Blockchain.Fae.Internal.Versions
-
-import Control.DeepSeq
 
 import Control.Monad.IO.Class
 import Control.Monad.State
@@ -32,6 +31,8 @@ import Data.Typeable
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
+
+import GHC.Generics (Generic)
 
 -- * Types
 
@@ -86,7 +87,7 @@ data InputOutputVersionsT c =
 type OutputsT c = IntMap (c, Int)
 -- | Transactions can have many named signatories.
 newtype Signers = Signers { getSigners :: Map String PublicKey }
-  deriving (Serialize, NFData)
+  deriving (Serialize, Generic)
 -- | The storage monad is just a state monad.  It has to be over 'IO' both
 -- because we need to catch exceptions, and because the interpreter has to
 -- be in a 'MonadIO'.

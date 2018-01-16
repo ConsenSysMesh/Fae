@@ -1,0 +1,4 @@
+body = Acquaintance
+keys
+  person1 = key1
+  person2 = key2

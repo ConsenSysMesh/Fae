@@ -19,12 +19,12 @@
 - The 'input' parameters are parsed and considered in order as the
 - transaction input list.
 -}
+
+import Blockchain.Fae
 import Blockchain.Fae.Internal hiding ((<.>))
 
 import Control.Concurrent
 import Control.Concurrent.STM
-
-import Control.DeepSeq
 
 import Control.Monad
 import Control.Monad.IO.Class

@@ -36,7 +36,6 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 
-import Control.DeepSeq
 import Control.Monad 
 import Control.Monad.State
 
@@ -77,8 +76,6 @@ type FaeInterpret = InterpreterT FaeStorage
 instance Serialize TX
 -- | Default instance
 instance Digestible TX
--- | Default instance
-instance NFData TX
 
 instance Show UnquotedString where
   show (UnquotedString s) = s

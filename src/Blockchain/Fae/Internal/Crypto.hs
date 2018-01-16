@@ -180,45 +180,47 @@ instance Serialize Digest where
 
 -- instance Serialize PublicKey
 -- instance Serialize Digest
--- | Default instance
+-- | 
 instance Serialize PrivateKey
--- | Default instance
+-- | 
 instance Serialize Signature
--- | Default instance
+-- | 
 instance (Serialize a) => Serialize (Signed a)
 
--- | Default instance
+-- | 
 instance Digestible EdPublicKey
--- | Default instance
+-- | 
 instance Digestible EdSecretKey
--- | Default instance
+-- | 
 instance Digestible EdSignature
--- | Default instance
+-- | 
 instance Digestible Digest
 
--- | Default instance
+-- | 
 instance Digestible ()
--- | Default instance
+-- | 
 instance Digestible Int
--- | Default instance
+-- | 
+instance Digestible Word
+-- | 
 instance Digestible Char
--- | Default instance
+-- | 
 instance Digestible Integer
--- | Default instance
+-- | 
 instance Digestible Float
--- | Default instance
+-- | 
 instance Digestible Double
--- | Default instance
+-- | 
 instance Digestible Natural
--- | Default instance
+-- | 
 instance (Serialize a, Serialize b) => Digestible (a, b)
--- | Default instance
+-- | 
 instance (Serialize a) => Digestible [a]
--- | Default instance
+-- | 
 instance (Serialize a) => Digestible (Maybe a) 
--- | Default instance
+-- | 
 instance (Serialize a, Serialize b) => Digestible (Either a b)
--- | Default instance
+-- | 
 instance (Serialize a, Serialize b, Serialize c) => Digestible (a, b, c)
 
 -- | Uniform instance from 'Serialize'

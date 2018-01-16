@@ -75,8 +75,10 @@ module Blockchain.Fae
     Versioned(Versioned, getVersioned),
     -- * Opaque classes
     GetInputValues, HasEscrowIDs, Versionable, 
+    NFData, rnf, force, deepseq, ($!!), (<$!!>),
     -- * Re-exports
-    Natural, Typeable, Exception, Generic, NFData, Void, throw, evaluate
+    Natural, Typeable, Exception, Generic, Identity(..), Void,
+    throw, evaluate
   ) where
 
 import Blockchain.Fae.Internal.Contract
@@ -87,12 +89,11 @@ import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.NFData
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
-
-import Control.DeepSeq
 
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
@@ -100,6 +101,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Writer.Class
 
 import Data.Dynamic
+import Data.Functor.Identity
 import Data.Maybe
 import Data.Sequence (Seq)
 import Data.Typeable

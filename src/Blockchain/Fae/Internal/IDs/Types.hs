@@ -43,7 +43,7 @@ data ContractID =
 -- contracts that are outputs of ... that are outputs of some long-ago
 -- transaction.
 newtype ShortContractID = ShortContractID Digest
-  deriving (Eq, Ord, Serialize, IsString, NFData)
+  deriving (Eq, Ord, Serialize, IsString, Generic)
 
 -- | For simplicity
 type TransactionID = ShortContractID
@@ -54,7 +54,7 @@ type BlockID = Digest
 type EntryID = Digest
 -- | For convenience
 newtype VersionID = VersionID Digest 
-  deriving (NFData, Eq, Ord, Serialize)
+  deriving (Generic, Eq, Ord, Serialize)
 
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
@@ -67,7 +67,7 @@ newtype VersionID = VersionID Digest
 -- that the contract receives and returns a particular kind of opaque
 -- value, e.g. a currency.
 newtype EscrowID argType valType = EscrowID { entID :: EntryID }
-  deriving (Generic, NFData)
+  deriving (NFData)
 
 -- Instances
 
@@ -75,8 +75,6 @@ newtype EscrowID argType valType = EscrowID { entID :: EntryID }
 instance Serialize ContractID
 -- | So we can get a 'ShortContractID' from a regular one.
 instance Digestible ContractID
--- | For 'faeServer'
-instance NFData ContractID
 
 -- | 'ShortContractID's and, by extension, 'TransactionIDs', are read as
 -- the digests they wrap.
@@ -95,6 +93,4 @@ instance Read VersionID where
 -- |
 instance Show VersionID where
   show (VersionID ver) = show ver
-
-
 

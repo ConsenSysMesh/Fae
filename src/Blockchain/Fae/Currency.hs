@@ -21,7 +21,6 @@ where
 import Blockchain.Fae
 
 import Control.Applicative
-import Control.DeepSeq
 
 import Control.Monad.Reader.Class
 
@@ -29,8 +28,6 @@ import Data.Function
 import Data.Maybe
 import Data.Ord
 import Data.Typeable
-
-import GHC.Generics
 
 import Numeric.Natural
 

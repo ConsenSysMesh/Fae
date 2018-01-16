@@ -26,7 +26,6 @@ module Blockchain.Fae.Contracts
 import Blockchain.Fae
 import Blockchain.Fae.Currency
 
-import Control.DeepSeq
 import Control.Exception
 import Control.Monad
 import Control.Monad.State
