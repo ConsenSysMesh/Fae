@@ -2,7 +2,7 @@
 {- |
 Module: Blockchain.Fae.Internal.GenericInstances
 Description: Automatic instances for generic types
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental

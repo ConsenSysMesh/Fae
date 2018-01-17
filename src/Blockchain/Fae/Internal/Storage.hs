@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.Storage
 Description: Storage of contracts and transactions
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -36,7 +36,7 @@ import GHC.Generics (Generic)
 
 -- * Types
 
--- | Storage is just an association between transactions and what they did.
+-- | 'StorageT' is just an association between transactions and what they did.
 newtype StorageT c =
   Storage 
   { 
@@ -53,8 +53,8 @@ newtype StorageT c =
 -- The technical reason for separating 'inputOutputs' from 'outputs' is
 -- that it makes it possible for contracts to create new contracts without
 -- putting a global lock on the storage; thunk execution will go straight
--- to the correct contract's outputs and not do any other contract's or the
--- transaction's direct outputs.
+-- to the correct contract's outputs and not require evaluation of any
+-- other contract or transaction.
 data TransactionEntryT c =
   forall a. (Show a) =>
   TransactionEntry 

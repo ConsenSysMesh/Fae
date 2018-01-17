@@ -2,7 +2,7 @@
 {- |
 Module: Blockchain.Fae
 Description: A functional smart contract system
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -77,8 +77,8 @@ module Blockchain.Fae
     GetInputValues, HasEscrowIDs, Versionable, 
     NFData, rnf, force, deepseq, ($!!), (<$!!>),
     -- * Re-exports
-    Natural, Typeable, Exception, Generic, Identity(..), Void,
-    throw, evaluate
+    Natural, Typeable, Exception, throw, evaluate, 
+    Generic, Identity(..), Void
   ) where
 
 import Blockchain.Fae.Internal.Contract

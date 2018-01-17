@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.Exceptions
 Description: Wrapper library for "Control.Monad.Catch"
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -57,9 +57,11 @@ data TransactionException =
 
 -- * Instances
 
+-- | -
 instance Show IDException where
   show (InvalidContractID cID) = "Invalid contract ID: " ++ show cID
 
+-- | -
 instance Show VersionException where
   show (BadVersionID vID) = "No version found with ID: " ++ show vID
   show (BadVersionedType vID bad good) = 
@@ -70,6 +72,7 @@ instance Show VersionException where
   show (UnexpectedResolvedVersion) = 
     "Found a resolved version where version ID was expected."
 
+-- | -
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
   show (BadInputID sID) = "No input contract with short ID: " ++ show sID
@@ -77,6 +80,7 @@ instance Show StorageException where
     "Contract " ++ show cID ++ " has nonce " ++ show good ++ "; got: " ++ show bad
   show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ show cID
 
+-- | -
 instance Show ContractException where
   show (BadInputParse input inputType) = 
     "Unable to parse '" ++ show input ++ "' as type: " ++ show inputType
@@ -87,14 +91,20 @@ instance Show ContractException where
   show (BadEscrowID eID) = "No escrow found in this contract with ID: " ++ show eID
   show (MissingSigner name) = "No signer named " ++ show name
 
+-- | -
 instance Show TransactionException where
   show NotEnoughInputs = "Transaction expected more inputs"
   show TooManyInputs = "Transaction expected fewer inputs"
   show (BadInput cID) = "No input contract with ID: " ++ show cID
 
+-- | -
 instance Exception IDException
+-- | -
 instance Exception VersionException
+-- | -
 instance Exception StorageException
+-- | -
 instance Exception ContractException
+-- | -
 instance Exception TransactionException
 

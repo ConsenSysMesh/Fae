@@ -2,7 +2,7 @@
 {- |
 Module: Blockchain.Fae.Internal
 Description: Omnibus module for all Fae internals
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -18,6 +18,7 @@ module Blockchain.Fae.Internal
     module Blockchain.Fae.Internal.Exceptions,
     module Blockchain.Fae.Internal.IDs,
     module Blockchain.Fae.Internal.Lens,
+    module Blockchain.Fae.Internal.NFData,
     module Blockchain.Fae.Internal.Reward,
     module Blockchain.Fae.Internal.Storage,
     module Blockchain.Fae.Internal.Transaction,
@@ -32,6 +33,7 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.NFData
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction

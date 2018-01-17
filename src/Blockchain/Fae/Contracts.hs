@@ -2,7 +2,7 @@
 {- |
 Module: Blockchain.Fae.Contracts
 Description: A contract library for Fae
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -125,7 +125,10 @@ twoPartySwapC partyA partyB x y choice1 = do
 
 -- $vendor
 -- Direct sales are contracts in which the seller delivers the product
--- automatically, allowing Fae-powered stores.
+-- automatically, allowing Fae-powered stores.  This exposes the seller to
+-- the risk of accepting a nonterminating computation embedded in the
+-- payment, so they should have some way of limiting their customers to
+-- a trusted subset.
 
 -- | The first argument is an escrow-backed value to sell; the second is
 -- its price; the third is the seller's public key.  The contract has two
@@ -192,7 +195,7 @@ redeem x valid seller = newContract [bearer x] redeemC where
 
 -- | The first argument is a value to assign possession; the second is the
 -- public key of the recipient.  A new contract is created that takes no
--- arguments (that is, takes '()') and checks that the sender is the owner,
+-- arguments (that is, takes @()@) and checks that the sender is the owner,
 -- in which case it returns the value.
 signOver ::
   forall a m.

@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.GetInputValues
 Description: Constructor for transaction inputs
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -24,13 +24,13 @@ import qualified GHC.Generics as Gen (to)
 import Numeric.Natural
 
 -- | This class controls how a type is constructed from
--- a heterogeneously-typed list of input return values.  Its default
--- instance, for any 'Generic' type, simply assigns each field of a product
--- type from successive values in the list, failing if they don't all match
--- or there are extras on one side.  For the moment, the member function is
--- not exported, so you can't write your own implementations; however, you
--- do need to @instance GetInputValues a@ for any 'a' you choose
--- to use.
+-- a heterogeneously-typed list of input return values.  Its default (and,
+-- through the magic of 'UndefinedInstances', automatic) instance, for any
+-- 'Generic' type, simply assigns each field of a product type from
+-- successive values in the list and sum types as-is from a single value,
+-- failing if they don't all match or there are extras on one side.  For
+-- the moment, the member function is not exported, so you can't write your
+-- own implementations.
 class GetInputValues a where
   getInputValues :: [BearsValue] -> (a, [BearsValue])
   default 
@@ -110,9 +110,11 @@ instance (HasEscrowIDs c, Typeable c) => GGetInputValues (K1 i c) where
 instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
   gGetInputValues = M1 <$> gGetInputValues
 
+-- | Abort: the "empty sum" type gets read as the whole type
 instance GGetInputValues U1 where
   gGetInputValues = empty
 
+-- | Abort: sum types get read as the whole type
 instance GGetInputValues (f :+: g) where
   gGetInputValues = empty
 

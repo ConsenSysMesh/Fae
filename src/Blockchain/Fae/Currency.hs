@@ -2,18 +2,22 @@
 {-|
 Module: Blockchain.Fae.Currency
 Description: A typeclass for currency escrows in Fae
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-The primary motivating example of a smart contract is a currency such as Bitcoin.  This module provides a typeclass for such contracts as well as a sample currency.
+The primary motivating example of a smart contract is a currency such as
+Bitcoin.  This module provides a typeclass for currency values that can be safely exchanged through the Fae smart contract system.
 -}
 module Blockchain.Fae.Currency 
   (
     -- * The currency typeclass
     Currency(..),
     -- * Basic numeric currency
+    -- | This is a nearly featureless currency that most likely suffers
+    -- from the effects of inflation, since its reward function creates one
+    -- coin at a time.  Not suitable for complex economic situations.
     Coin, reward
   )
 where
@@ -31,10 +35,7 @@ import Data.Typeable
 
 import Numeric.Natural
 
--- | Interface for a currency type.  The token type needs to be specified
--- because, possibly, not all "encryptions" support all the below
--- "homomorphic" operations.  Note that no actual encryption needs to be
--- involved.
+-- | Interface for a currency type.
 class 
   (Versionable coin, NFData coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
   Currency coin where
@@ -172,11 +173,11 @@ instance Currency Coin where
       remID <- mint r
       return (partIDs, pure remID)
 
--- | A contract to claim system rewards in exchange for Coin values.  The
+-- | A contract to claim system rewards in exchange for 'Coin' values.  The
 -- one-to-one exchange rate is of course an example and probably not
 -- actually desirable.
 --
--- Note that there is no Currency instance for rewards: thus, rewards are
+-- Note that there is no 'Currency' instance for rewards: thus, rewards are
 -- a unary counting value and can only be collected individually; in
 -- addition, 'claimReward' is the only means of spending them, and it
 -- destroys the reward token.  So this function can be seen as reifying

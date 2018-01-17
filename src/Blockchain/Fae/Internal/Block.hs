@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.Block
 Description: Block types and functions
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental

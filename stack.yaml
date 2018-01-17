@@ -41,6 +41,8 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
   - cryptonite-0.24
+  - haddock-api-2.18.1
+  - haddock-library-1.4.4
 
 ghc-options:
   "$everything": -dynamic-too -optl-pthread

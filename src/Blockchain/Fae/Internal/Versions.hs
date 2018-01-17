@@ -2,7 +2,7 @@
 {- |
 Module: Blockchain.Fae.Internal.Versions
 Description: The core 'Contract' type that underlies Fae
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -52,7 +52,8 @@ data Versioned a =
 -- * Type classes
 
 -- | Types that can be versioned, meaning a unique identifier is calculated
--- for it and all subobjects (stopping at 'Versioned' fields).
+-- for it and all subobjects (stopping at 'Versioned' fields).  Has an
+-- automatic, undecidable instance for any 'Generic' type.
 class (HasEscrowIDs a, Typeable a) => Versionable a where
   -- | Returns the map of all versions, including self.
   versionMap :: (EntryID -> VersionID) -> a -> VersionMap
@@ -87,25 +88,31 @@ class GRecords f where
 
 {- Instances -}
 
+-- | Like 'Maybe'.
 instance Foldable Versioned where
   foldr f y0 (Versioned x) = f x y0
   foldr _ y0 _ = y0
 
+-- | Like 'Maybe'.
 instance Functor Versioned where
   fmap f (Versioned x) = Versioned (f x)
   fmap _ (VersionedID v) = VersionedID v
 
+-- | Like 'Maybe'.  We don't provide a 'Monad' instance because, unlike
+-- 'Maybe', 'Versioned' values shouldn't go from one constructor to the
+-- other except when we say so.
 instance Applicative Versioned where
   pure = Versioned
   (Versioned f) <*> (Versioned x) = Versioned (f x)
   _ <*> (VersionedID v) = VersionedID v
 
+-- | -
 instance Traversable Versioned where
   traverse f (Versioned x) = Versioned <$> f x
   traverse _ (VersionedID v) = pure $ VersionedID v
 
 -- | Read 'Versioned' values as their version, which is a 'Digest'.
--- Regardless of whether 'a' has a 'Read' instance, 'Versioned a' always
+-- Regardless of whether 'a' has a 'Read' instance, @Versioned a@ always
 -- does, though the version may fail to be resolved.
 instance Read (Versioned a) where
   readsPrec n = fmap (_1 %~ VersionedID) . readsPrec n
@@ -156,35 +163,35 @@ instance {-# OVERLAPPABLE #-} -- Also undecidable
   versions f x = (mkVersionID $ map (fst . versions f) $ toList x, emptyVersionMap)
   mapVersions = fmap . mapVersions
 
--- | 
+-- | -
 instance Versionable Char where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | 
+-- | -
 instance Versionable Word where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | 
+-- | -
 instance Versionable Int where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | 
+-- | -
 instance Versionable Integer where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | 
+-- | -
 instance Versionable Float where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | 
+-- | -
 instance Versionable Double where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | 
+-- | -
 instance Versionable Natural where
   versions = defaultVersions
   mapVersions = defaultMapVersions
--- | 
+-- | -
 instance Versionable PublicKey where
   versions = defaultVersions
   mapVersions = defaultMapVersions

@@ -2,7 +2,7 @@
 {- |
 Module: Blockchain.Fae.Internal.IDs
 Description: Functions on identifier types
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -11,8 +11,8 @@ This module re-exports "Blockchain.Fae.Internal.IDs.Types" and provides some ins
 -}
 module Blockchain.Fae.Internal.IDs 
   (
-    module Blockchain.Fae.Internal.IDs,
-    module Blockchain.Fae.Internal.IDs.Types
+    module Blockchain.Fae.Internal.IDs.Types,
+    module Blockchain.Fae.Internal.IDs
   ) where
 
 import Blockchain.Fae.Internal.Coroutine
@@ -72,9 +72,8 @@ type EscrowIDTraversal a =
 -- will be transferred along with a value of type 'a' whenever it is
 -- returned from a contract.  
 --
--- Although this class must be instantiated for any user-defined types used
--- in contracts, we do not export the class members, so that only the
--- default instance may be used.
+-- We do not export the class members, so that only the default (automatic,
+-- undecidable) instance may be used.
 class HasEscrowIDs a where
   -- | Like 'traverse' from 'Traversable', except that it only covers the
   -- escrow IDs, which may be of heterogeneous types.
@@ -99,28 +98,28 @@ instance
   -- Not point-free; we need to specialize the forall.
   traverseEscrowIDs f eID = f eID
 
--- | 
+-- | -
 instance HasEscrowIDs Char where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | 
+-- | -
 instance HasEscrowIDs Word where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | 
+-- | -
 instance HasEscrowIDs Int where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | 
+-- | -
 instance HasEscrowIDs Integer where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | 
+-- | -
 instance HasEscrowIDs Float where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | 
+-- | -
 instance HasEscrowIDs Double where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | 
+-- | -
 instance HasEscrowIDs Natural where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | 
+-- | -
 instance HasEscrowIDs PublicKey where
   traverseEscrowIDs = defaultTraverseEscrowIDs
 -- | This is just natural, though it can probably be covered in most
@@ -181,6 +180,7 @@ unBear (BearsValue x) x0
   | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
   | otherwise = x0
 
+-- | Like 'dynTypeRep'.
 bearerType :: BearsValue -> SomeTypeRep
 bearerType (BearsValue x) = someTypeRep (Just x)
 

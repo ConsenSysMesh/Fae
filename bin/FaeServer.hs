@@ -20,8 +20,7 @@
 - transaction input list.
 -}
 
-import Blockchain.Fae
-import Blockchain.Fae.Internal hiding ((<.>))
+import Blockchain.Fae.FrontEnd
 
 import Control.Concurrent
 import Control.Concurrent.STM

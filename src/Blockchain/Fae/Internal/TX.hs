@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.TX
 Description: Transaction interpreter
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -64,6 +64,7 @@ data TX =
   }
   deriving (Generic)
 
+-- | Helpful for printing strings without the surrounding quotes.
 newtype UnquotedString = UnquotedString String
 
 -- | This builds on 'FaeStorage' because the interpreter has to access the
@@ -77,6 +78,7 @@ instance Serialize TX
 -- | Default instance
 instance Digestible TX
 
+-- | Prints a string without the quotes
 instance Show UnquotedString where
   show (UnquotedString s) = s
 
@@ -86,8 +88,9 @@ instance Show UnquotedString where
 -- transaction ID; the first argument is whether or not the transaction
 -- gets a reward.  We set up the module search path carefully so that this
 -- transaction can effectively import both its own other modules, and those
--- of other transactions.  The first transaction is very slow because the
--- interpreter has to initialize, but subsequent ones are acceptably fast.
+-- of other transactions.  Now that we dynamically link @faeServer@, the
+-- load-up time for the first transaction is pretty short; subsequent
+-- transactions are faster still.
 interpretTX :: Bool -> TX -> FaeInterpret ()
 interpretTX isReward TX{..} = handle fixGHCErrors $ do
   Int.set [searchPath := thisTXPath]
@@ -107,12 +110,12 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
     fixGHCErrors (UnknownError e) = error e
     fixGHCErrors (NotAllowed e) = error e
     fixGHCErrors (GhcException e) = error e
-    txSrc = "Blockchain.Fae.Transactions.TX" ++ show txID
+    txModName = "TX" ++ show txID
+    txSrc = "Blockchain.Fae.Transactions." ++ txModName
     thisTXPath = 
       [
         ".",
-        "Blockchain" </> "Fae" </> "Transactions" </> 
-          ("TX" ++ show txID) </> "private"
+        "Blockchain" </> "Fae" </> "Transactions" </> txModName </> "private"
       ]
     qualified varName = txSrc ++ "." ++ varName
 

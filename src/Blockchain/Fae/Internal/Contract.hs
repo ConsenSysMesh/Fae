@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.Contract
 Description: The core 'Contract' type that underlies Fae
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental

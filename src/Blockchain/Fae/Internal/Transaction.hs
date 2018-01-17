@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.Transaction
 Description: Transaction execution
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -101,6 +101,7 @@ runTransaction f fallback inputArgs txID signers isReward =
 
   where txStorage = _getStorage . at txID
  
+-- | Actually perform the transaction
 doTX :: 
   (HasEscrowIDs inputs, GetInputValues inputs, Typeable inputs) => 
   [BearsValue] -> [Transaction inputs ()] -> Bool -> 

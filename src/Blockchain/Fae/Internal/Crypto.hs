@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.Crypto
 Description: Cryptography for Fae
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -180,47 +180,47 @@ instance Serialize Digest where
 
 -- instance Serialize PublicKey
 -- instance Serialize Digest
--- | 
+-- | -
 instance Serialize PrivateKey
--- | 
+-- | -
 instance Serialize Signature
--- | 
+-- | -
 instance (Serialize a) => Serialize (Signed a)
 
--- | 
+-- | -
 instance Digestible EdPublicKey
--- | 
+-- | -
 instance Digestible EdSecretKey
--- | 
+-- | -
 instance Digestible EdSignature
--- | 
+-- | -
 instance Digestible Digest
 
--- | 
+-- | -
 instance Digestible ()
--- | 
+-- | -
 instance Digestible Int
--- | 
+-- | -
 instance Digestible Word
--- | 
+-- | -
 instance Digestible Char
--- | 
+-- | -
 instance Digestible Integer
--- | 
+-- | -
 instance Digestible Float
--- | 
+-- | -
 instance Digestible Double
--- | 
+-- | -
 instance Digestible Natural
--- | 
+-- | -
 instance (Serialize a, Serialize b) => Digestible (a, b)
--- | 
+-- | -
 instance (Serialize a) => Digestible [a]
--- | 
+-- | -
 instance (Serialize a) => Digestible (Maybe a) 
--- | 
+-- | -
 instance (Serialize a, Serialize b) => Digestible (Either a b)
--- | 
+-- | -
 instance (Serialize a, Serialize b, Serialize c) => Digestible (a, b, c)
 
 -- | Uniform instance from 'Serialize'
@@ -231,12 +231,15 @@ instance Read Digest where
 instance Read EdPublicKey where
   readsPrec = readsPrecSer
 
+-- | Uniform instance from 'Serialize'
 instance Ord EdPublicKey where
   compare = compareSerialize
 
+-- | Uniform instance from 'Serialize'
 instance Ord EdSecretKey where
   compare = compareSerialize
 
+-- | Uniform instance from 'Serialize'
 instance Ord EdSignature where
   compare = compareSerialize
 

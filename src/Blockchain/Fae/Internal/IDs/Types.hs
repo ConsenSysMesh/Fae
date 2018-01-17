@@ -1,7 +1,7 @@
 {- |
 Module: Blockchain.Fae.Internal.IDs.Types
 Description: Identifier types
-Copyright: (c) Ryan Reich, 2017
+Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
@@ -86,11 +86,11 @@ instance Read ShortContractID where
 instance Show ShortContractID where
   show (ShortContractID dig) = show dig
 
--- |
+-- | -
 instance Read VersionID where
   readsPrec n = map (_1 %~ VersionID) . readsPrec n
 
--- |
+-- | -
 instance Show VersionID where
   show (VersionID ver) = show ver
 
