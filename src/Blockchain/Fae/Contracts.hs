@@ -182,7 +182,7 @@ redeem x valid seller = newContract [bearer x] redeemC where
     unless (claimedSeller == seller) $ 
       throw $ UnauthorizedSeller claimedSeller
     ok <- valid tok
-    unless ok $ throw $ BadToken
+    unless ok $ throw BadToken
     _ <- release $ Right x
     sender <- signer "self"
     unless (sender == seller) $

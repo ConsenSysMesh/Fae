@@ -104,7 +104,6 @@ import Data.Dynamic
 import Data.Functor.Identity
 import Data.Maybe
 import Data.Sequence (Seq)
-import Data.Typeable
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -252,7 +251,7 @@ newEscrow ::
     MonadTX m
   ) =>
   [BearsValue] -> Contract argType valType -> m (EscrowID argType valType)
-newEscrow eIDs f = liftTX $ Fae $ internalNewEscrow eIDs $ (getFae . f)
+newEscrow eIDs f = liftTX $ Fae $ internalNewEscrow eIDs $ getFae . f
 
 -- | Registers a contract publicly, with the same interface as 'newEscrow'.
 -- Public contracts may only be called as transaction inputs with string

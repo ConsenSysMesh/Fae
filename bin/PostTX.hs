@@ -63,8 +63,8 @@ postTX host fake TXData{..} = do
   request <- flip formDataBody requestURL $
     partFileSource "body" (maybe (error "Missing body") (++ ".hs") _bodyM) :
     fmap (partFileSource "other" . (++ ".hs")) _others ++
-    (fmap (uncurry partLBS) $
-      fakeArg : rewardArg : fallbackArgs ++ inputArgs ++ keysArgs)
+    fmap (uncurry partLBS) 
+      (fakeArg : rewardArg : fallbackArgs ++ inputArgs ++ keysArgs)
   response <- httpLbs request manager
   LC8.putStrLn $ responseBody response
 
@@ -109,7 +109,7 @@ readList name listLens lines txData
   | otherwise = error $ "Multiple '" ++ name ++ "' blocks"
   where
     list = 
-      fmap (\l -> catchInvalid l $ fmap dropSpaces $ stripPrefix "  -" l) dashList
+      fmap (\l -> catchInvalid l $ dropSpaces <$> stripPrefix "  -" l) dashList
     catchInvalid l = fromMaybe (error $ "Invalid " ++ name ++ " spec: " ++ l) 
     (dashList, rest) = span (isPrefixOf "  -") lines
 

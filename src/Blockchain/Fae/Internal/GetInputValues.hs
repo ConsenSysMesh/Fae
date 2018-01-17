@@ -18,8 +18,7 @@ import Control.Monad.State
 
 import Data.Typeable
 
-import GHC.Generics hiding (to)
-import qualified GHC.Generics as Gen (to)
+import GHC.Generics
 
 import Numeric.Natural
 
@@ -104,7 +103,7 @@ instance (HasEscrowIDs c, Typeable c) => GGetInputValues (K1 i c) where
     if s
     -- This allows you to use only part of an input structure.
     then return $ K1 $ throw NotEnoughInputs
-    else fmap K1 $ state $ defaultGetInputValues
+    else K1 <$> state defaultGetInputValues
 
 -- | Just ignore metadata for this one.
 instance (GGetInputValues f) => GGetInputValues (M1 i t f) where

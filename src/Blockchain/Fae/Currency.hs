@@ -147,8 +147,7 @@ instance Currency Coin where
   add eID1 eID2 = do
     CoinVal n1 <- useEscrow eID1 Spend
     CoinVal n2 <- useEscrow eID2 Spend
-    eID <- mint $ n1 + n2
-    return eID
+    mint $ n1 + n2
 
   change eID nV@(CoinValuation n) = do
     ord <- valCompare eID nV

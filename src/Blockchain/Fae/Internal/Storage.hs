@@ -191,15 +191,15 @@ showTransaction txID = do
       ("result: " ++ resultSafe) :
       ("outputs: " ++ outputsSafe) :
       prettySigners ss :
-      (flip map inputsSafe $ uncurry $
-        \sID str -> "input " ++ show sID ++ "\n    " ++ str)
+      flip map inputsSafe 
+        (uncurry $ \sID str -> "input " ++ show sID ++ "\n    " ++ str)
   where 
     displayException f x = liftIO $
       catchAll (evaluate $ force $ f x) $ \e -> return $ "<exception> " ++ show e
     showNonce InputOutputVersions{..} =
       use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
     showOutputs os = "outputs: " ++ show (IntMap.keys os)
-    showIOVersions nS InputOutputVersions{..} = intercalate "\n    " $
+    showIOVersions nS InputOutputVersions{..} = intercalate "\n    "
       [
         "nonce: " ++ nS, 
         showOutputs iOutputs,

@@ -99,7 +99,7 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
   run <- interpret runString infer
   lift $ run inputs txID pubKeys isReward 
   where
-    runString = intercalate " "
+    runString = unwords
       [
         "runTransaction",
         qualified "body", 

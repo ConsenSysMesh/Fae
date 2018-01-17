@@ -24,6 +24,7 @@ import Data.Typeable as T
 -- * Types
 --
 -- | Exceptions for ID-related errors.
+-- There may be more exceptions in the future; shouldn't be a newtype
 data IDException =
   InvalidContractID ContractID
 
@@ -69,7 +70,7 @@ instance Show VersionException where
     "; expected type: " ++ show good ++ 
     "; got: " ++ show bad
   show (UnresolvedVersionID vID) = "Unresolved version ID: " ++ show vID
-  show (UnexpectedResolvedVersion) = 
+  show UnexpectedResolvedVersion = 
     "Found a resolved version where version ID was expected."
 
 -- | -

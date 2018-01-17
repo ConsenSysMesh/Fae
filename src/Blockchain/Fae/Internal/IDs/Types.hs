@@ -11,7 +11,7 @@ There are several identifier types in Fae: two kinds of contract ID (one detaile
 module Blockchain.Fae.Internal.IDs.Types where
 
 import Blockchain.Fae.Internal.Crypto
-import Blockchain.Fae.Internal.Lens hiding (from, to)
+import Blockchain.Fae.Internal.Lens
 
 import Control.DeepSeq
 import Data.Serialize
@@ -79,7 +79,7 @@ instance Digestible ContractID
 -- | 'ShortContractID's and, by extension, 'TransactionIDs', are read as
 -- the digests they wrap.
 instance Read ShortContractID where
-  readsPrec _ = fmap (_1 %~ ShortContractID) . readsPrec 0
+  readsPrec n = fmap (_1 %~ ShortContractID) . readsPrec n
 
 -- | 'ShortContractID's and, by extension, 'TransactionIDs', show as hex
 -- strings.  This should be inverse to the 'Read' instance.

@@ -155,7 +155,7 @@ runInputContract cID arg (results, vers) = do
       -- Only nonce-protected contract calls are allowed to return
       -- versioned values.
       (iVersions, vers')
-        | hasNonce cID = (fmap bearerType $ getVersionMap vMap, vers `vUnion` vMap)
+        | hasNonce cID = (bearerType <$> getVersionMap vMap, vers `vUnion` vMap)
         | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
     return (result, vers', InputOutputVersions{..})
