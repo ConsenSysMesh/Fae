@@ -2,7 +2,8 @@
 set -e
 
 exeName=postTX
-imgName=fae:$exeName
+repoName=${exeName,,}
+imgName=teamfae/$repoName
 
 mkdir -p bin/
 stack --local-bin-path $PWD/bin install :$exeName

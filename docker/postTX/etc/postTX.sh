@@ -3,9 +3,9 @@ if [[ $# -eq 0 ]]
 then echo >&2 "Must supply a transaction spec file name"; exit 1
 fi
 
-imgName=fae:postTX
-if [[ -n $FAE_REPO ]]
-then imgName=$FAE_REPO/$imgName
+imgName=teamfae/posttx
+if [[ -n $FAE_VERSION ]]
+then imgName=$imgName:$FAE_VERSION
 fi
 
 envList=""

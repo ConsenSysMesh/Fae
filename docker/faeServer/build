@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build -t fae:faeServer .
+docker build -t teamfae/faeserver .
