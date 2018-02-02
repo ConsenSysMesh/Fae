@@ -160,7 +160,7 @@ type AbstractEscrow = ConcreteContract BearsValue BearsValue
 -- expect.  This prevents malicious users from injecting their own code
 -- into transactions' contract calls.
 type AbstractContract = 
-  ConcreteContract (String, VersionMap) (BearsValue, VersionMap)
+  ConcreteContract (String, VersionMap') (BearsValue, VersionMap)
 
 -- * Template Haskell
 

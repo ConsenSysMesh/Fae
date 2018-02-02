@@ -30,7 +30,7 @@ data IDException =
 
 -- | Exceptions for version-related errors.
 data VersionException =
-  BadVersionID VersionID |
+  BadVersionID ShortContractID VersionID |
   BadVersionedType VersionID TypeRep TypeRep |
   UnresolvedVersionID VersionID |
   UnexpectedResolvedVersion
@@ -64,7 +64,8 @@ instance Show IDException where
 
 -- | -
 instance Show VersionException where
-  show (BadVersionID vID) = "No version found with ID: " ++ show vID
+  show (BadVersionID scID vID) = 
+    "No version found in contract " ++ show scID ++ " with ID: " ++ show vID
   show (BadVersionedType vID bad good) = 
     "For value with version ID: " ++ show vID ++ 
     "; expected type: " ++ show good ++ 

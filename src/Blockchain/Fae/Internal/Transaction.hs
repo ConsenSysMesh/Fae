@@ -134,13 +134,13 @@ doFallback fallback input = forM_ fallback $
 -- progressively increasing set of outputs.
 runInputContracts :: Inputs -> TXStorageM [BearsValue]
 runInputContracts = fmap fst .
-  foldl' (>>=) (return ([], emptyVersionMap)) .
+  foldl' (>>=) (return ([], emptyVersionMap')) .
   map (uncurry runInputContract) 
 
 -- | Runs a single input contract.
 runInputContract ::
   ContractID -> String ->
-  ([BearsValue], VersionMap) -> TXStorageM ([BearsValue], VersionMap)
+  ([BearsValue], VersionMap') -> TXStorageM ([BearsValue], VersionMap')
 runInputContract cID arg (results, vers) = do
   let inputError e = return (throw e, vers, throw e)
   (result, vers', ioV) <- handleAll inputError $ do
@@ -155,7 +155,11 @@ runInputContract cID arg (results, vers) = do
       -- Only nonce-protected contract calls are allowed to return
       -- versioned values.
       (iVersions, vers')
-        | hasNonce cID = (bearerType <$> getVersionMap vMap, vers `vUnion` vMap)
+        | hasNonce cID = 
+            (
+              bearerType <$> getVersionMap vMap, 
+              addContractVersions cID vMap vers
+            )
         | otherwise = (Map.empty, vers)
     liftFaeContract $ at cID .= gAbsM
     return (result, vers', InputOutputVersions{..})
