@@ -176,35 +176,42 @@ showTransaction txID = do
   TransactionEntry ios ino os ss x <- use $
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   resultSafe <- displayException show x
-  outputsSafe <- displayException (show . IntMap.keys) os
+  outputsSafe <- displayException (prettyOutputs cIDfTX) os
   inputsSafe <- forM ino $ \sID -> do
     let 
       iov = 
         fromMaybe (error $ "Contract ID " ++ show sID ++ " missing") $ 
         Map.lookup sID ios
     n <- handleAll (return . throw) $ showNonce iov
-    iovS <- displayException (showIOVersions n) iov
+    iovS <- displayException (showIOVersions n sID) iov
     return (sID, iovS)
   return $ 
     intercalate "\n  " $
       ("Transaction " ++ show txID) :
       ("result: " ++ resultSafe) :
-      ("outputs: " ++ outputsSafe) :
+      outputsSafe :
       prettySigners ss :
       flip map inputsSafe 
-        (uncurry $ \sID str -> "input " ++ show sID ++ "\n    " ++ str)
+        (\(sID, str) -> "input " ++ show sID ++ "\n    " ++ str)
   where 
     displayException f x = liftIO $
       catchAll (evaluate $ force $ f x) $ \e -> return $ "<exception> " ++ show e
     showNonce InputOutputVersions{..} =
       use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
     showOutputs os = "outputs: " ++ show (IntMap.keys os)
-    showIOVersions nS InputOutputVersions{..} = intercalate "\n    "
+    showIOVersions nS sID InputOutputVersions{..} = intercalate "\n    "
       [
         "nonce: " ++ nS, 
-        showOutputs iOutputs,
+        prettyOutputs (cIDfC sID) iOutputs,
         prettyVersions iVersions
       ]
+    cIDfTX = TransactionOutput txID
+    cIDfC = InputOutput txID
+    prettyOutputs cIDf os =
+      intercalate "\n    " $
+      ("outputs:" :) $
+      map (\n -> show n ++ ": " ++ show (shorten $ cIDf n)) $ 
+      IntMap.keys os
     prettySigners =
       intercalate "\n    " .
       ("signers:" :) .
