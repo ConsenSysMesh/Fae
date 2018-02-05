@@ -27,7 +27,7 @@ import Control.Concurrent.STM
 
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.State.Class
+import Control.Monad.State
 import Control.Monad.Trans.Class
 
 import Data.ByteString.Builder
@@ -40,6 +40,7 @@ import Data.Function
 import Data.List
 import Data.Maybe
 
+import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Serialize as S
 
@@ -52,14 +53,46 @@ import Network.Wai.Handler.Warp hiding (FileInfo)
 import Network.Wai.Parse
 
 import System.Directory
+import System.Environment
+import System.Exit
 import System.FilePath
+import System.Process
 
 import Text.Read (readMaybe)
 
-type TXQueue = TQueue (Bool, Bool, TX, TMVar String, ThreadId)
+-- | All the pieces of data that are required to execute a transaction in
+-- the dedicated interpreter thread.
+data TXExecData =
+  TXExecData
+  {
+    mainFile :: C8.ByteString,
+    modules :: Map String C8.ByteString,
+    parentM :: Maybe TransactionID,
+    fake :: Bool,
+    reward :: Bool,
+    tx :: TX,
+    resultVar :: TMVar String,
+    callerTID :: ThreadId
+  }
+
+-- | Communications channel with the interpreter thread
+type TXQueue = TQueue TXExecData
+
+-- | Tracks all post-transaction states for the purpose of rolling back.
+data TXHistory = 
+  TXHistory
+  {
+    txStorageAndCounts :: Map TransactionID (Storage, Integer),
+    bestTXID :: TransactionID,
+    bestTXCount :: Integer
+  }
+
+-- | Monad for tracking history
+type FaeInterpretWithHistory = StateT TXHistory FaeInterpret
 
 main :: IO ()
 main = do
+  gitInit
   txQueue <- atomically newTQueue
   tID <- myThreadId
   void $ forkIO $ runFae txQueue tID
@@ -69,40 +102,151 @@ faeSettings :: Settings
 faeSettings = defaultSettings &
   setPort 27182 &
   setOnExceptionResponse exceptionResponseForDebug
+
+gitInit :: IO ()
+gitInit = do
+  setEnv "GIT_DIR" "./.fae-git"
+  runGitWithArgs "init" ["--quiet"]
+  runGitWithArgs "commit" ["-q", "--allow-empty", "-m", "Transaction " ++ show nullID]
+  runGitWithArgs "tag" [txGitTag nullID]
+
+gitCommit :: TransactionID -> IO ()
+gitCommit txID = do
+  runGitWithArgs "add" ["Blockchain"]
+  runGitWithArgs "commit" ["-q", "-m", "Transaction " ++ show txID]
+  runGitWithArgs "tag" [txGitTag txID]
+
+gitReset :: TransactionID -> IO ()
+gitReset oldTXID = do
+  runGitWithArgs "reset" ["--hard", "-q", txGitTag oldTXID]
+
+gitClean :: IO ()
+gitClean = runGitWithArgs "clean" ["-q", "-f", "./Blockchain"]
+
+txGitTag :: TransactionID -> String
+txGitTag txID = "TX" ++ show txID
+
+runGitWithArgs :: String -> [String] -> IO ()
+runGitWithArgs cmd args = do
+  let fullArgs = "--work-tree" : "." : cmd : args
+  (exitCode, out, err) <- readProcessWithExitCode "git" fullArgs ""
+  case exitCode of
+    ExitSuccess -> when (not $ null out) $ putStrLn $ unlines
+      [
+        "`git " ++ cmd ++ "` was successful with the following output:",
+        out
+      ]
+    ExitFailure n -> do
+      putStrLn $ unlines $
+        ("`git " ++ cmd ++ "` returned code " ++ show n) :
+        if null err then [] else
+          [            
+            "Error message:",
+            err
+          ]
+      exitFailure
   
 runFae :: TXQueue -> ThreadId -> IO ()
-runFae txQueue mainTID = runFaeInterpret $ forever $ 
-  handle (liftIO . throwTo @SomeException mainTID) $ do
-    (fake, reward, tx@TX{..}, resultVar, tID) <- 
-      liftIO $ atomically $ readTQueue txQueue
-    s0 <- lift get
-    resultE <- try $ do
-      interpretTX reward tx
-      lift $ showTransaction txID
-    when fake $ lift $ put s0
-    liftIO $ either 
-      (throwTo @SomeException tID)
-      (atomically . putTMVar resultVar)
-      resultE
+runFae txQueue mainTID = reThrow mainTID $ runFaeInterpretWithHistory $ 
+  forever $ do
+    TXExecData{tx=tx@TX{..}, ..} <- ioAtomically $ readTQueue txQueue
+    reThrow callerTID $ handle (liftIO . throwTo @ExitCode mainTID) $ do
+      dup <- gets $ Map.member txID . txStorageAndCounts
+      when dup $ error $ "Duplicate transaction ID: " ++ show txID
+
+      txCount <- recallHistory parentM
+      liftIO $ writeModules mainFile modules txID
+      txResult <- lift $ do
+        interpretTX reward tx
+        lift $ showTransaction txID
+      if fake
+      then liftIO gitClean
+      else updateHistory txID txCount
+      ioAtomically $ putTMVar resultVar txResult
+
+  where 
+    reThrow :: (MonadIO m, MonadCatch m) => ThreadId -> m () -> m ()
+    reThrow tID = handleAll (liftIO . throwTo tID)
+
+    ioAtomically :: (MonadIO m) => STM a -> m a
+    ioAtomically = liftIO . atomically
+
+recallHistory :: Maybe TransactionID -> FaeInterpretWithHistory Integer
+recallHistory parentM = do
+  TXHistory{..} <- get
+  let parent = fromMaybe bestTXID parentM
+  let err = error $ "No transaction in history with ID: " ++ show parent
+  -- Weird construct forces this lookup before git runs
+  (s, n) <- return $ Map.findWithDefault err parent txStorageAndCounts
+  liftIO $ gitReset parent
+  liftFaeStorage $ put s
+  return n
+
+updateHistory :: TransactionID -> Integer -> FaeInterpretWithHistory ()
+updateHistory txID txCount = do
+  TXHistory{..} <- get
+  s <- liftFaeStorage get
+  let newCount = txCount + 1
+  let txStorageAndCounts' = Map.insert txID (s, newCount) txStorageAndCounts
+  let (bestTXID', bestTXCount')
+        | txCount == bestTXCount = (txID, newCount)
+        | otherwise = (bestTXID, bestTXCount)
+  liftIO $ gitCommit txID
+  put $ TXHistory txStorageAndCounts' bestTXID' bestTXCount'
+
+liftFaeStorage :: FaeStorage a -> FaeInterpretWithHistory a
+liftFaeStorage = lift . lift
+
+runFaeInterpretWithHistory :: FaeInterpretWithHistory () -> IO ()
+runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory where
+  emptyTXHistory = 
+    TXHistory
+    {
+      txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 0),
+      bestTXID = nullID,
+      bestTXCount = 0
+    }
+
+nullID :: TransactionID
+nullID = ShortContractID $ digest ()
+
+writeModules :: 
+  C8.ByteString -> Map.Map String C8.ByteString -> TransactionID -> IO ()
+writeModules mainFile modules txID = do
+  let
+    txIDName = "TX" ++ show txID
+    txDir = "Blockchain" </> "Fae" </> "Transactions"
+    thisTXDir = txDir </> txIDName
+    thisTXPrivate = thisTXDir </> "private"
+    writeModule fileName fileContents = do
+      C8.writeFile (thisTXDir </> fileName) fileContents
+      C8.writeFile (thisTXPrivate </> fileName) $ privateModule txID fileName
+  createDirectoryIfMissing True thisTXPrivate
+  C8.writeFile (txDir </> txIDName <.> "hs") mainFile
+  sequence_ $ Map.mapWithKey writeModule modules
+
+privateModule :: TransactionID -> String -> C8.ByteString
+privateModule txID fileName = C8.pack $
+  "module " ++ moduleName ++ "(module " ++ realModuleName ++ ") where\n\n" ++
+  "import " ++ realModuleName ++ "\n" 
+  where
+    moduleName = takeBaseName fileName
+    realModuleName = txModuleName txID ++ "." ++ moduleName
 
 serverApp :: TXQueue -> Application
 serverApp txQueue request respond = do
   (params, files) <- parseRequestBody lbsBackEnd request
   let 
-    fake = last $ False : [ read $ C8.unpack s | ("fake", s) <- params ]
-    reward = last $ False : [ read $ C8.unpack s | ("reward", s) <- params ]
-    keyNames0 = 
-      [ (signerName, tail keyName) | -- Remove the colon
-        ("key", keyBS) <- params,
-        let (signerName, keyName) = break (== ':') (C8.unpack keyBS) 
-      ]
-    keyNames = if null keyNames0 then [("self", "key1")] else keyNames0
-    inputParams = 
-      [ C8.unpack inputBS | ("input", inputBS) <- params ]
-    inputs = fromMaybe (error "Couldn't parse inputs") $ 
-      mapM readMaybe inputParams
-    fallback =
-      [ C8.unpack fallbackBS | ("fallback", fallbackBS) <- params ]
+    getParams = getParameters params
+    parentM = getLast Nothing Just $ getParams "parent" 
+    fake = getLast False id $ getParams "fake" 
+    reward = getLast False id $ getParams "reward"
+    keyNames = if null keyNames0 then [("self", "key1")] else keyNames0 where
+      keyNames0 = map uncolon $ getParams "key"
+      uncolon s = (x, tail y) where (x, y) = break (== ':') s
+    inputs = fromMaybe inputsErr $ mapM readMaybe $ getParams "input" where
+      inputsErr = error "Couldn't parse inputs"
+    fallback = getParams "fallback"
 
   tx@TX{pubKeys, txID} <- nextTX keyNames inputs fallback >>= evaluate . force
   let (mainFileM, modules) = makeFilesMap files txID
@@ -113,14 +257,18 @@ serverApp txQueue request respond = do
       Map.toList $
       getSigners pubKeys
     Just mainFile -> do
-      writeModules mainFile modules txID
-
-      tID <- myThreadId
+      callerTID <- myThreadId
       resultVar <- atomically newEmptyTMVar
-      atomically $ writeTQueue txQueue (fake, reward, tx, resultVar, tID)
+      atomically $ writeTQueue txQueue TXExecData{..}
       result <- atomically $ takeTMVar resultVar
-
       respond $ buildResponse result
+
+getParameters :: [(C8.ByteString, C8.ByteString)] -> C8.ByteString -> [String]
+getParameters params paramName = 
+  [ C8.unpack s | (pName, s) <- params, pName == paramName]
+
+getLast :: (Read b) => a -> (b -> a) -> [String] -> a
+getLast x0 f l = last $ x0 : map (f . read) l
 
 buildResponse :: String -> Response
 buildResponse = responseBuilder ok200 headers . stringUtf8 where
@@ -178,29 +326,6 @@ replaceModuleNameWith moduleName contents =
     (pre, post0) = C8.breakSubstring "module" contents
     (_, post) = C8.breakSubstring "where" post0
  
-writeModules :: 
-  C8.ByteString -> Map.Map String C8.ByteString -> TransactionID -> IO ()
-writeModules mainFile modules txID = do
-  let
-    txIDName = "TX" ++ show txID
-    txDir = "Blockchain" </> "Fae" </> "Transactions"
-    thisTXDir = txDir </> txIDName
-    thisTXPrivate = thisTXDir </> "private"
-    writeModule fileName fileContents = do
-      C8.writeFile (thisTXDir </> fileName) fileContents
-      C8.writeFile (thisTXPrivate </> fileName) $ privateModule txID fileName
-  createDirectoryIfMissing True thisTXPrivate
-  C8.writeFile (txDir </> txIDName <.> "hs") mainFile
-  sequence_ $ Map.mapWithKey writeModule modules
-
-privateModule :: TransactionID -> String -> C8.ByteString
-privateModule txID fileName = C8.pack $
-  "module " ++ moduleName ++ "(module " ++ realModuleName ++ ") where\n\n" ++
-  "import " ++ realModuleName ++ "\n" 
-  where
-    moduleName = takeBaseName fileName
-    realModuleName = txModuleName txID ++ "." ++ moduleName
-
 txModuleName :: TransactionID -> String
 txModuleName txID = "Blockchain.Fae.Transactions.TX" ++ show txID
 

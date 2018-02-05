@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 import Prelude hiding (readList)
-import Blockchain.Fae (ContractID)
+import Blockchain.Fae (ContractID, TransactionID)
 import Control.Lens
 import Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8 as LC8
@@ -21,7 +21,8 @@ data TXData =
     _fallback :: [String],
     _inputs :: [(ContractID, String)],
     _keys :: [(String, String)],
-    _reward :: Bool
+    _reward :: Bool,
+    _parent :: Maybe TransactionID
   }
 
 makeLenses ''TXData
@@ -50,7 +51,8 @@ main = do
       _fallback = [],
       _inputs = [],
       _keys = [], 
-      _reward = False
+      _reward = False,
+      _parent = Nothing
     } 
   case _bodyM txData of
     Nothing -> error "Missing body filename"
@@ -64,7 +66,8 @@ postTX host fake TXData{..} = do
     partFileSource "body" (maybe (error "Missing body") (++ ".hs") _bodyM) :
     fmap (partFileSource "other" . (++ ".hs")) _others ++
     fmap (uncurry partLBS) 
-      (fakeArg : rewardArg : fallbackArgs ++ inputArgs ++ keysArgs)
+      (maybe id (:) parentArg $ fakeArg : rewardArg : 
+      fallbackArgs ++ inputArgs ++ keysArgs)
   response <- httpLbs request manager
   LC8.putStrLn $ responseBody response
 
@@ -73,6 +76,7 @@ postTX host fake TXData{..} = do
       parseRequest $ "http://" ++ host
     fakeArg = ("fake", ) $ if fake then "True" else "False"
     rewardArg = ("reward", ) $ if _reward then "True" else "False"
+    parentArg = ("parent", ) . LC8.pack . show <$> _parent
     fallbackArgs = map (("fallback",) . LC8.pack) _fallback
     inputArgs = map (("input", ) . LC8.pack . show) _inputs
     keysArgs = map (\(signer, key) -> ("key", LC8.pack $ signer ++ ":" ++ key)) _keys
@@ -86,6 +90,9 @@ readData (line1 : rest) txData =
     ("reward", Just rewardS) -> 
       let _reward = read rewardS in
       readData rest txData{_reward} 
+    ("parent", Just parentS) -> do
+      _parent <- Just . read <$> resolveVars parentS 
+      readData rest txData{_parent} 
     ("others", sM) 
       | maybe True null sM -> readList "others" others rest txData 
       | otherwise -> forbiddenArgument "others" sM

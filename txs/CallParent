@@ -1,0 +1,4 @@
+body = CallParent
+inputs
+  TransactionOutput $txID 0 = ()
+parent = $txID
