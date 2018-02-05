@@ -87,6 +87,13 @@ executable faeServer
   hs-source-dirs:      bin
   main-is:             FaeServer.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
+  other-modules:
+    FaeServer.App
+    FaeServer.Concurrency
+    FaeServer.Fae
+    FaeServer.Git
+    FaeServer.History
+    FaeServer.Modules
   build-depends:       
     base, 
     bytestring,
