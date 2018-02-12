@@ -13,6 +13,10 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+flag static
+  description: Build postTX statically linked.
+  default: False
+
 library
   hs-source-dirs:      src
   exposed-modules:     
@@ -125,8 +129,9 @@ executable postTX
   buildable: True
   hs-source-dirs: bin
   main-is: PostTX.hs
-  ld-options: -static
-  ghc-options: -fPIC
+  if flag(static)
+    ld-options: -static
+    ghc-options: -fPIC
   build-depends:
     base,
     bytestring,

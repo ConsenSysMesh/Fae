@@ -1,4 +1,3 @@
-{-# LANGUAGE Trustworthy #-}
 module Auction where
 
 import System.IO.Unsafe
