@@ -46,7 +46,7 @@ chmod 1777 /tmp
 mv .stack-work $FAE_HOME
 ln -s $FAE_HOME/run /var/run/fae # Created later
 
-apt-get -y purge ssh xz-utils git wget apt-utils
+apt-get -y purge ssh xz-utils wget apt-utils
 apt-get -y autoremove
 rm -rf /var/lib/apt/lists /var/cache/apt
 

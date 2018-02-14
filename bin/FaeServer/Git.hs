@@ -12,6 +12,8 @@ gitInit :: IO ()
 gitInit = do
   setEnv "GIT_DIR" "./.fae-git"
   runGitWithArgs "init" ["--quiet"]
+  runGitWithArgs "config" ["user.name", "Fae"]
+  runGitWithArgs "config" ["user.email", "fae"]
   runGitWithArgs "commit" ["-q", "--allow-empty", "-m", "Transaction " ++ show nullID]
   runGitWithArgs "tag" [txGitTag nullID]
 
