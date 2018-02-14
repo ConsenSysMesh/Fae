@@ -6,7 +6,7 @@ repoName=${exeName,,}
 imgName=teamfae/$repoName
 
 mkdir -p bin/
-stack --local-bin-path $PWD/bin --flag fae:static install :$exeName
+stack --local-bin-path $PWD/bin install --flag fae:static :$exeName
 { docker build -t $imgName . ; s=$?; } || true
 rm -r ./bin
 exit $s
