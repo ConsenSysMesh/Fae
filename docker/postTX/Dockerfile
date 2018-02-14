@@ -1,4 +1,6 @@
 FROM scratch
 ADD . /
+ENV TMPDIR /tmp
+WORKDIR $TMPDIR
 WORKDIR /txs
 ENTRYPOINT ["/bin/postTX"]

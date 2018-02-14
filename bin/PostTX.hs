@@ -1,16 +1,19 @@
 {-# LANGUAGE TemplateHaskell #-}
 import Prelude hiding (readList)
 import Blockchain.Fae (ContractID, TransactionID)
-import Control.Lens
+import Control.Exception
+import Control.Lens hiding ((<.>))
 import Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import Data.Char
 import Data.List
 import Data.Maybe
+import Data.Text (Text)
 import Network.HTTP.Client
 import Network.HTTP.Client.MultipartFormData
 import System.Directory
 import System.Environment
+import System.FilePath
 import System.Process
 
 data TXData =
@@ -62,24 +65,74 @@ main = do
 postTX :: String -> Bool -> TXData -> IO ()
 postTX host fake TXData{..} = do
   manager <- newManager defaultManagerSettings
+  (mainTmpName, mainModule) <- makeTempFile "body" bodyFile
+  (tmpNames, otherModules) <- unzip <$> mapM (makeTempFile "other") _others
   request <- flip formDataBody requestURL $
-    partFileSource "body" (maybe (error "Missing body") (++ ".hs") _bodyM) :
-    fmap (partFileSource "other" . (++ ".hs")) _others ++
+    mainModule :
+    otherModules ++
     fmap (uncurry partLBS) 
       (maybe id (:) parentArg $ fakeArg : rewardArg : 
       fallbackArgs ++ inputArgs ++ keysArgs)
-  response <- httpLbs request manager
+  response <- httpLbs request manager 
+    `finally` mapM removeFile (mainTmpName : tmpNames)
   LC8.putStrLn $ responseBody response
 
   where
     requestURL = fromMaybe (error $ "Bad host string: " ++ host) $ 
       parseRequest $ "http://" ++ host
+    bodyFile = fromMaybe (error "Missing body") _bodyM
     fakeArg = ("fake", ) $ if fake then "True" else "False"
     rewardArg = ("reward", ) $ if _reward then "True" else "False"
     parentArg = ("parent", ) . LC8.pack . show <$> _parent
     fallbackArgs = map (("fallback",) . LC8.pack) _fallback
     inputArgs = map (("input", ) . LC8.pack . show) _inputs
     keysArgs = map (\(signer, key) -> ("key", LC8.pack $ signer ++ ":" ++ key)) _keys
+
+makeTempFile :: Text -> String -> IO (String, Part)
+makeTempFile label mName = do
+  fText <- readFile fName
+  fTextResolved <- fmap unlines $ resolveImportVars $ lines fText
+  tempDir <- getTemporaryDirectory
+  let newName = tempDir </> mName <.> "temp" <.> "hs"
+  writeFile newName fTextResolved
+  let part = (partFileSource label newName){partFilename = Just fName}
+  return (newName, part)
+
+  where fName = mName <.> "hs"
+
+resolveImportVars :: [String] -> IO [String]
+resolveImportVars [] = return []
+resolveImportVars x
+  | (l : rest) <- dropWhile (all isSpace) x,
+    "import" : _ <- words l = do
+      let (ls, iTail) = span headSpace rest
+      iHeadR <- mapM resolveImportLine $ l : ls 
+      iTailR <- resolveImportVars iTail
+      return $ iHeadR ++ iTailR
+  | otherwise = return x
+
+  where
+    headSpace "" = True
+    headSpace (c : rest) = isSpace c
+
+resolveImportLine :: String -> IO String
+resolveImportLine [] = return []
+resolveImportLine l = do
+  resolvedVar <- 
+    case varM of
+      Nothing -> return ""
+      Just "" -> return "$"
+      Just var -> getEnv var
+  resolvedAfter <- resolveImportLine after
+  return $ before ++ resolvedVar ++ resolvedAfter 
+
+  where
+    (before, after0) = break (== '$') l
+    (varM, after) 
+      | null after0 = (Nothing, "")
+      | ('$' : after1) <- after0 = 
+          let (var, after) = span isAlphaNum after1 in
+          (Just var, after) 
 
 readData :: [String] -> TXData -> IO TXData
 readData [] txData = return txData
