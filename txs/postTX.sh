@@ -1,1 +1,0 @@
-../docker/postTX/etc/postTX.sh
