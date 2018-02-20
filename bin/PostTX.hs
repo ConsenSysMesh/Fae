@@ -106,7 +106,7 @@ resolveImportVars x
   | (l : rest) <- dropWhile (all isSpace) x,
     "import" : _ <- words l = do
       let (ls, iTail) = span headSpace rest
-      iHeadR <- mapM resolveImportLine $ l : ls 
+      iHeadR <- mapM resolveLine $ l : ls 
       iTailR <- resolveImportVars iTail
       return $ iHeadR ++ iTailR
   | otherwise = return x
@@ -115,15 +115,15 @@ resolveImportVars x
     headSpace "" = True
     headSpace (c : rest) = isSpace c
 
-resolveImportLine :: String -> IO String
-resolveImportLine [] = return []
-resolveImportLine l = do
+resolveLine :: String -> IO String
+resolveLine [] = return []
+resolveLine l = do
   resolvedVar <- 
     case varM of
       Nothing -> return ""
       Just "" -> return "$"
       Just var -> getEnv var
-  resolvedAfter <- resolveImportLine after
+  resolvedAfter <- resolveLine after
   return $ before ++ resolvedVar ++ resolvedAfter 
 
   where
@@ -144,7 +144,7 @@ readData (line1 : rest) txData =
       let _reward = read rewardS in
       readData rest txData{_reward} 
     ("parent", Just parentS) -> do
-      _parent <- Just . read <$> resolveVars parentS 
+      _parent <- Just . read <$> resolveLine parentS 
       readData rest txData{_parent} 
     ("others", sM) 
       | maybe True null sM -> readList "others" others rest txData 
@@ -198,20 +198,13 @@ readEqualsSpec good name readA lines
   | otherwise = error $ "Multiple '" ++ name ++ "' blocks"
   where
     resolvePair (a,b) = do
-      cIDS <- resolveVars a
-      arg <- resolveVars b
+      cIDS <- resolveLine a
+      arg <- resolveLine b
       return (readA cIDS, arg)
     catchInvalid l (a, b)
       | null a || maybe True null b = 
           error $ "Invalid " ++ name ++ " spec: " ++ l
       | otherwise = (a, fromJust b)
-
-resolveVars :: String -> IO String
-resolveVars = fmap unwords . mapM resolveVar . words
-
-resolveVar :: String -> IO String
-resolveVar ('$' : name) = getEnv name
-resolveVar s = return s
 
 dropSpaces :: String -> String
 dropSpaces = dropWhile isSpace . dropWhileEnd isSpace 
