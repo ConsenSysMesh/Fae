@@ -4,4 +4,4 @@ keys
   seller = seller
 inputs
   TransactionOutput $coinTX 0 :# 0 = ()
-  TransactionOutput $aucTX 0 = Just $coinVersion
+  TransactionOutput $aucTX 0 = Just ($coinSCID ::: $coinVersion)

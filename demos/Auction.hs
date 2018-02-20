@@ -1,7 +1,5 @@
 module Auction where
 
-import System.IO.Unsafe
-  
 import Blockchain.Fae
 import Blockchain.Fae.Currency
 
