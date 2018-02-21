@@ -8,11 +8,14 @@ if [[ -n $FAE_VERSION ]]
 then imgName=$imgName:$FAE_VERSION
 fi
 
-envList=""
+declare -a envlist
+n=0
 while true; do
   case $1 in
     -e|--env-list|--env-file)
-      envList="$envList $1 $2"
+      envlist[$n]=$1
+      envlist[$n + 1]=$2
+      let n+=2
       shift 2
       ;;
     *) break ;;
@@ -27,5 +30,5 @@ docker run \
   --rm \
   --network host \
   --mount type=bind,src=$PWD,dst=/txs/,readonly \
-  $envList $imgName $txfile $@
+  "${envlist[@]}" $imgName $txfile $@
 
