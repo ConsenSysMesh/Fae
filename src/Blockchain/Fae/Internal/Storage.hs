@@ -151,7 +151,7 @@ nonceAt cID@(InputOutput txID sID i) =
   defaultLens (throw $ BadTransactionID txID) .
   _inputOutputs .
   at sID .
-  defaultLens (throw $ BadInputID sID) .
+  defaultLens (throw $ BadInputID txID sID) .
   _iOutputs .
   _outputMap .
   at i
@@ -232,7 +232,7 @@ showTransaction txID = do
     cIDfTX = TransactionOutput txID
     cIDfC = InputOutput txID
     prettyOutputs cIDf OutputsT{..} =
-      intercalate "\n    " $
+      intercalate "\n      " $
       ("outputs:" :) $
       map (\n -> show n ++ ": " ++ show (shorten $ cIDf n)) $ 
       IntMap.keys outputMap

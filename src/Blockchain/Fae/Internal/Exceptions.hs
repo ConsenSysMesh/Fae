@@ -38,7 +38,7 @@ data VersionException =
 -- | Exceptions for storage-related errors.
 data StorageException =
   BadTransactionID TransactionID |
-  BadInputID ShortContractID |
+  BadInputID TransactionID ShortContractID |
   BadNonce ContractID Int Int |
   InvalidNonceAt ContractID |
   ContractIDCollision ContractID ContractID ShortContractID |
@@ -79,7 +79,9 @@ instance Show VersionException where
 -- | -
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
-  show (BadInputID sID) = "No input contract with short ID: " ++ show sID
+  show (BadInputID txID sID) = 
+    "No input contract with short ID " ++ show sID ++ 
+    " for transaction " ++ show txID
   show (BadNonce cID bad good) = 
     "Contract " ++ show cID ++ " has nonce " ++ show good ++ "; got: " ++ show bad
   show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ show cID

@@ -57,13 +57,10 @@ main = do
       _reward = False,
       _parent = Nothing
     } 
-  case _bodyM txData of
-    Nothing -> error "Missing body filename"
-    Just _ -> return ()
-  postTX host fake txData
+  postTX txSpec host fake txData
 
-postTX :: String -> Bool -> TXData -> IO ()
-postTX host fake TXData{..} = do
+postTX :: String -> String -> Bool -> TXData -> IO ()
+postTX txName host fake TXData{..} = do
   manager <- newManager defaultManagerSettings
   (mainTmpName, mainModule) <- makeTempFile "body" bodyFile
   (tmpNames, otherModules) <- unzip <$> mapM (makeTempFile "other") _others
@@ -80,7 +77,7 @@ postTX host fake TXData{..} = do
   where
     requestURL = fromMaybe (error $ "Bad host string: " ++ host) $ 
       parseRequest $ "http://" ++ host
-    bodyFile = fromMaybe (error "Missing body") _bodyM
+    bodyFile = fromMaybe txName _bodyM
     fakeArg = ("fake", ) $ if fake then "True" else "False"
     rewardArg = ("reward", ) $ if _reward then "True" else "False"
     parentArg = ("parent", ) . LC8.pack . show <$> _parent

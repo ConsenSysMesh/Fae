@@ -1,6 +1,5 @@
-body = CallDuplicateInputsOutputs
 inputs =
-  InputOutput $txID $scID 0 = ()
-  InputOutput $txID $scID 1 = ()
-  InputOutput $txID $scID 2 = ()
-  InputOutput $txID $scID 3 = ()
+  InputOutput $tx2ID $scID 0 = ()
+  InputOutput $tx2ID $scID 1 = ()
+  InputOutput $tx2ID $scID 2 = ()
+  InputOutput $tx2ID $scID 3 = ()
