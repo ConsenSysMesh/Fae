@@ -40,7 +40,9 @@ data StorageException =
   BadTransactionID TransactionID |
   BadInputID ShortContractID |
   BadNonce ContractID Int Int |
-  InvalidNonceAt ContractID
+  InvalidNonceAt ContractID |
+  ContractIDCollision ContractID ContractID ShortContractID |
+  MismatchedContractIDs ContractID ContractID
 
 -- | Exceptions for contract-related errors.
 data ContractException =
@@ -81,6 +83,12 @@ instance Show StorageException where
   show (BadNonce cID bad good) = 
     "Contract " ++ show cID ++ " has nonce " ++ show good ++ "; got: " ++ show bad
   show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ show cID
+  show (ContractIDCollision cID1 cID2 scID) =
+    "Contract " ++ show cID1 ++ " and contract " ++ show cID2 ++
+    " have the same short ID " ++ show scID ++ "!"
+  show (MismatchedContractIDs cID1 cID2) =
+    "Attempted to combine contract outputs for contracts " ++ 
+    show cID1 ++ " and " ++ show cID2 ++ " with different short contract IDs"
 
 -- | -
 instance Show ContractException where

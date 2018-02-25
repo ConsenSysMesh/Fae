@@ -81,10 +81,18 @@ data InputOutputVersionsT c =
   }
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
--- contracts, so it's not enough to just store them in a sequence.  The
--- second field is the "nonce" of a contract, the number of times it has
--- been called, used for security.
-type OutputsT c = IntMap (c, Int)
+-- contracts, so it's not enough to just store them in a sequence.  In case
+-- the outputs of several input calls need to be combined, the original
+-- count of outputs needs to be retained.  The
+-- second component of the map entries is the "nonce" of a contract, the
+-- number of times it has been called, used for security.
+data OutputsT c = 
+  OutputsT
+  {
+    outputMap :: IntMap (c, Int),
+    outputCount :: Int
+  }
+
 -- | Transactions can have many named signatories.
 newtype Signers = Signers { getSigners :: Map String PublicKey }
   deriving (Serialize, Generic)
@@ -108,6 +116,7 @@ makeLenses ''Signers
 makeLenses ''StorageT
 makeLenses ''TransactionEntryT
 makeLenses ''InputOutputVersionsT
+makeLenses ''OutputsT
 
 {- Instances -}
 
@@ -134,6 +143,7 @@ nonceAt cID@(TransactionOutput txID i) =
   at txID .
   defaultLens (throw $ BadTransactionID txID) .
   _outputs .
+  _outputMap .
   at i
 nonceAt cID@(InputOutput txID sID i) = 
   _getStorage .
@@ -143,6 +153,7 @@ nonceAt cID@(InputOutput txID sID i) =
   at sID .
   defaultLens (throw $ BadInputID sID) .
   _iOutputs .
+  _outputMap .
   at i
 nonceAt cID = throw $ InvalidNonceAt cID
 
@@ -163,8 +174,22 @@ nonceSetter Nothing (Just y) = Just (y, 0)
 nonceSetter _ _ = Nothing
 
 -- | Just an 'IntMap' constructor, indexing consecutively from 0.
-intMapList :: [a] -> IntMap (a, Int)
-intMapList = IntMap.fromList . zip [0 ..] . flip zip (repeat 0)
+listToOutputs :: [c] -> OutputsT c
+listToOutputs l = 
+  OutputsT
+  {
+    outputMap = oMap, 
+    outputCount = IntMap.size oMap
+  }
+  where oMap = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
+
+emptyOutputs :: OutputsT c
+emptyOutputs =
+  OutputsT
+  {
+    outputMap = IntMap.empty,
+    outputCount = 0
+  }
 
 -- | Convenience function for neatly showing a 'TransactionEntry' by ID,
 -- rather than actually going into the storage to get and format it.  It
@@ -177,7 +202,7 @@ showTransaction txID = do
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   resultSafe <- displayException show x
   outputsSafe <- displayException (prettyOutputs cIDfTX) os
-  inputsSafe <- forM ino $ \sID -> do
+  inputsSafe <- forM (nub ino) $ \sID -> do
     let 
       iov = 
         fromMaybe (error $ "Contract ID " ++ show sID ++ " missing") $ 
@@ -198,7 +223,6 @@ showTransaction txID = do
       catchAll (evaluate $ force $ f x) $ \e -> return $ "<exception> " ++ show e
     showNonce InputOutputVersions{..} =
       use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
-    showOutputs os = "outputs: " ++ show (IntMap.keys os)
     showIOVersions nS sID InputOutputVersions{..} = intercalate "\n    "
       [
         "nonce: " ++ nS, 
@@ -207,11 +231,11 @@ showTransaction txID = do
       ]
     cIDfTX = TransactionOutput txID
     cIDfC = InputOutput txID
-    prettyOutputs cIDf os =
+    prettyOutputs cIDf OutputsT{..} =
       intercalate "\n    " $
       ("outputs:" :) $
       map (\n -> show n ++ ": " ++ show (shorten $ cIDf n)) $ 
-      IntMap.keys os
+      IntMap.keys outputMap
     prettySigners =
       intercalate "\n    " .
       ("signers:" :) .
@@ -223,4 +247,38 @@ showTransaction txID = do
       ("versions:" :) .
       map (\(vID, tRep) -> show vID ++ ": " ++ show tRep) .
       Map.toList 
+
+-- | Unions the outputs and the versions of the two arguments.  The failure
+-- mode is when the arguments have a different 'iRealID', in which case we
+-- choose the second one for the result.  This is because in "Transaction",
+-- the second argument is the old entry, and we want to prevent people from
+-- screwing up contract calls by way of subsequent calls.  This is
+-- extraordinarily unlikely anyway, the way that the module works currently,
+-- since to do so would require manufacturing a hash collision for the
+-- short IDs.  If that happens, the later contract call is /definitely/
+-- malicious, and so it's okay to mishandle it.
+combineIOV :: 
+  InputOutputVersionsT c -> InputOutputVersionsT c -> InputOutputVersionsT c
+combineIOV
+  InputOutputVersions{iOutputs = os1, iVersions = vs1}
+  InputOutputVersions{iOutputs = os2, iVersions = vs2, ..}
+  = InputOutputVersions
+    {
+      -- 'combineO' shifts the second argument, which needs to be the new
+      -- map.      
+      iOutputs = combineO os2 os1, 
+      iVersions = vs1 `Map.union` vs2,
+      ..
+    }
+
+combineO :: OutputsT c -> OutputsT c -> OutputsT c
+combineO 
+  OutputsT{outputMap = os1, outputCount = n1} 
+  OutputsT{outputMap = os2, outputCount = n2}
+  = OutputsT
+    {
+      outputMap = os1 `IntMap.union` os2',
+      outputCount = n1 + n2
+    }
+  where os2' = IntMap.mapKeys (+ n1) os2
 

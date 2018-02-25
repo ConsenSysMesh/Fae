@@ -25,7 +25,6 @@ import Control.Monad.Writer
 
 import Data.Foldable
 
-import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
 -- * Types
@@ -80,14 +79,14 @@ runTransaction f fallback inputArgs txID signers isReward =
   let 
     inputIDs = map fst inputArgs
     defaultIOs = flip map inputIDs $ \cID ->
-      (shorten cID, InputOutputVersions (withoutNonce cID) IntMap.empty Map.empty)
+      (shorten cID, InputOutputVersions (withoutNonce cID) emptyOutputs Map.empty)
     inputOrder = map fst defaultIOs
   liftFaeContract $ txStorage ?= 
     TransactionEntry
     {
       inputOutputs = Map.fromList defaultIOs,
       inputOrder = inputOrder,
-      outputs = IntMap.empty,
+      outputs = emptyOutputs,
       signers,
       result = undefined :: a
     }
@@ -116,7 +115,7 @@ doTX inputsL fallback isReward f =
     (result, outputsL) <- listen $ catchAll 
       (hoistFaeContract $! getFae $ f input)
       (\e -> doFallback fallback input >> return (throw e))
-    censor (const []) $ return (result, intMapList outputsL)
+    censor (const []) $ return (result, listToOutputs outputsL)
 
   where
     withReward 
@@ -151,7 +150,7 @@ runInputContract cID arg (results, vers) = do
     ((!gAbsM, (!result, !vMap)), !outputsL) <- listen $ fAbs (arg, vers)
     let 
       iRealID = withoutNonce cID
-      iOutputs = intMapList outputsL
+      iOutputs = listToOutputs outputsL
       -- Only nonce-protected contract calls are allowed to return
       -- versioned values.
       (iVersions, vers')
@@ -166,6 +165,8 @@ runInputContract cID arg (results, vers) = do
   -- Nothing after this line should ever throw an exception
   txID <- view _thisTXID
   liftFaeContract $ _getStorage . at txID %= 
-    fmap (_inputOutputs . at (shorten cID) ?~ ioV)
+    -- Important here that 'ioV', the new versions, are the /first/
+    -- argument to 'combineIOV'; see the comments for that function.
+    fmap (_inputOutputs . at (shorten cID) %~ Just . maybe ioV (combineIOV ioV))
   censor (const []) $ return (results |> result, vers')
 

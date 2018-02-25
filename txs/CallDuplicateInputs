@@ -1,0 +1,4 @@
+body = CallDuplicateInputs
+inputs =
+  TransactionOutput $txID 0 = ()
+  TransactionOutput $txID 0 = ()

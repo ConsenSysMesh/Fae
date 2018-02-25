@@ -1,0 +1,6 @@
+body = CallDuplicateInputsOutputs
+inputs =
+  InputOutput $txID $scID 0 = ()
+  InputOutput $txID $scID 1 = ()
+  InputOutput $txID $scID 2 = ()
+  InputOutput $txID $scID 3 = ()

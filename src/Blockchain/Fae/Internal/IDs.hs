@@ -122,12 +122,6 @@ instance HasEscrowIDs Natural where
 -- | -
 instance HasEscrowIDs PublicKey where
   traverseEscrowIDs = defaultTraverseEscrowIDs
--- | This is just natural, though it can probably be covered in most
--- practical cases by the 'Generic' instance, if probably slower.
-instance {-# OVERLAPPABLE #-} 
-  (Traversable f, HasEscrowIDs a) => HasEscrowIDs (f a) where
-
-  traverseEscrowIDs g = traverse (traverseEscrowIDs g)
 
 -- Boring Generic boilerplate
 
