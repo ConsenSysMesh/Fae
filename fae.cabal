@@ -4,7 +4,7 @@ name:                fae
 --   *.b.*.* -> *.(b + 1).0.0 : Compatible but major new features
 --   *.*.c.* -> *.*.(c + 1).0 : Bugfixes that may change the (incorrect) behavior of existing code
 --   *.*.*.d -> *.*.*.(d + 1) : Adding omitted exports, GHC extensions, cosmetic stuff, demos ...
-version:             1.0.0.1
+version:             1.0.1.0
 -- synopsis:
 -- description:
 homepage:            https://github.com/Consensys/Fae
