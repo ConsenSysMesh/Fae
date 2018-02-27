@@ -33,7 +33,7 @@ import Text.Read (readMaybe)
 faeSettings :: Settings
 faeSettings = defaultSettings &
   setPort 27182 &
-  setOnExceptionResponse exceptionResponseForDebug
+  setOnExceptionResponse exceptionResponse
 
 serverApp :: TXQueue -> Application
 serverApp txQueue request respond = do
@@ -73,10 +73,15 @@ getLast :: (Read b) => a -> (b -> a) -> [String] -> a
 getLast x0 f l = last $ x0 : map (f . read) l
 
 buildResponse :: String -> Response
-buildResponse = responseBuilder ok200 headers . stringUtf8 where
-  headers = 
-    [
-      (hContentEncoding, "utf8"),
-      (hContentType, "text/plain")
-    ]
+buildResponse = responseBuilder ok200 headers . stringUtf8 
+
+exceptionResponse :: SomeException -> Response
+exceptionResponse = responseBuilder badRequest400 headers . stringUtf8 . show
+
+headers :: ResponseHeaders
+headers = 
+  [
+    (hContentEncoding, "utf8"),
+    (hContentType, "text/plain")
+  ]
 
