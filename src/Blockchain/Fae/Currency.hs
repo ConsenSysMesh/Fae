@@ -27,6 +27,7 @@ import Blockchain.Fae
 import Control.Applicative
 
 import Control.Monad.Reader.Class
+import Control.Monad.State
 
 import Data.Function
 import Data.Maybe
@@ -42,8 +43,9 @@ class
 
   data Valuation coin
 
-  -- | A mixed 'Ord'-style comparison
-  valCompare :: (MonadTX m) => coin -> Valuation coin -> m Ordering
+  -- | Like the name says.  Sometimes useful; should satisfy
+  -- prop> zero >>= value = return 0
+  zero :: (MonadTX m) => m coin
   -- | Peek at the value inside.  The ID remains valid.  Careful!  For
   -- semantic correctness, this function must also validate the escrow to
   -- prove that it actually has value.
@@ -55,10 +57,38 @@ class
   change :: 
     (Alternative f, Alternative f', MonadTX m) =>
     coin -> Valuation coin -> m (f (coin, f' coin))
+
   -- | Partition the value into the given proportions and the remainder.
   split :: 
     (Traversable t, Alternative f, MonadTX m) =>
     coin -> t Natural -> m (t coin, f coin)
+  split c ws 
+    | s == 0 = do
+        xs <- mapM (const zero) ws
+        return (xs, pure c)
+    | otherwise = do
+        v <- value c
+        let 
+          q = v `quot` fromIntegral s
+          vs = fmap (\w -> fromIntegral w * q) ws
+          f Nothing _ = (, Nothing) <$> zero
+          f (Just c) v = do
+            qrM <- change c v
+            maybe ((, Nothing) <$> zero) return qrM
+        (xs, rM) <- mapMAccumL f (return $ Just c) vs
+        return (xs, maybe empty pure rM)
+    where 
+      s = sum ws
+      mapMAccumL ::
+        (Monad m, Traversable t) =>
+        (a -> b -> m (c, a)) -> m a -> t b -> m (t c, a)
+      mapMAccumL g y0 xs = runStateT (mapM (StateT . flip g) xs) =<< y0
+
+  -- | A mixed 'Ord'-style comparison
+  valCompare :: (MonadTX m) => coin -> Valuation coin -> m Ordering
+  valCompare c v = do
+    cv <- value c
+    return $ compare cv v
 
   -- | A mixed 'Eq'-style comparison
   atLeast :: (MonadTX m) => coin -> Valuation coin -> m Bool
@@ -136,9 +166,7 @@ instance Currency Coin where
   newtype Valuation Coin = CoinValuation Natural
     deriving (Eq, Ord, Num, Real, Enum, Integral)
 
-  valCompare eID (CoinValuation n) = do
-    CoinValuation m <- value eID
-    return $ compare m n
+  zero = mint 0
 
   value eID = do
     CoinVal n <- useEscrow eID UnsafePeek
@@ -159,18 +187,6 @@ instance Currency Coin where
         remID <- mint $ m - n
         return $ pure (amtID, pure remID)
       LT -> return empty
-
-  split eID weights = do
-    CoinVal n <- useEscrow eID Spend
-    let 
-      s = sum weights
-      (q, r) = n `quotRem` s
-    partIDs <- traverse (mint . (q *)) weights
-    if r == 0
-    then return (partIDs, empty)
-    else do
-      remID <- mint r
-      return (partIDs, pure remID)
 
 -- | A contract to claim system rewards in exchange for 'Coin' values.  The
 -- one-to-one exchange rate is of course an example and probably not

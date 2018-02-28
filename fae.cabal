@@ -3,6 +3,7 @@ name:                fae
 --   a.*.*.* -> (a + 1).0.0.0 : Breaking API changes
 --   *.b.*.* -> *.(b + 1).0.0 : Compatible but major new features
 --   *.*.c.* -> *.*.(c + 1).0 : Bugfixes that may change the (incorrect) behavior of existing code
+--                              or minor, compatible new features
 --   *.*.*.d -> *.*.*.(d + 1) : Adding omitted exports, GHC extensions, cosmetic stuff, demos ...
 version:             1.0.1.0
 -- synopsis:
