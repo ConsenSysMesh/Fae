@@ -19,7 +19,7 @@ module Blockchain.Fae.Contracts
     sell, redeem,
     -- * Possession
     -- $possession
-    signOver, deposit
+    signOver, signOverTo, deposit, depositAs
   )
   where
 
@@ -193,28 +193,52 @@ redeem x valid seller = newContract [bearer x] redeemC where
 -- A possession contract is simply one that marks a value as being owned by
 -- a particular cryptographically-identified entity.
 
+-- | Checks that the sender is the owner, in which case it returns the value.
+-- The type signature is a little weird; we don't use @Contract String a@
+-- for the return value because we want to be able to compose this contract
+-- function with something that changes the argument type.
+signOverC :: 
+  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadContract b a m) =>
+  a -> PublicKey -> String -> m (WithEscrows a)
+signOverC x owner name = do
+  who <- signer name
+  unless (owner == who) $ throw $ NotOwner who
+  spend x
+
 -- | The first argument is a value to assign possession; the second is the
--- public key of the recipient.  A new contract is created that takes no
--- arguments (that is, takes @()@) and checks that the sender is the owner,
--- in which case it returns the value.
+-- public key of the recipient.  
+--
+-- This function is not flexible enough; use 'signOverTo'.
 signOver ::
-  forall a m.
   (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
   a -> PublicKey -> m ()
-signOver x owner = newContract [bearer x] signOverC where
-  signOverC :: Contract () a
-  signOverC _ = do
-    who <- signer "self"
-    unless (owner == who) $ throw $ NotOwner who
-    spend x
+signOver x owner = 
+  newContract [bearer x] (signOverC x owner . \() -> "self")
+
+-- | Like 'signOver', creates a 'signOverC' contract, but doesn't fix the
+-- signer name that it accepts.
+signOverTo ::
+  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
+  a -> PublicKey -> m ()
+signOverTo x owner = newContract [bearer x] $ signOverC x owner
 
 -- | Sign over a value to a named owner.
+--
+-- This function is not flexible enough; use 'depositAs'.
 deposit ::
   (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
   a -> String -> m ()
 deposit x name = do
   owner <- signer name
   signOver x owner
+
+-- | Sign over a value to a named owner.
+depositAs ::
+  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
+  a -> String -> m ()
+depositAs x name = do
+  owner <- signer name
+  signOverTo x owner
 
 data ContractsError =
   NotEnough | NotOwner PublicKey | UnauthorizedSeller PublicKey | BadToken

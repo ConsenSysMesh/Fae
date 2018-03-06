@@ -188,6 +188,9 @@ instance Currency Coin where
         return $ pure (amtID, pure remID)
       LT -> return empty
 
+instance Show (Valuation Coin) where
+  show (CoinValuation n) = show n
+
 -- | A contract to claim system rewards in exchange for 'Coin' values.  The
 -- one-to-one exchange rate is of course an example and probably not
 -- actually desirable.

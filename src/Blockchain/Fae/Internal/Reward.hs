@@ -18,9 +18,11 @@ import GHC.Generics
 -- * Types
 
 -- | The system-managed reward value.  Not constructible directly.
-data Reward = Reward deriving (Generic)
+data RewardValue = Reward deriving (Generic)
 -- | Private token controlling a 'RewardEscrowID'.
 data RewardToken = Token deriving (Generic)
 -- | The escrow ID of a reward token provided by the system.
-type RewardEscrowID = EscrowID RewardToken Reward 
+type RewardEscrowID = EscrowID RewardToken RewardValue
+-- | Seems unnecessary to have to write the whole thing.
+type Reward = RewardEscrowID
 

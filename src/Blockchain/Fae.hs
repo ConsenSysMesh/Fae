@@ -64,7 +64,7 @@ module Blockchain.Fae
     Transaction, TransactionM, TransactionID, PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
     Contract, ContractM, ContractID(..), Fae, MonadContract,
-    WithEscrows, EscrowID, BearsValue, RewardEscrowID, 
+    WithEscrows, EscrowID, BearsValue, RewardEscrowID, Reward,
     spend, release, useEscrow, newEscrow, newContract,
     lookupSigner, signer, Blockchain.Fae.signers, claimReward, bearer, 
     -- * Versioning
