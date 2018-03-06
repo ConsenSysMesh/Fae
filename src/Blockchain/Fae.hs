@@ -65,7 +65,8 @@ module Blockchain.Fae
     -- * Contracts and escrows
     Contract, ContractM, ContractID(..), Fae, MonadContract,
     WithEscrows, EscrowID, BearsValue, RewardEscrowID, Reward,
-    spend, release, useEscrow, newEscrow, newContract,
+    spend, release, useEscrow, newEscrow, 
+    newContract, contractState, contractReader,
     lookupSigner, signer, Blockchain.Fae.signers, claimReward, bearer, 
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
@@ -95,8 +96,8 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
 
-import Control.Monad.Reader.Class
-import Control.Monad.State.Class
+import Control.Monad.Reader
+import Control.Monad.State
 import Control.Monad.Trans.Class
 import Control.Monad.Writer.Class
 
@@ -269,6 +270,18 @@ newContract ::
 newContract eIDs f = liftTX $ Fae $ do
   cAbs <- makeContractAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
   tell [cAbs]
+
+contractState ::
+  s ->
+  ContractM (StateT s) argType valType ->
+  Contract argType valType
+contractState s f = flip evalStateT s . f
+
+contractReader ::
+  r ->
+  ContractM (ReaderT r) argType valType ->
+  Contract argType valType
+contractReader r f = flip runReaderT r . f
 
 -- | Looks up a named signatory, maybe. 
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
