@@ -1,4 +1,5 @@
 body = CreateSwap
+reward = True
 
 inputs
   TransactionOutput $bobCoinTX 0 = ()
