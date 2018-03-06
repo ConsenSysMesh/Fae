@@ -1,0 +1,9 @@
+body = CreateSwap
+
+inputs
+  TransactionOutput $bobCoinTX 0 = ()
+
+keys
+  partyA = alice
+  partyB = bob
+  self = bob

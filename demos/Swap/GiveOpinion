@@ -1,0 +1,7 @@
+body = GiveOpinion
+
+inputs
+  TransactionOutput $swapTX 0 = Just $opinion
+
+keys
+  self = $self

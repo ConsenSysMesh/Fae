@@ -1,0 +1,7 @@
+body = GetOffering
+
+inputs
+  TransactionOutput $swapTX 0 = Nothing
+
+keys
+  self = $self
