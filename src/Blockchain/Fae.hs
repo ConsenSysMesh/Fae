@@ -66,7 +66,7 @@ module Blockchain.Fae
     Contract, ContractM, ContractID(..), Fae, MonadContract,
     WithEscrows, EscrowID, BearsValue, RewardEscrowID, Reward,
     spend, release, useEscrow, newEscrow, 
-    newContract, contractState, contractReader,
+    newContract, usingState, usingReader,
     lookupSigner, signer, Blockchain.Fae.signers, claimReward, bearer, 
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
@@ -271,17 +271,23 @@ newContract eIDs f = liftTX $ Fae $ do
   cAbs <- makeContractAbstract . makeConcrete <$> makeInternalT eIDs (getFae . f)
   tell [cAbs]
 
-contractState ::
+-- | A simple utility for adding mutable state to a contract or
+-- transaction, since the manual way of doing this is a little awkward.
+usingState ::
+  (Monad m) =>
   s ->
-  ContractM (StateT s) argType valType ->
-  Contract argType valType
-contractState s f = flip evalStateT s . f
+  (a -> StateT s m b) ->
+  (a -> m b)
+usingState s f = flip evalStateT s . f
 
-contractReader ::
+-- | A simple utility for adding constant state to a contract or
+-- transaction, since the manual way of doing this is a little awkward.
+usingReader ::
+  (Monad m) =>
   r ->
-  ContractM (ReaderT r) argType valType ->
-  Contract argType valType
-contractReader r f = flip runReaderT r . f
+  (a -> ReaderT r m b) ->
+  (a -> m b)
+usingReader r f = flip runReaderT r . f
 
 -- | Looks up a named signatory, maybe. 
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
