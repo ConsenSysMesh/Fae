@@ -135,6 +135,13 @@ executable postTX
   buildable: True
   hs-source-dirs: bin
   main-is: PostTX.hs
+  other-modules:
+    PostTX.Args
+    PostTX.EnvVars
+    PostTX.Network
+    PostTX.Submit
+    PostTX.TXMessage
+    PostTX.View
   if flag(static)
     ld-options: -static
     ghc-options: -fPIC

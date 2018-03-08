@@ -41,6 +41,8 @@ serverApp txQueue request respond = do
   let 
     getParams = getParameters params
     parentM = getLast Nothing Just $ getParams "parent" 
+    viewM = getLast Nothing Just $ getParams "view" 
+    lazy = getLast False id $ getParams "lazy" 
     fake = getLast False id $ getParams "fake" 
     reward = getLast False id $ getParams "reward"
     keyNames = if null keyNames0 then [("self", "key1")] else keyNames0 where
@@ -50,20 +52,35 @@ serverApp txQueue request respond = do
       inputsErr = error "Couldn't parse inputs"
     fallback = getParams "fallback"
 
-  tx@TX{pubKeys, txID} <- nextTX keyNames inputs fallback >>= evaluate . force
-  let (mainFileM, modules) = makeFilesMap files txID
-  case mainFileM of
-    Nothing -> respond $ buildResponse $ 
-      intercalate "\n" $ 
-      map (\(x,y) -> x ++ ": " ++ show y) $
-      Map.toList $
-      getSigners pubKeys
-    Just mainFile -> do
-      callerTID <- myThreadId
-      resultVar <- atomically newEmptyTMVar
-      atomically $ writeTQueue txQueue TXExecData{..}
-      result <- atomically $ takeTMVar resultVar
-      respond $ buildResponse result
+  let send = sendTXExecData respond txQueue
+  case viewM of
+    Just txID 
+      | fake -> error "'fake' and 'view' are incompatible parameters"
+      | lazy -> error "'lazy and 'view' are incompatible parameters"
+      | otherwise -> send $ \callerTID resultVar -> View{..}
+    Nothing -> do
+      tx@TX{pubKeys, txID} <- nextTX keyNames inputs fallback >>= evaluate . force
+      let (mainFileM, modules) = makeFilesMap files txID
+      case mainFileM of
+        Nothing -> respond $ buildResponse $ 
+          intercalate "\n" $ 
+          map (\(x,y) -> x ++ ": " ++ show y) $
+          Map.toList $
+          getSigners pubKeys
+        Just mainFile -> send $ \callerTID resultVar -> TXExecData{..} 
+
+sendTXExecData :: 
+  (Response -> IO ResponseReceived) -> 
+  TXQueue -> 
+  (ThreadId -> TMVar String -> TXExecData) -> 
+  IO ResponseReceived
+sendTXExecData respond txQueue constr = do
+  callerTID <- myThreadId
+  resultVar <- atomically newEmptyTMVar
+  let txExecData = constr callerTID resultVar
+  atomically $ writeTQueue txQueue txExecData
+  result <- atomically $ takeTMVar resultVar
+  respond $ buildResponse result
 
 getParameters :: [(C8.ByteString, C8.ByteString)] -> C8.ByteString -> [String]
 getParameters params paramName = 

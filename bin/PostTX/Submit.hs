@@ -17,11 +17,11 @@ import Network.HTTP.Client.MultipartFormData
 import System.Directory
 import System.FilePath
 
-submit :: String -> String -> Bool -> TXData -> IO ()
-submit txName host fake txData@TXData{_bodyM, _others} = do
+submit :: String -> String -> Bool -> Bool-> TXData -> IO ()
+submit txName host fake lazy txData@TXData{_bodyM, _others} = do
   (mainTmpName, mainModule) <- makeTempFile "body" bodyFile
   (tmpNames, otherModules) <- unzip <$> mapM (makeTempFile "other") _others
-  request <- buildRequest txName host fake txData mainModule otherModules
+  request <- buildRequest txName host fake lazy txData mainModule otherModules
   sendReceive request
     `finally` mapM removeFile (mainTmpName : tmpNames)
 
@@ -39,16 +39,18 @@ makeTempFile label mName = do
 
   where fName = mName <.> "hs"
 
-buildRequest :: String -> String -> Bool -> TXData -> Part -> [Part] -> IO Request
-buildRequest txName host fake TXData{..} mainModule otherModules =
+buildRequest :: 
+  String -> String -> Bool -> Bool -> TXData -> Part -> [Part] -> IO Request
+buildRequest txName host fake lazy TXData{..} mainModule otherModules =
   flip formDataBody (requestURL host) $
     mainModule :
     otherModules ++
     fmap (uncurry partLBS) 
-      (maybe id (:) parentArg $ fakeArg : rewardArg : 
+      (maybe id (:) parentArg $ lazyArg : fakeArg : rewardArg : 
       fallbackArgs ++ inputArgs ++ keysArgs)
 
   where
+    lazyArg = ("lazy", ) $ if lazy then "True" else "False"
     fakeArg = ("fake", ) $ if fake then "True" else "False"
     rewardArg = ("reward", ) $ if _reward then "True" else "False"
     parentArg = ("parent", ) . LC8.pack . show <$> _parent

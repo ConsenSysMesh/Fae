@@ -17,9 +17,17 @@ data TXExecData =
     mainFile :: C8.ByteString,
     modules :: Map String C8.ByteString,
     parentM :: Maybe TransactionID,
+    lazy :: Bool,
     fake :: Bool,
     reward :: Bool,
     tx :: TX,
+    resultVar :: TMVar String,
+    callerTID :: ThreadId
+  } |
+  View 
+  {
+    txID :: TransactionID,
+    parentM :: Maybe TransactionID,
     resultVar :: TMVar String,
     callerTID :: ThreadId
   }
