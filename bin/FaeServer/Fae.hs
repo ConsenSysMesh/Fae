@@ -35,8 +35,8 @@ runTXExecData mainTID TXExecData{tx=tx@TX{..}, ..} = do
 
   txCount <- recallHistory parentM
   liftIO $ writeModules mainFile modules txID
-  txResult <- lift $ do
-    interpretTX reward tx
+  lift $ interpretTX reward tx
+  txResult <-
     if lazy
     then return $ "Transaction " ++ show txID
     else lift $ showTransaction txID
@@ -47,7 +47,7 @@ runTXExecData mainTID TXExecData{tx=tx@TX{..}, ..} = do
 
 runTXExecData mainTID View{..} = do
   void $ recallHistory parentM
-  txResult <- lift $ lift $ showTransaction txID
+  txResult <- lift $ showTransaction txID
   ioAtomically $ putTMVar resultVar txResult
 
 reThrowExit :: (MonadIO m, MonadCatch m) => ThreadId -> ThreadId -> m () -> m ()

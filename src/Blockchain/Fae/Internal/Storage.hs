@@ -22,6 +22,7 @@ import Control.Monad.IO.Class
 import Control.Monad.State
 
 import Data.Dynamic
+import Data.Functor.Identity
 import Data.IntMap (IntMap)
 import Data.List
 import Data.Map (Map)
@@ -96,19 +97,9 @@ data OutputsT c =
 -- | Transactions can have many named signatories.
 newtype Signers = Signers { getSigners :: Map String PublicKey }
   deriving (Serialize, Generic)
--- | The storage monad is just a state monad.  It has to be over 'IO' both
--- because we need to catch exceptions, and because the interpreter has to
--- be in a 'MonadIO'.
-newtype FaeStorageT c a = FaeStorage {getFaeStorage :: StateT (StorageT c) IO a}
-  deriving 
-  (
-    Functor, Applicative, Monad, 
-    MonadThrow, MonadCatch, MonadMask,
-    MonadIO
-  )
-
--- | Just making it easier to use this monad.
-deriving instance MonadState (StorageT c) (FaeStorageT c)
+-- | The storage monad is just a state monad.  It's a transformer so that
+-- we can apply it to 'Interpreter'; logically they are different.
+type FaeStorageT m c = StateT (StorageT c) m
 
 -- * Template Haskell
 
@@ -135,6 +126,10 @@ instance At (StorageT c) where
   at cID = nonceAt cID . checkNonce cID Nothing
 
 -- * Functions
+
+-- | Raises the base monad
+hoistFaeStorage :: (Monad m) => FaeStorageT Identity c a -> FaeStorageT m c a
+hoistFaeStorage m = state $ runIdentity . runStateT m
 
 -- | Like 'at', but retaining the nonce
 nonceAt :: ContractID -> Lens' (StorageT c) (Maybe (c, Int))
@@ -196,7 +191,8 @@ emptyOutputs =
 -- catches all exceptions thrown by contracts or transactions and prints
 -- an error message instead; thus, whatever actually did complete is part
 -- of the output.
-showTransaction :: forall c. TransactionID -> FaeStorageT c String
+showTransaction :: 
+  (MonadCatch m, MonadIO m) => TransactionID -> FaeStorageT m c String
 showTransaction txID = do
   TransactionEntry ios ino os ss x <- use $
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
@@ -219,8 +215,8 @@ showTransaction txID = do
       flip map inputsSafe 
         (\(sID, str) -> "input " ++ show sID ++ "\n    " ++ str)
   where 
-    displayException f x = liftIO $
-      catchAll (evaluate $ force $ f x) $ \e -> return $ "<exception> " ++ show e
+    displayException f x = catchAll (liftIO $ evaluate $ force $ f x) $ 
+      \e -> return $ "<exception> " ++ show e
     showNonce InputOutputVersions{..} =
       use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
     showIOVersions nS sID InputOutputVersions{..} = intercalate "\n    "

@@ -69,7 +69,7 @@ newtype UnquotedString = UnquotedString String
 
 -- | This builds on 'FaeStorage' because the interpreter has to access the
 -- storage as part of 'runTransaction'.
-type FaeInterpret = InterpreterT FaeStorage
+type FaeInterpret = FaeStorageM Interpreter 
 
 {- Instances -}
 
@@ -81,6 +81,11 @@ instance Digestible TX
 -- | Prints a string without the quotes
 instance Show UnquotedString where
   show (UnquotedString s) = s
+
+instance MonadInterpreter FaeInterpret where
+  fromSession f = lift $ fromSession f
+  modifySessionRef f g = lift $ modifySessionRef f g
+  runGhc x = lift $ runGhc x
 
 -- * Functions
 
@@ -97,7 +102,7 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
   loadModules [txSrc]
   setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]
   run <- interpret runString infer
-  lift $ run inputs txID pubKeys isReward 
+  hoistFaeStorage $ getFaeStorage $ run inputs txID pubKeys isReward 
   where
     runString = unwords
       [
@@ -123,9 +128,8 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
 runFaeInterpret :: FaeInterpret a -> IO a
 runFaeInterpret x = 
   fmap (either throw id) $
-  flip evalStateT (Storage Map.empty) $
-  getFaeStorage $
-  runInterpreter $ do
+  runInterpreter $ 
+  flip evalStateT (Storage Map.empty) $ do
     Int.set [languageExtensions := languageExts]
     mapM_ Int.unsafeSetGhcOption $
       "-fpackage-trust" :

@@ -33,13 +33,13 @@ recallHistory parentM = do
   -- Weird construct forces this lookup before git runs
   (s, n) <- return $ Map.findWithDefault err parent txStorageAndCounts
   liftIO $ gitReset parent
-  liftFaeStorage $ put s
+  lift $ put s
   return n
 
 updateHistory :: TransactionID -> Integer -> FaeInterpretWithHistory ()
 updateHistory txID txCount = do
   TXHistory{..} <- get
-  s <- liftFaeStorage get
+  s <- lift get
   let newCount = txCount + 1
   let txStorageAndCounts' = Map.insert txID (s, newCount) txStorageAndCounts
   let (bestTXID', bestTXCount')
@@ -47,9 +47,6 @@ updateHistory txID txCount = do
         | otherwise = (bestTXID, bestTXCount)
   liftIO $ gitCommit txID
   put $ TXHistory txStorageAndCounts' bestTXID' bestTXCount'
-
-liftFaeStorage :: FaeStorage a -> FaeInterpretWithHistory a
-liftFaeStorage = lift . lift
 
 runFaeInterpretWithHistory :: FaeInterpretWithHistory () -> IO ()
 runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory where
@@ -60,6 +57,4 @@ runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory wh
       bestTXID = nullID,
       bestTXCount = 0
     }
-
-
 

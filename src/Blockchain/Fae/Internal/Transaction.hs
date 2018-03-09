@@ -40,7 +40,9 @@ type InputOutputs = InputOutputsT AbstractContract
 -- | Likewise
 type InputOutputVersions = InputOutputVersionsT AbstractContract
 -- | Likewise
-type FaeStorage = FaeStorageT AbstractContract
+type FaeStorageM m = FaeStorageT m AbstractContract
+-- | Likewise
+newtype FaeStorage a = FaeStorage { getFaeStorage :: FaeStorageM Identity a }
 -- | Likewise
 type TransactionEntry = TransactionEntryT AbstractContract
 
@@ -59,7 +61,7 @@ type Transaction a b = a -> FaeM Naught b
 -- 'FaeStorage', meaning it has direct access to the storage and also to
 -- 'IO'.  Needless to say, we don't want any of that near user-defined
 -- contracts.
-type TXStorageM = FaeContractT Naught FaeStorage
+type TXStorageM = FaeContractT Naught (FaeStorageM Identity)
 
 -- * Functions
 
@@ -75,7 +77,7 @@ runTransaction ::
   Inputs -> TransactionID -> Signers -> Bool ->
   FaeStorage ()
 runTransaction f fallback inputArgs txID signers isReward = 
- runFaeContract txID signers $ do -- TXStorageM
+ FaeStorage $ runFaeContract txID signers $ do -- TXStorageM
   liftFaeContract $ txStorage ?= 
     TransactionEntry
     {
@@ -122,9 +124,9 @@ doTX inputsL fallback isReward f = do
       | otherwise = return 
 
 -- | Performs all fallback transactions, ignoring errors.
-doFallback :: [Transaction inputs ()] -> inputs -> TXStorageM ()
-doFallback fallback input = forM_ fallback $ 
-  \tx -> handleAll (const $ return ()) $ hoistFaeContract $ getFae $ tx input
+--doFallback :: [Transaction inputs ()] -> inputs -> TXStorageM ()
+--doFallback fallback input = forM_ fallback $ 
+--  \tx -> handleAll (const $ return ()) $ hoistFaeContract $ getFae $ tx input
 
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.

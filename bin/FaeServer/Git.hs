@@ -4,6 +4,7 @@ import Blockchain.Fae.FrontEnd
 
 import Control.Monad
 
+import System.Directory
 import System.Environment
 import System.Exit
 import System.Process
@@ -11,6 +12,7 @@ import System.Process
 gitInit :: IO ()
 gitInit = do
   setEnv "GIT_DIR" "./.fae-git"
+  removePathForcibly "./.fae-git"
   runGitWithArgs "init" ["--quiet"]
   runGitWithArgs "config" ["user.name", "Fae"]
   runGitWithArgs "config" ["user.email", "fae"]
