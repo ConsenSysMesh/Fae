@@ -76,11 +76,6 @@ runTransaction ::
   FaeStorage ()
 runTransaction f fallback inputArgs txID signers isReward = 
  runFaeContract txID signers $ do -- TXStorageM
-  let 
-    inputIDs = map fst inputArgs
-    defaultIOs = flip map inputIDs $ \cID ->
-      (shorten cID, InputOutputVersions (withoutNonce cID) emptyOutputs Map.empty)
-    inputOrder = map fst defaultIOs
   liftFaeContract $ txStorage ?= 
     TransactionEntry
     {
@@ -90,32 +85,34 @@ runTransaction f fallback inputArgs txID signers isReward =
       signers,
       result = undefined :: a
     }
-  -- Modifies inputOutputs
-  inputsL <- runInputContracts inputArgs
-  (result, outputs) <- doTX inputsL fallback isReward f
-  liftFaeContract $ txStorage %= 
+  inputsL <- runInputContracts inputArgs -- Modifies inputOutputs
+  roPair <- doTX inputsL fallback isReward f
+  liftFaeContract $ txStorage %= fmap (modifyTXEntry roPair)
+
+  where 
+    txStorage = _getStorage . at txID
     -- Keep inputOutputs, set result and outputs
     -- Can't use a record update because of existential quantification
-    fmap (\TransactionEntry{inputOutputs} -> TransactionEntry{..})
-
-  where txStorage = _getStorage . at txID
+    modifyTXEntry p TransactionEntry{inputOutputs} =
+      let ~(result, outputs) = p in TransactionEntry{..}
+    inputIDs = map fst inputArgs
+    defaultIOs = flip map inputIDs $ \cID ->
+      (shorten cID, InputOutputVersions (withoutNonce cID) emptyOutputs Map.empty)
+    inputOrder = map fst defaultIOs
  
 -- | Actually perform the transaction
 doTX :: 
   (HasEscrowIDs inputs, GetInputValues inputs, Typeable inputs) => 
   [BearsValue] -> [Transaction inputs ()] -> Bool -> 
   Transaction inputs a -> TXStorageM (a, Outputs)
-doTX inputsL fallback isReward f = 
-  -- We have to handle exceptions because we don't want the inputs to get
-  -- rolled back.
-  handleAll (\e -> return (throw e, throw e)) $ do
-    (input, unused) <- getInputValues <$> withReward inputsL
-    unless (null unused) $ throw TooManyInputs
-    -- We have to hoist so that transactions can be pure
-    (result, outputsL) <- listen $ catchAll 
-      (hoistFaeContract $! getFae $ f input)
-      (\e -> doFallback fallback input >> return (throw e))
-    censor (const []) $ return (result, listToOutputs outputsL)
+doTX inputsL fallback isReward f = do
+  (input, unused) <- getInputValues <$> withReward inputsL
+  unless (null unused) $ throw TooManyInputs
+  -- We have to hoist so that transactions can be pure
+  (result, outputsL) <- listen $ hoistFaeContract $! getFae $ f input
+-- Still have to figure out how to do the fallbacks without catching
+--    (\e -> doFallback fallback input >> return (throw e))
+  censor (const []) $ return (result, listToOutputs outputsL)
 
   where
     withReward 
@@ -141,8 +138,7 @@ runInputContract ::
   ContractID -> String ->
   ([BearsValue], VersionMap') -> TXStorageM ([BearsValue], VersionMap')
 runInputContract cID arg (results, vers) = do
-  let inputError e = return (throw e, vers, throw e)
-  (result, vers', ioV) <- handleAll inputError $ do
+  ~(result, vers', ioV) <- do
     ConcreteContract fAbs <- liftFaeContract $ use $
       at cID . defaultLens (throw $ BadInput cID)
     -- This strictness is /so/ important.  It flushes out errors that would
