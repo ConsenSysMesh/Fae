@@ -137,6 +137,11 @@ type InternalT s argType valType =
 type InternalContract argType valType = 
   InternalT (FaeRequest argType valType) (WithEscrows argType) valType
 
+-- | Shorthand for the form of a concrete contract
+type ContractF s m argType valType =
+  argType -> 
+  FaeContractT s m (Maybe (ConcreteContract argType valType), valType)
+
 -- | A contract is, abstractly, a function that can be called in any Fae
 -- context, producing a value and a continuation.  The return-type monad is
 -- a 'FaeContractT' rather than just a 'FaeContract' because contracts
@@ -144,11 +149,7 @@ type InternalContract argType valType =
 -- latter.
 newtype ConcreteContract argType valType = 
   ConcreteContract
-  (
-    forall s m. (Functor s, Monad m) => 
-      argType -> 
-      FaeContractT s m (Maybe (ConcreteContract argType valType), valType)
-  )
+    (forall s m. (Functor s, Monad m) => ContractF s m argType valType)
 
 -- | The type actually stored in the escrows map, because escrows can have
 -- any types of input and output.  Abstract escrows take arbitrary argument

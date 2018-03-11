@@ -43,6 +43,7 @@ library
     Blockchain.Fae.Internal.IDs.Types
     Blockchain.Fae.Internal.Lens
     Blockchain.Fae.Internal.NFData
+    Blockchain.Fae.Internal.PrettyFae
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Transaction
@@ -63,6 +64,7 @@ library
     memory,
     monad-coroutine,
     mtl,
+    pretty,
     template-haskell,
     text,
     transformers

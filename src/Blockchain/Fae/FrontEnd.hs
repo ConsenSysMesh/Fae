@@ -19,6 +19,7 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.Block,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
+    showTransaction,
     -- * Cryptography types and functions
     module Blockchain.Fae.Internal.Crypto,
     -- * Specialized 'NFData' instances
@@ -35,6 +36,7 @@ import Blockchain.Fae.Internal.Crypto hiding
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs.Types
 import Blockchain.Fae.Internal.NFData hiding (GNFData)
+import Blockchain.Fae.Internal.PrettyFae (showTransaction)
 import Blockchain.Fae.Internal.Storage hiding 
   (nonceAt, checkNonce, nonceSetter, intMapList)
 import Blockchain.Fae.Internal.Transaction hiding

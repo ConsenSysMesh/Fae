@@ -45,6 +45,9 @@ type FaeStorageM m = FaeStorageT m AbstractContract
 newtype FaeStorage a = FaeStorage { getFaeStorage :: FaeStorageM Identity a }
 -- | Likewise
 type TransactionEntry = TransactionEntryT AbstractContract
+-- | Likewise
+type ExplicitContract = 
+  ContractF Naught Identity (String, VersionMap') (BearsValue, VersionMap) 
 
 -- | How inputs are provided to transactions.
 type Inputs = [(ContractID, String)]
@@ -81,40 +84,40 @@ runTransaction f fallback inputArgs txID signers isReward =
   liftFaeContract $ txStorage ?= 
     TransactionEntry
     {
-      inputOutputs = Map.fromList defaultIOs,
+      inputOutputs = InputOutputs $ Map.fromList defaultIOs,
       inputOrder = inputOrder,
       outputs = emptyOutputs,
       signers,
-      result = undefined :: a
+      result = Result (undefined :: a)
     }
-  inputsL <- runInputContracts inputArgs -- Modifies inputOutputs
-  roPair <- doTX inputsL fallback isReward f
-  liftFaeContract $ txStorage %= fmap (modifyTXEntry roPair)
+  inputsL <- runInputContracts inputArgs
+  ~(result, outputs) <- hoistFaeContract $ doTX inputsL fallback isReward f
+  liftFaeContract $ txStorage %= fmap (\txE -> txE{result, outputs})
 
   where 
     txStorage = _getStorage . at txID
-    -- Keep inputOutputs, set result and outputs
-    -- Can't use a record update because of existential quantification
-    modifyTXEntry p TransactionEntry{inputOutputs} =
-      let ~(result, outputs) = p in TransactionEntry{..}
     inputIDs = map fst inputArgs
     defaultIOs = flip map inputIDs $ \cID ->
-      (shorten cID, InputOutputVersions (withoutNonce cID) emptyOutputs Map.empty)
+      (
+        shorten cID, 
+        InputOutputVersions (withoutNonce cID) emptyOutputs emptyVersionMap
+      )
     inputOrder = map fst defaultIOs
  
 -- | Actually perform the transaction
 doTX :: 
-  (HasEscrowIDs inputs, GetInputValues inputs, Typeable inputs) => 
+  (HasEscrowIDs inputs, GetInputValues inputs, Typeable inputs, Show a) => 
   [BearsValue] -> [Transaction inputs ()] -> Bool -> 
-  Transaction inputs a -> TXStorageM (a, Outputs)
+  Transaction inputs a -> FaeContract Naught (Result, Outputs)
 doTX inputsL fallback isReward f = do
-  (input, unused) <- getInputValues <$> withReward inputsL
-  unless (null unused) $ throw TooManyInputs
-  -- We have to hoist so that transactions can be pure
-  (result, outputsL) <- listen $ hoistFaeContract $! getFae $ f input
--- Still have to figure out how to do the fallbacks without catching
---    (\e -> doFallback fallback input >> return (throw e))
-  censor (const []) $ return (result, listToOutputs outputsL)
+  ~(result, outputsL) <- do
+    ~(input, unused) <- getInputValues <$> withReward inputsL
+    if null unused -- unused /must/ always be defined
+    then listen $! getFae $ f input
+    else return $ throw TooManyInputs
+    -- Still have to figure out how to do the fallbacks without catching
+    --    (\e -> doFallback fallback input >> return (throw e))
+  censor (const []) $ return (Result result, listToOutputs outputsL)
 
   where
     withReward 
@@ -143,28 +146,41 @@ runInputContract cID arg (results, vers) = do
   ~(result, vers', ioV) <- do
     ConcreteContract fAbs <- liftFaeContract $ use $
       at cID . defaultLens (throw $ BadInput cID)
-    -- This strictness is /so/ important.  It flushes out errors that would
-    -- otherwise be saved in future iterations of the contract.
-    ((!gAbsM, (!result, !vMap)), !outputsL) <- listen $ fAbs (arg, vers)
-    let 
-      iRealID = withoutNonce cID
-      iOutputs = listToOutputs outputsL
-      -- Only nonce-protected contract calls are allowed to return
-      -- versioned values.
-      (iVersions, vers')
-        | hasNonce cID = 
-            (
-              bearerType <$> getVersionMap vMap, 
-              addContractVersions cID vMap vers
-            )
-        | otherwise = (Map.empty, vers)
+    (result, ioV, vers', gAbsM) <- hoistFaeContract $ runContract cID vers fAbs arg
     liftFaeContract $ at cID .= gAbsM
-    return (result, vers', InputOutputVersions{..})
+    return (result, vers', ioV)
   -- Nothing after this line should ever throw an exception
   txID <- view _thisTXID
   liftFaeContract $ _getStorage . at txID %= 
     -- Important here that 'ioV', the new versions, are the /first/
     -- argument to 'combineIOV'; see the comments for that function.
-    fmap (_inputOutputs . at (shorten cID) %~ Just . maybe ioV (combineIOV ioV))
+    fmap (_inputOutputs . _getInputOutputs . at (shorten cID) %~ 
+      Just . maybe ioV (combineIOV ioV))
   censor (const []) $ return (results |> result, vers')
+
+runContract ::
+  ContractID ->
+  VersionMap' ->
+  ExplicitContract -> 
+  String ->
+  FaeContract Naught 
+    (BearsValue, InputOutputVersions, VersionMap', 
+    Maybe AbstractContract)
+runContract cID vers fAbs arg = do
+  -- This strictness is /so/ important.  It flushes out errors that would
+  -- otherwise be saved in future iterations of the contract.
+  ((!gAbsM, (!result, !vMap)), !outputsL) <- listen $ fAbs (arg, vers)
+  let 
+    iRealID = withoutNonce cID
+    iOutputs = listToOutputs outputsL
+    -- Only nonce-protected contract calls are allowed to return
+    -- versioned values.
+    (iVersions, vers')
+      | hasNonce cID = 
+          (
+            VersionMap $ bearerType <$> getVersionMap vMap, 
+            addContractVersions cID vMap vers
+          )
+      | otherwise = (emptyVersionMap, vers)
+  return (result, InputOutputVersions{..}, vers', gAbsM)
 

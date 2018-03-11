@@ -1,0 +1,2 @@
+inputs
+  TransactionOutput $prevTX 0 = ()

@@ -27,7 +27,7 @@ import Data.IntMap (IntMap)
 import Data.List
 import Data.Map (Map)
 import Data.Maybe
-import Data.Serialize
+import Data.Serialize hiding (Result)
 import Data.Typeable
 
 import qualified Data.IntMap as IntMap
@@ -45,11 +45,7 @@ newtype StorageT c =
   }
 
 -- | Each transaction can produce outputs in two different ways (cf.
--- 'ContractID'), has an associated "signer" public key, and a result,
--- which can be anything, but should be 'show'able so that it has outside
--- meaning.  This is an existential type, so the record names are just
--- there for documentation; values have to be extracted by
--- pattern-matching.
+-- 'ContractID'), has an associated "signer" public key, and a result.
 --
 -- The technical reason for separating 'inputOutputs' from 'outputs' is
 -- that it makes it possible for contracts to create new contracts without
@@ -57,20 +53,26 @@ newtype StorageT c =
 -- to the correct contract's outputs and not require evaluation of any
 -- other contract or transaction.
 data TransactionEntryT c =
-  forall a. (Show a) =>
   TransactionEntry 
   {
     inputOutputs :: InputOutputsT c,
     inputOrder :: [ShortContractID],
     outputs :: OutputsT c,
     signers :: Signers,
-    result :: a
+    result :: Result
   }
+
+-- The result can be anything, but should be 'show'able so that it has
+-- outside meaning.  This is an existential type, so the record names are
+-- just there for documentation; values have to be extracted by
+-- pattern-matching.
+data Result = forall a. (Show a) => Result a
 
 -- | Inputs are identified by 'ShortContractID's so that 'ContractIDs' of
 -- the 'InputOutput' variant can be flat, rather than nested potentially
 -- indefinitely.
-type InputOutputsT c = Map ShortContractID (InputOutputVersionsT c)
+newtype InputOutputsT c = 
+  InputOutputs { getInputOutputs :: Map ShortContractID (InputOutputVersionsT c) }
 -- | We save the versions map, with the actual values scrubbed, so that it
 -- can be displayed to learn the actual version IDs.
 data InputOutputVersionsT c =
@@ -78,7 +80,7 @@ data InputOutputVersionsT c =
   {
     iRealID :: ContractID,
     iOutputs :: OutputsT c,
-    iVersions :: Map VersionID TypeRep
+    iVersions :: VersionRepMap
   }
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
@@ -105,11 +107,16 @@ type FaeStorageT m c = StateT (StorageT c) m
 
 makeLenses ''Signers
 makeLenses ''StorageT
+makeLenses ''InputOutputsT
 makeLenses ''TransactionEntryT
 makeLenses ''InputOutputVersionsT
 makeLenses ''OutputsT
 
 {- Instances -}
+
+-- | For convenience, so we don't have to pattern-match elsewhere.
+instance Show Result where
+  show (Result x) = show x
 
 -- | For the 'At' instance
 type instance Index (StorageT c) = ContractID
@@ -145,6 +152,7 @@ nonceAt cID@(InputOutput txID sID i) =
   at txID .
   defaultLens (throw $ BadTransactionID txID) .
   _inputOutputs .
+  _getInputOutputs .
   at sID .
   defaultLens (throw $ BadInputID txID sID) .
   _iOutputs .
@@ -178,6 +186,7 @@ listToOutputs l =
   }
   where oMap = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
 
+-- | Like the name says.
 emptyOutputs :: OutputsT c
 emptyOutputs =
   OutputsT
@@ -185,64 +194,6 @@ emptyOutputs =
     outputMap = IntMap.empty,
     outputCount = 0
   }
-
--- | Convenience function for neatly showing a 'TransactionEntry' by ID,
--- rather than actually going into the storage to get and format it.  It
--- catches all exceptions thrown by contracts or transactions and prints
--- an error message instead; thus, whatever actually did complete is part
--- of the output.
-showTransaction :: 
-  (MonadCatch m, MonadIO m) => TransactionID -> FaeStorageT m c String
-showTransaction txID = do
-  TransactionEntry ios ino os ss x <- use $
-    _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  resultSafe <- displayException show x
-  outputsSafe <- displayException (prettyOutputs cIDfTX) os
-  inputsSafe <- forM (nub ino) $ \sID -> do
-    let 
-      iov = 
-        fromMaybe (error $ "Contract ID " ++ show sID ++ " missing") $ 
-        Map.lookup sID ios
-    n <- handleAll (return . throw) $ showNonce iov
-    iovS <- displayException (showIOVersions n sID) iov
-    return (sID, iovS)
-  return $ 
-    intercalate "\n  " $
-      ("Transaction " ++ show txID) :
-      ("result: " ++ resultSafe) :
-      outputsSafe :
-      prettySigners ss :
-      flip map inputsSafe 
-        (\(sID, str) -> "input " ++ show sID ++ "\n    " ++ str)
-  where 
-    displayException f x = catchAll (liftIO $ evaluate $ force $ f x) $ 
-      \e -> return $ "<exception> " ++ show e
-    showNonce InputOutputVersions{..} =
-      use $ nonceAt iRealID . defaultLens (undefined, -1) . to (show . snd)
-    showIOVersions nS sID InputOutputVersions{..} = intercalate "\n    "
-      [
-        "nonce: " ++ nS, 
-        prettyOutputs (cIDfC sID) iOutputs,
-        prettyVersions iVersions
-      ]
-    cIDfTX = TransactionOutput txID
-    cIDfC = InputOutput txID
-    prettyOutputs cIDf OutputsT{..} =
-      intercalate "\n      " $
-      ("outputs:" :) $
-      map (\n -> show n ++ ": " ++ show (shorten $ cIDf n)) $ 
-      IntMap.keys outputMap
-    prettySigners =
-      intercalate "\n    " .
-      ("signers:" :) .
-      map (\(name, key) -> name ++ ": " ++ show key) .
-      Map.toList .
-      getSigners
-    prettyVersions =
-      intercalate "\n      " .
-      ("versions:" :) .
-      map (\(vID, tRep) -> show vID ++ ": " ++ show tRep) .
-      Map.toList 
 
 -- | Unions the outputs and the versions of the two arguments.  The failure
 -- mode is when the arguments have a different 'iRealID', in which case we
@@ -256,17 +207,19 @@ showTransaction txID = do
 combineIOV :: 
   InputOutputVersionsT c -> InputOutputVersionsT c -> InputOutputVersionsT c
 combineIOV
-  InputOutputVersions{iOutputs = os1, iVersions = vs1}
-  InputOutputVersions{iOutputs = os2, iVersions = vs2, ..}
+  InputOutputVersions{iOutputs = os1, iVersions = VersionMap vs1}
+  InputOutputVersions{iOutputs = os2, iVersions = VersionMap vs2, ..}
   = InputOutputVersions
     {
       -- 'combineO' shifts the second argument, which needs to be the new
       -- map.      
       iOutputs = combineO os2 os1, 
-      iVersions = vs1 `Map.union` vs2,
+      iVersions = VersionMap $ vs1 `Map.union` vs2,
       ..
     }
 
+-- | Concatenates two output lists, shifting the second one by the full
+-- count of the first one.
 combineO :: OutputsT c -> OutputsT c -> OutputsT c
 combineO 
   OutputsT{outputMap = os1, outputCount = n1} 

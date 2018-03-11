@@ -41,7 +41,9 @@ import Numeric.Natural
 -- * Types
 
 -- | The inverse to the map of subobjects to their versions.
-newtype VersionMap = VersionMap { getVersionMap :: Map VersionID BearsValue }
+newtype VersionMapT a = VersionMap { getVersionMap :: Map VersionID a }
+type VersionMap = VersionMapT BearsValue
+type VersionRepMap = VersionMapT TypeRep
 -- | Versions by contract ID
 newtype VersionMap' = VersionMap' (Map ShortContractID VersionMap)
 -- | For marking a contract input to be passed by version ID, or a contract
@@ -306,7 +308,7 @@ defaultMapVersions :: VersionMap' -> a -> a
 defaultMapVersions _ = id
 
 -- | For convenience
-emptyVersionMap :: VersionMap
+emptyVersionMap :: VersionMapT a
 emptyVersionMap = VersionMap Map.empty
 
 -- | For convenience

@@ -1,0 +1,2 @@
+body :: Transaction () ()
+body = return

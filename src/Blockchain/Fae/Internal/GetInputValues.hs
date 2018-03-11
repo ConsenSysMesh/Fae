@@ -47,10 +47,10 @@ class GGetInputValues f where
 
 -- | Gets a single value from a single input
 defaultGetInputValues :: 
-  forall a. (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
+  (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
+defaultGetInputValues [] = (throw NotEnoughInputs, [])
 defaultGetInputValues (xDyn : rest) = (x, rest) where
   x = unBear xDyn $ throw $ BadArgType (bearerType xDyn) (typeOf x) 
-defaultGetInputValues [] = throw NotEnoughInputs
 
 {- Instances -}
 

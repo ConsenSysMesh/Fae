@@ -1,0 +1,3 @@
+inputs
+  TransactionOutput $loopTX 0 = ()
+  TransactionOutput $loopTX 1 = ()

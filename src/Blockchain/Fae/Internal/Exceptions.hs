@@ -18,7 +18,7 @@ module Blockchain.Fae.Internal.Exceptions
 
 import Blockchain.Fae.Internal.IDs.Types
 import qualified Control.Exception as Ex
-import Control.Monad.Catch
+import Control.Monad.Catch hiding (displayException)
 import Data.Typeable as T
 
 -- * Types
