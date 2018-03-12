@@ -60,11 +60,7 @@ infixl 4 <$!!>
 (<$!!>) f mx = fmap getRNF $ (RNF  . f) DS.<$!!> mx
 
 -- | -
-instance {-# OVERLAPPABLE #-} 
-  (Generic a, GNFData (Rep a)) => DS.NFData (RNF a) where
-
-  rnf (RNF x) = grnf (from x)
-
+deriving instance DS.NFData (RNF Word)
 -- | -
 deriving instance DS.NFData (RNF Char)
 -- | -

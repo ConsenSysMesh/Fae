@@ -27,7 +27,38 @@ import Control.Monad.Writer
 
 import Data.Bifunctor
 
+mapMonadNaught :: 
+  (Monad m, Monad n) =>
+  (forall x. m x -> n x) -> Coroutine Naught m a -> Coroutine Naught n a
+mapMonadNaught f (Coroutine eithM) = Coroutine $ fmap f' $ f eithM where
+  f' ~(Right x) = Right x
+
 {- Orphan instances -}
+
+-- | Laziness optimization for @'Coroutine' 'Naught'@, isomorphic to 'Identity'.
+instance {-# OVERLAPPING #-} 
+  (Functor m) => Functor (Coroutine Naught m)
+  where
+
+  fmap f (Coroutine eithM) = Coroutine $ fmap f' eithM where 
+    f' ~(Right x) = Right $ f x
+
+-- | Laziness optimization for @'Coroutine' 'Naught'@, isomorphic to 'Identity'.
+instance {-# OVERLAPPING #-}
+  (Applicative m) => Applicative (Coroutine Naught m)
+  where
+
+  pure = Coroutine . pure . Right
+  (Coroutine fM) <*> (Coroutine eithM) = Coroutine $ fmap f' fM <*> eithM where 
+    f' ~(Right f) ~(Right x) = Right $ f x
+
+-- | Laziness optimization for @'Coroutine' 'Naught'@, isomorphic to 'Identity'.
+instance {-# OVERLAPPING #-}
+  (Monad m) => Monad (Coroutine Naught m)
+  where
+
+  (Coroutine eithM) >>= f = Coroutine $ eithM >>= f' where
+    f' ~(Right x) = resume $ f x
 
 -- | A 'Coroutine' on a 'MonadState' is a 'MonadState' just by lifting.
 instance (Functor f, MonadState s m) => MonadState s (Coroutine f m) where

@@ -17,13 +17,19 @@ import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
+import Blockchain.Fae.Internal.NFData
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
 
+import Control.Monad.Reader
+import Control.Monad.State
 import Control.Monad.Writer
 
+import qualified Control.DeepSeq as DS
+
 import Data.Foldable
+import Data.Functor.Identity
 
 import qualified Data.Map as Map
 
@@ -79,9 +85,8 @@ runTransaction ::
   Transaction inputs a -> [Transaction inputs ()] -> 
   Inputs -> TransactionID -> Signers -> Bool ->
   FaeStorage ()
-runTransaction f fallback inputArgs txID signers isReward = 
- FaeStorage $ runFaeContract txID signers $ do -- TXStorageM
-  liftFaeContract $ txStorage ?= 
+runTransaction f fallback inputArgs txID signers isReward = FaeStorage $ do
+  txStorage ?= 
     TransactionEntry
     {
       inputOutputs = InputOutputs $ Map.fromList defaultIOs,
@@ -90,9 +95,10 @@ runTransaction f fallback inputArgs txID signers isReward =
       signers,
       result = Result (undefined :: a)
     }
-  inputsL <- runInputContracts inputArgs
-  ~(result, outputs) <- hoistFaeContract $ doTX inputsL fallback isReward f
-  liftFaeContract $ txStorage %= fmap (\txE -> txE{result, outputs})
+  ~(result, outputs) <- runFaeContract txID signers $ do
+    inputsL <- runInputContracts inputArgs
+    hoistFaeContract $ doTX inputsL fallback isReward f
+  txStorage %= fmap (\txE -> txE{result, outputs})
 
   where 
     txStorage = _getStorage . at txID
@@ -110,10 +116,10 @@ doTX ::
   [BearsValue] -> [Transaction inputs ()] -> Bool -> 
   Transaction inputs a -> FaeContract Naught (Result, Outputs)
 doTX inputsL fallback isReward f = do
-  ~(result, outputsL) <- do
-    ~(input, unused) <- getInputValues <$> withReward inputsL
+  ~(input, unused) <- getInputValues <$> withReward inputsL
+  ~(result, outputsL) <- 
     if null unused -- unused /must/ always be defined
-    then listen $! getFae $ f input
+    then listen $ getFae $ f $ force input
     else return $ throw TooManyInputs
     -- Still have to figure out how to do the fallbacks without catching
     --    (\e -> doFallback fallback input >> return (throw e))
@@ -146,7 +152,8 @@ runInputContract cID arg (results, vers) = do
   ~(result, vers', ioV) <- do
     ConcreteContract fAbs <- liftFaeContract $ use $
       at cID . defaultLens (throw $ BadInput cID)
-    (result, ioV, vers', gAbsM) <- hoistFaeContract $ runContract cID vers fAbs arg
+    ~(result, ioV, vers', gAbsM) <- 
+      hoistFaeContractNaught $ runContract cID vers fAbs arg
     liftFaeContract $ at cID .= gAbsM
     return (result, vers', ioV)
   -- Nothing after this line should ever throw an exception
@@ -167,9 +174,7 @@ runContract ::
     (BearsValue, InputOutputVersions, VersionMap', 
     Maybe AbstractContract)
 runContract cID vers fAbs arg = do
-  -- This strictness is /so/ important.  It flushes out errors that would
-  -- otherwise be saved in future iterations of the contract.
-  ((!gAbsM, (!result, !vMap)), !outputsL) <- listen $ fAbs (arg, vers)
+  ~(~(gAbsM, ~(result, vMap)), outputsL) <- listen $ lazify $ fAbs (arg, vers)
   let 
     iRealID = withoutNonce cID
     iOutputs = listToOutputs outputsL
@@ -182,5 +187,20 @@ runContract cID vers fAbs arg = do
             addContractVersions cID vMap vers
           )
       | otherwise = (emptyVersionMap, vers)
-  return (result, InputOutputVersions{..}, vers', gAbsM)
+  return (result, InputOutputVersions{..}, vers', DS.force gAbsM)
+
+-- | Boosts the base monad from 'Identity'.
+hoistFaeContractNaught :: 
+  (Monad m) => FaeContract Naught a -> FaeContractT Naught m a
+hoistFaeContractNaught = mapMonadNaught hoistFaeRWST
+
+-- | It's possible that the monad itself, and not just the value it
+-- "contains", is bottom.  This function lazily unwraps the monad, pushing
+-- the bottom into the contained value.
+lazify :: FaeContract Naught a -> FaeContract Naught a
+lazify (Coroutine eithM) = Coroutine $ lazifyS eithM where
+  lazifyS (StateT f) = StateT $ lazifyW . f
+  lazifyW (WriterT p) = WriterT $ lazifyR p
+  lazifyR (ReaderT f) = ReaderT $ lazifyX . f
+  lazifyX (Identity ~(~(~(Right x), s), w)) = Identity ((Right x, s), w)
 

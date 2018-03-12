@@ -54,8 +54,10 @@ class PrettyFae a where
 instance Pretty Signers where
   pPrint = prettyList "signers" . Map.toList . getSigners 
 
-instance Pretty (OutputOf c) where
-  pPrint = prettyList "outputs" . outputsToList. outputCIDs 
+instance PrettyFae (OutputOf c) where
+  prettyFae outs = do
+    outputsBody <- displayException $ prettyPairs $ outputsToList $ outputCIDs outs
+    return $ prettyHeader (text "outputs") outputsBody
     where
       outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
       outputCIDs (OutputOfTransaction txID outputs) = 
@@ -65,16 +67,22 @@ instance Pretty (OutputOf c) where
       makeOutputCIDs makeCID OutputsT{..} = 
         IntMap.mapWithKey (\i _ -> makeCID i) outputMap
 
-instance Pretty VersionRepMap where
-  pPrint = prettyList "versions" . map (_1 %~ show) . Map.toList . getVersionMap
+instance PrettyFae VersionRepMap where
+  prettyFae vers = do
+    versionsBody <- displayException $ 
+      prettyPairs $ map (_1 %~ show) $ Map.toList $ getVersionMap vers
+    return $ prettyHeader (text "versions") versionsBody
 
 instance PrettyFae (InputOf c) where
   prettyFae (InputOf txID n ~InputOutputVersions{..}) = do
+    outputsD <- prettyFae (OutputOfContract txID scID iOutputs)
+    versionsD <- prettyFae iVersions
+    nonceD <- displayException $ prettyPair ("nonce", n)
     inputBody <- displayException $ vcat
       [
-        prettyPair ("nonce", n),
-        pPrint (OutputOfContract txID scID iOutputs),
-        pPrint iVersions
+        nonceD,
+        outputsD,
+        versionsD
       ]
     return $ prettyHeader header inputBody
     where 
@@ -94,7 +102,7 @@ instance PrettyFae (InputsOf c) where
 instance PrettyFae (EntryOf c) where
   prettyFae (EntryOf txID ~TransactionEntry{..}) = do
     resultD <- displayException $ text $ show result
-    outputsD <- displayException $ pPrint $ OutputOfTransaction txID outputs
+    outputsD <- prettyFae $ OutputOfTransaction txID outputs
     inputsD <- prettyFae $ InputsOf txID inputOrder inputOutputs
     return $ prettyHeader header $ vcat
       [
@@ -127,7 +135,11 @@ prettyHeader header body = header <> colon $+$ nest 2 body
 -- | Converts a string and list of "lines" into a body with header.
 prettyList :: (Show v) => String -> [(String, v)] -> Doc ann
 prettyList headString bodyList = 
-  prettyHeader (text headString) (vcat $ map prettyPair bodyList)
+  prettyHeader (text headString) (prettyPairs bodyList)
+
+-- | Converts a list of pairs into a display, without header.
+prettyPairs :: (Show v) => [(String, v)] -> Doc ann
+prettyPairs = vcat . map prettyPair
 
 -- | Prints a key-value pair with a colon.
 prettyPair :: (Show v) => (String, v) -> Doc ann

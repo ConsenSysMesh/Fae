@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {- |
 Module: Blockchain.Fae.Internal.Contract
 Description: The core 'Contract' type that underlies Fae
@@ -60,6 +61,8 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
+import qualified Control.DeepSeq as DS
+
 import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Map (Map)
@@ -100,8 +103,12 @@ type FaeRequest argType valType =
 -- | This monad contains everything that relates a contract to its
 -- surrounding transaction.
 type FaeRWT m = WriterT [AbstractContract] (ReaderT TXData m)
+-- | This one also includes the local contract state.
+type FaeRWST m = StateT Escrows (FaeRWT m)
 -- | The commonly used variant
 type FaeRW = FaeRWT Identity
+-- | The commonly used variant
+type FaeRWS = FaeRWST Identity
 -- | The relevant transaction info
 data TXData =
   TXData
@@ -112,18 +119,12 @@ data TXData =
 
 -- | The actual contract monad builds on 'FaeRW' by adding escrows and
 -- continuation support.
-type FaeContractT s m = Coroutine s (StateT Escrows (FaeRWT m))
+type FaeContractT s m = Coroutine s (FaeRWST m)
 -- | The commonly used variant
 type FaeContract s = FaeContractT s Identity
 -- | A "contract transformer".  The useful one is 'ContractM', though, in
 -- "MonadFae".
 type ContractT m argType valType = argType -> m (WithEscrows valType)
--- | This wrapper is necessary because 'Fae' and 'FaeTX' are monads that
--- contract authors can actually use, and so we need to carefully limit the
--- capabilities they are allowed.  It's here so we don't export it from
--- "Fae".
-newtype FaeM s a = Fae { getFae :: FaeContract s a }
-  deriving (Functor, Applicative, Monad)
 
 -- | An internal representation of a contract, partway through full
 -- "compilation".  An 'InternalT' has its escrows hidden, because it will
@@ -149,7 +150,14 @@ type ContractF s m argType valType =
 -- latter.
 newtype ConcreteContract argType valType = 
   ConcreteContract
-    (forall s m. (Functor s, Monad m) => ContractF s m argType valType)
+    (forall s m. 
+      (
+        Functor s, Monad m, 
+        Monad (FaeContractT s m),
+        Monad (FaeContract s)
+      ) => 
+      ContractF s m argType valType
+    )
 
 -- | The type actually stored in the escrows map, because escrows can have
 -- any types of input and output.  Abstract escrows take arbitrary argument
@@ -163,6 +171,12 @@ type AbstractEscrow = ConcreteContract BearsValue BearsValue
 type AbstractContract = 
   ConcreteContract (String, VersionMap') (BearsValue, VersionMap)
 
+-- | This wrapper is necessary because 'Fae' and 'FaeTX' are monads that
+-- contract authors can actually use, and so we need to carefully limit the
+-- capabilities they are allowed.  It's here so we don't export it from
+-- "Fae".
+newtype FaeM s a = Fae { getFae :: FaeContract s a }
+
 -- * Template Haskell
 
 makeLenses ''Escrows
@@ -170,12 +184,22 @@ makeLenses ''TXData
 
 {- Instances -}
 
+instance DS.NFData (ConcreteContract argType valType) where
+  rnf (ConcreteContract !f) = ()
+
+deriving instance (Functor (FaeContract s)) => Functor (FaeM s)
+deriving instance (Applicative (FaeContract s)) => Applicative (FaeM s)
+deriving instance (Monad (FaeContract s)) => Monad (FaeM s)
+
 -- * Functions
 
 -- | Processes a 'Contract' so that it can take escrows on the first call,
 -- and hides the escrow storage.
 makeInternalT ::
-  (Functor s, Functor s', Monad m) =>
+  (
+    Functor s, Functor s', Monad m, 
+    Monad (FaeContractT s m), Monad (FaeContract s')
+  ) =>
   [BearsValue] ->
   ContractT (FaeContract s') argType valType ->
   FaeContractT s m (InternalT s' (WithEscrows argType) valType)
@@ -225,7 +249,7 @@ makeEscrowAbstract (ConcreteContract !f) = ConcreteContract $ \xDyn -> do
   let 
     x = unBear xDyn $
       throw $ BadArgType (typeRep (Proxy @argType)) (bearerType xDyn)
-  (gM, y) <- f x
+  ~(gM, y) <- f x
   return (makeEscrowAbstract <$> gM, bearer y)
 
 -- | An abstract contract needs to parse its input, clear the
@@ -246,7 +270,7 @@ makeContractAbstract (ConcreteContract !f) = ConcreteContract $ \(argS, vers) ->
       (throw $ BadInputParse argS $ typeRep $ Proxy @argType) 
       (mapVersions vers) 
       (readMaybe argS)
-  (gM, y) <- f x
+  ~(gM, y) <- f x
   escrowMap <- use _escrowMap
   let 
     h entID = 
@@ -321,7 +345,7 @@ internalNewEscrow ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
     Typeable argType, Typeable valType,
-    Functor s, Monad m
+    Functor s, Monad m, Monad (FaeContractT s m)
   ) =>
   [BearsValue] -> 
   ContractT (FaeContract (FaeRequest argType valType)) argType valType -> 
@@ -345,14 +369,20 @@ runFaeContract thisTXID@(ShortContractID dig) txSigners =
   flip evalStateT Escrows{escrowMap = Map.empty, nextID = dig} .
   runCoroutine
 
--- | Boosts the base monad from 'Identity'.
-hoistFaeContract :: (Monad m, Functor s) => FaeContract s a -> FaeContractT s m a
-hoistFaeContract = mapMonad hoistFaeRWST where
-  hoistFaeRWST (StateT f) = StateT $ hoistFaeRWT . f
-  hoistFaeRWT (WriterT p) = WriterT $ hoistFaeReaderT p
-  hoistFaeReaderT (ReaderT f) = reader $ runIdentity . f
-
 -- | Goes all the way up the rather long monad stack.
 liftFaeContract :: (Monad m, Functor s) => m a -> FaeContractT s m a
 liftFaeContract = lift . lift . lift . lift
 
+hoistFaeContract :: 
+  (Monad m, Functor s, Monad (FaeContract s)) => 
+  FaeContract s a -> FaeContractT s m a
+hoistFaeContract = mapMonad hoistFaeRWST
+
+hoistFaeRWST :: (Monad m) => FaeRWS a -> FaeRWST m a
+hoistFaeRWST (StateT f) = StateT $ hoistFaeRWT . f
+
+hoistFaeRWT :: (Monad m) => FaeRW a -> FaeRWT m a
+hoistFaeRWT (WriterT p) = WriterT $ hoistFaeReaderT p
+
+hoistFaeReaderT :: (Monad m) => Reader r a -> ReaderT r m a
+hoistFaeReaderT (ReaderT f) = reader $ runIdentity . f

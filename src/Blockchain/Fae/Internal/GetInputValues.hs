@@ -11,6 +11,7 @@ module Blockchain.Fae.Internal.GetInputValues where
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
+import Blockchain.Fae.Internal.NFData
 import Blockchain.Fae.Internal.Versions
 
 import Control.Applicative
@@ -30,7 +31,7 @@ import Numeric.Natural
 -- failing if they don't all match or there are extras on one side.  For
 -- the moment, the member function is not exported, so you can't write your
 -- own implementations.
-class GetInputValues a where
+class (NFData a) => GetInputValues a where
   getInputValues :: [BearsValue] -> (a, [BearsValue])
   default 
     getInputValues :: 
