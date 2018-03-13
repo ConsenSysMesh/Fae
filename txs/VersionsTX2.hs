@@ -1,2 +1,2 @@
-body :: Transaction (String, String) String
+body :: Transaction (Versioned String, String) String
 body = return . snd

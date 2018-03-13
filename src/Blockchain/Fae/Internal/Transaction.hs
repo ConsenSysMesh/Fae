@@ -26,8 +26,6 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
-import qualified Control.DeepSeq as DS
-
 import Data.Foldable
 import Data.Functor.Identity
 
@@ -154,7 +152,12 @@ runInputContract cID arg (results, vers) = do
       at cID . defaultLens (throw $ BadInput cID)
     ~(result, ioV, vers', gAbsM) <- 
       hoistFaeContractNaught $ runContract cID vers fAbs arg
-    liftFaeContract $ at cID .= gAbsM
+    let update = liftFaeContract $ at cID .= gAbsM
+    -- In plain language, if both the result and the continuation are
+    -- defined, the call is considered to have succeeded and the contract
+    -- entry is updated, including the nonce; otherwise, the entry is left
+    -- as it is for the next caller.
+    unsafeTryWithDefault (return ()) $ result `seq` gAbsM `deepseq` update
     return (result, vers', ioV)
   -- Nothing after this line should ever throw an exception
   txID <- view _thisTXID
@@ -187,7 +190,7 @@ runContract cID vers fAbs arg = do
             addContractVersions cID vMap vers
           )
       | otherwise = (emptyVersionMap, vers)
-  return (result, InputOutputVersions{..}, vers', DS.force gAbsM)
+  return (result, InputOutputVersions{..}, vers', gAbsM)
 
 -- | Boosts the base monad from 'Identity'.
 hoistFaeContractNaught :: 

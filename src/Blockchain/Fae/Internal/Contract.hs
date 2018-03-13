@@ -184,8 +184,8 @@ makeLenses ''TXData
 
 {- Instances -}
 
-instance DS.NFData (ConcreteContract argType valType) where
-  rnf (ConcreteContract !f) = ()
+instance DS.NFData (RNF (ConcreteContract argType valType)) where
+  rnf (RNF (ConcreteContract !f)) = ()
 
 deriving instance (Functor (FaeContract s)) => Functor (FaeM s)
 deriving instance (Applicative (FaeContract s)) => Applicative (FaeM s)

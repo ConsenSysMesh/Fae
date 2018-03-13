@@ -21,6 +21,18 @@ import qualified Control.Exception as Ex
 import Control.Monad.Catch hiding (displayException)
 import Data.Typeable as T
 
+import System.IO.Unsafe
+
+-- * Functions
+
+-- | Obviously not pure at all, but intended to be used only in extremely
+-- limited circumstances; namely, to decide what to do with the global
+-- update of a contract function or nonce, or escrow function, in the event
+-- of an exception.
+unsafeTryWithDefault :: a -> a -> a
+unsafeTryWithDefault def act = 
+  unsafePerformIO $ catchAll (Ex.evaluate act) (const $ return def)
+
 -- * Types
 --
 -- | Exceptions for ID-related errors.

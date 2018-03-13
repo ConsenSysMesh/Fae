@@ -96,6 +96,8 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
 
+import qualified Control.DeepSeq as DS
+
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Class
@@ -226,17 +228,23 @@ useEscrow ::
   ) =>
   EscrowID argType valType -> argType -> m valType
 useEscrow EscrowID{..} x = liftTX $ Fae $ do
-  (fAbs, ver) <- 
+  ~(fAbs, ver) <- 
     use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
   let ConcreteContract f = unmakeAbstractEscrow fAbs
-  (gConcM, y) <- f x
+  ~(gConcM, y) <- f x
   txID <- view _thisTXID
-  -- We hash with the transaction ID so that each new version reflects how
-  -- it was created.  If the transaction is a known quantity, then this
-  -- ensures that the version accurately reflects its effects and not those
-  -- of some other, hidden, transaction.
-  let newVer = mkVersionID (ver, txID)
-  _escrowMap . at entID .= ((,newVer) . makeEscrowAbstract <$> gConcM)
+  let 
+    -- We hash with the transaction ID so that each new version reflects how
+    -- it was created.  If the transaction is a known quantity, then this
+    -- ensures that the version accurately reflects its effects and not those
+    -- of some other, hidden, transaction.
+    newVer = mkVersionID (ver, txID)
+    update = _escrowMap . at entID .= ((,newVer) . makeEscrowAbstract <$> gConcM)
+  -- In plain language, if both the result and the continuation are
+  -- defined, the call is considered to have succeeded and the escrow
+  -- entry is updated, including the version; otherwise, the entry is left
+  -- as it is for the next caller.
+  unsafeTryWithDefault (return ()) $ y `seq` gConcM `deepseq` update
   return y
 
 -- | Registers a contract as a new escrow, returning its ID.  The argument
