@@ -50,7 +50,7 @@ class GGetInputValues f where
 defaultGetInputValues :: 
   (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
 defaultGetInputValues [] = (throw NotEnoughInputs, [])
-defaultGetInputValues (xDyn : rest) = (x, rest) where
+defaultGetInputValues ~(xDyn : rest) = (x, rest) where
   x = unBear xDyn $ throw $ BadArgType (bearerType xDyn) (typeOf x) 
 
 {- Instances -}

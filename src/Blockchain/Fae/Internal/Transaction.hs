@@ -113,27 +113,39 @@ doTX ::
   (HasEscrowIDs inputs, GetInputValues inputs, Typeable inputs, Show a) => 
   [BearsValue] -> [Transaction inputs ()] -> Bool -> 
   Transaction inputs a -> FaeContract Naught (Result, Outputs)
-doTX inputsL fallback isReward f = do
-  ~(input, unused) <- getInputValues <$> withReward inputsL
-  ~(result, outputsL) <- 
-    if null unused -- unused /must/ always be defined
-    then listen $ getFae $ f $ force input
+doTX inputsL fallbacks isReward f = do
+  (input, unused) <- getInputValues <$> withReward inputsL
+  ~(result, outputsL) <- lazify $ -- In case the conditional itself throws
+    if null unused
+    then listen $ do
+      ~(result, outputsL) <- listen $ lazify $ getFae $ f input
+      let successful = unsafeIsDefined $ outputsL `deepseq` result
+      unless successful $ do
+        -- If the transaction fails, it has to be rolled back.  Also, this
+        -- ensures that this failure can't pollute the outputs that the
+        -- fallbacks might create
+        censor (const []) $ return ()
+        doFallback fallbacks input
+      return result
     else return $ throw TooManyInputs
-    -- Still have to figure out how to do the fallbacks without catching
-    --    (\e -> doFallback fallback input >> return (throw e))
   censor (const []) $ return (Result result, listToOutputs outputsL)
 
   where
-    withReward 
-      | isReward = \inputsL -> do
+    withReward inputsL
+      | isReward = do
           eID <- internalNewEscrow [] $ \Token -> internalSpend Reward
           return $ bearer eID : inputsL
-      | otherwise = return 
+      | otherwise = return inputsL
 
 -- | Performs all fallback transactions, ignoring errors.
---doFallback :: [Transaction inputs ()] -> inputs -> TXStorageM ()
---doFallback fallback input = forM_ fallback $ 
---  \tx -> handleAll (const $ return ()) $ hoistFaeContract $ getFae $ tx input
+doFallback :: [Transaction inputs ()] -> inputs -> FaeContract Naught ()
+doFallback fallbacks input = forM_ fallbacks $ \tx -> do
+  -- input is already forced from the main transaction
+  result <- lazify $ getFae $ tx input 
+  let 
+    successful = unsafeIsDefined result
+    act = if successful then id else censor (const [])
+  act $ return ()
 
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
@@ -142,32 +154,36 @@ runInputContracts = fmap fst .
   foldl' (>>=) (return ([], emptyVersionMap')) .
   map (uncurry runInputContract) 
 
--- | Runs a single input contract.
+-- | Runs a single input contract as a monadic state update, adding the
+-- result to the ongoing list and updating the map of all defined versions.
 runInputContract ::
   ContractID -> String ->
   ([BearsValue], VersionMap') -> TXStorageM ([BearsValue], VersionMap')
 runInputContract cID arg (results, vers) = do
-  ~(result, vers', ioV) <- do
-    ConcreteContract fAbs <- liftFaeContract $ use $
-      at cID . defaultLens (throw $ BadInput cID)
-    ~(result, ioV, vers', gAbsM) <- 
-      hoistFaeContractNaught $ runContract cID vers fAbs arg
-    let update = liftFaeContract $ at cID .= gAbsM
-    -- In plain language, if both the result and the continuation are
-    -- defined, the call is considered to have succeeded and the contract
-    -- entry is updated, including the nonce; otherwise, the entry is left
-    -- as it is for the next caller.
-    unsafeTryWithDefault (return ()) $ result `seq` gAbsM `deepseq` update
-    return (result, vers', ioV)
-  -- Nothing after this line should ever throw an exception
+  escrows <- get
+  ~(ConcreteContract fAbs) <- liftFaeContract $ use $
+    at cID . defaultLens (throw $ BadInput cID)
+  ~(result, ioV, vers', gAbsM) <- 
+    hoistFaeContractNaught $ lazify $ runContract cID vers fAbs arg
+  -- Success means that the result and continuation are defined.
+  -- Because of the internal use of 'lazify', this also includes the
+  -- escrows and outputs.
+  let 
+    testVal = gAbsM `deepseq` result
+    ioV' = testVal `seq` ioV
+    successful = unsafeIsDefined testVal
+  when successful $ liftFaeContract $ at cID .= gAbsM
   txID <- view _thisTXID
   liftFaeContract $ _getStorage . at txID %= 
     -- Important here that 'ioV', the new versions, are the /first/
     -- argument to 'combineIOV'; see the comments for that function.
     fmap (_inputOutputs . _getInputOutputs . at (shorten cID) %~ 
-      Just . maybe ioV (combineIOV ioV))
-  censor (const []) $ return (results |> result, vers')
+      Just . maybe ioV' (combineIOV ioV'))
+  return (results |> result, vers')
 
+-- | Executes the contract function, returning the result, the structured
+-- outputs, the new map of all currently defined versions, and the
+-- continuation function.
 runContract ::
   ContractID ->
   VersionMap' ->
@@ -177,7 +193,7 @@ runContract ::
     (BearsValue, InputOutputVersions, VersionMap', 
     Maybe AbstractContract)
 runContract cID vers fAbs arg = do
-  ~(~(gAbsM, ~(result, vMap)), outputsL) <- listen $ lazify $ fAbs (arg, vers)
+  ((gAbsM, (result, vMap)), outputsL) <- listen $ fAbs (arg, vers)
   let 
     iRealID = withoutNonce cID
     iOutputs = listToOutputs outputsL
@@ -190,20 +206,10 @@ runContract cID vers fAbs arg = do
             addContractVersions cID vMap vers
           )
       | otherwise = (emptyVersionMap, vers)
-  return (result, InputOutputVersions{..}, vers', gAbsM)
+  censor (const []) $ return (result, InputOutputVersions{..}, vers', gAbsM)
 
 -- | Boosts the base monad from 'Identity'.
 hoistFaeContractNaught :: 
   (Monad m) => FaeContract Naught a -> FaeContractT Naught m a
 hoistFaeContractNaught = mapMonadNaught hoistFaeRWST
-
--- | It's possible that the monad itself, and not just the value it
--- "contains", is bottom.  This function lazily unwraps the monad, pushing
--- the bottom into the contained value.
-lazify :: FaeContract Naught a -> FaeContract Naught a
-lazify (Coroutine eithM) = Coroutine $ lazifyS eithM where
-  lazifyS (StateT f) = StateT $ lazifyW . f
-  lazifyW (WriterT p) = WriterT $ lazifyR p
-  lazifyR (ReaderT f) = ReaderT $ lazifyX . f
-  lazifyX (Identity ~(~(~(Right x), s), w)) = Identity ((Right x, s), w)
 

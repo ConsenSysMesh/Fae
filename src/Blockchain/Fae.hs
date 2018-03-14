@@ -230,7 +230,7 @@ useEscrow ::
 useEscrow EscrowID{..} x = liftTX $ Fae $ do
   ~(fAbs, ver) <- 
     use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
-  let ConcreteContract f = unmakeAbstractEscrow fAbs
+  let ~(ConcreteContract f) = unmakeAbstractEscrow fAbs
   ~(gConcM, y) <- f x
   txID <- view _thisTXID
   let 
@@ -239,12 +239,9 @@ useEscrow EscrowID{..} x = liftTX $ Fae $ do
     -- ensures that the version accurately reflects its effects and not those
     -- of some other, hidden, transaction.
     newVer = mkVersionID (ver, txID)
-    update = _escrowMap . at entID .= ((,newVer) . makeEscrowAbstract <$> gConcM)
-  -- In plain language, if both the result and the continuation are
-  -- defined, the call is considered to have succeeded and the escrow
-  -- entry is updated, including the version; otherwise, the entry is left
-  -- as it is for the next caller.
-  unsafeTryWithDefault (return ()) $ y `seq` gConcM `deepseq` update
+    successful = unsafeIsDefined $ y `seq` force gConcM
+  when successful $
+    _escrowMap . at entID .= ((,newVer) . makeEscrowAbstract <$> gConcM)
   return y
 
 -- | Registers a contract as a new escrow, returning its ID.  The argument

@@ -37,7 +37,7 @@ data OutputOf c =
   OutputOfContract TransactionID ShortContractID (OutputsT c)
 
 -- | Single input entry decorated with the nonce and transaction.
-data InputOf c = InputOf TransactionID Int (InputOutputVersionsT c)
+data InputOf c = InputOf TransactionID ShortContractID Int (InputOutputVersionsT c)
 -- | Inputs map decorated with call order and transaction.
 data InputsOf c = InputsOf TransactionID [ShortContractID] (InputOutputsT c)
 -- | Transaction entry decorated with transaction.
@@ -55,9 +55,9 @@ instance Pretty Signers where
   pPrint = prettyList "signers" . Map.toList . getSigners 
 
 instance PrettyFae (OutputOf c) where
-  prettyFae outs = do
-    outputsBody <- displayException $ prettyPairs $ outputsToList $ outputCIDs outs
-    return $ prettyHeader (text "outputs") outputsBody
+  prettyFae outs = return $
+    prettyHeader (text "outputs") $
+      prettyPairs $ outputsToList $ outputCIDs outs
     where
       outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
       outputCIDs (OutputOfTransaction txID outputs) = 
@@ -68,16 +68,15 @@ instance PrettyFae (OutputOf c) where
         IntMap.mapWithKey (\i _ -> makeCID i) outputMap
 
 instance PrettyFae VersionRepMap where
-  prettyFae vers = do
-    versionsBody <- displayException $ 
+  prettyFae vers = return $
+    prettyHeader (text "versions") $
       prettyPairs $ map (_1 %~ show) $ Map.toList $ getVersionMap vers
-    return $ prettyHeader (text "versions") versionsBody
 
 instance PrettyFae (InputOf c) where
-  prettyFae (InputOf txID n ~InputOutputVersions{..}) = do
+  prettyFae (InputOf txID scID n ~InputOutputVersions{..}) = do
     outputsD <- prettyFae (OutputOfContract txID scID iOutputs)
     versionsD <- prettyFae iVersions
-    nonceD <- displayException $ prettyPair ("nonce", n)
+    let nonceD = prettyPair ("nonce", n)
     inputBody <- displayException $ vcat
       [
         nonceD,
@@ -85,9 +84,7 @@ instance PrettyFae (InputOf c) where
         versionsD
       ]
     return $ prettyHeader header inputBody
-    where 
-      scID = shorten iRealID
-      header = labelHeader "input" scID
+    where header = labelHeader "input" scID
 
 instance PrettyFae (InputsOf c) where
   prettyFae (InputsOf txID inputSCIDs ~(InputOutputs inputMap)) = 
@@ -97,7 +94,7 @@ instance PrettyFae (InputsOf c) where
         ~InputOutputVersions{..} = input
       storage <- get
       let n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
-      prettyFae $ InputOf txID n input
+      prettyFae $ InputOf txID scID n input
 
 instance PrettyFae (EntryOf c) where
   prettyFae (EntryOf txID ~TransactionEntry{..}) = do

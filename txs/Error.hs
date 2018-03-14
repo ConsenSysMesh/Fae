@@ -1,2 +1,2 @@
 body :: Transaction Void ()
-body _ = newContract @() @() [] $ \_ -> do {error "error"; spend ();}
+body _ = newContract @() @() [] $ \_ -> error "error"

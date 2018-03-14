@@ -29,9 +29,10 @@ import System.IO.Unsafe
 -- limited circumstances; namely, to decide what to do with the global
 -- update of a contract function or nonce, or escrow function, in the event
 -- of an exception.
-unsafeTryWithDefault :: a -> a -> a
-unsafeTryWithDefault def act = 
-  unsafePerformIO $ catchAll (Ex.evaluate act) (const $ return def)
+unsafeIsDefined :: a -> Bool
+unsafeIsDefined act = unsafePerformIO $ catchAll 
+  (Ex.evaluate act >> return True) 
+  (const $ return False)
 
 -- * Types
 --

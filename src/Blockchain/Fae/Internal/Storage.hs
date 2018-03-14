@@ -82,6 +82,7 @@ data InputOutputVersionsT c =
     iOutputs :: OutputsT c,
     iVersions :: VersionRepMap
   }
+  deriving (Generic)
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
 -- contracts, so it's not enough to just store them in a sequence.  In case

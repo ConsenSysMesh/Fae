@@ -51,6 +51,7 @@ module Blockchain.Fae.Internal.Contract where
 import Blockchain.Fae.Internal.Coroutine hiding (Reader)
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
+import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.NFData
@@ -63,6 +64,7 @@ import Control.Monad.Writer
 
 import qualified Control.DeepSeq as DS
 
+import Data.Bifunctor
 import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Map (Map)
@@ -184,6 +186,8 @@ makeLenses ''TXData
 
 {- Instances -}
 
+-- | I /think/ that 'Generic'-deriving is impossible for an existential
+-- type.
 instance DS.NFData (RNF (ConcreteContract argType valType)) where
   rnf (RNF (ConcreteContract !f)) = ()
 
@@ -194,50 +198,56 @@ deriving instance (Monad (FaeContract s)) => Monad (FaeM s)
 -- * Functions
 
 -- | Processes a 'Contract' so that it can take escrows on the first call,
--- and hides the escrow storage.
+-- and hides the escrow storage.  The resulting function is guaranteed to
+-- produce a defined monadic value (containing a possibly-undefined regular
+-- value). 
 makeInternalT ::
   (
     Functor s, Functor s', Monad m, 
-    Monad (FaeContractT s m), Monad (FaeContract s')
+    Monad (FaeContractT s m), Monad (FaeContract s), Monad (FaeContract s')
   ) =>
   [BearsValue] ->
   ContractT (FaeContract s') argType valType ->
   FaeContractT s m (InternalT s' (WithEscrows argType) valType)
-makeInternalT eIDs !f = do
-  Escrows{..} <- takeEscrows eIDs
+makeInternalT eIDs f = do
+  ~Escrows{..} <- hoistFaeContract $ lazify $ takeEscrows eIDs
   txID <- view _thisTXID
   -- It is less crucial that we start the ID chain at a place that reflects
   -- the transaction, but this is nicely uniform with 'useEscrow'.
   let seedID = digest (nextID, txID)
   _nextID %= digest
   entID <- use _nextID
-  return $ \(WithEscrows inputEscrows x) ->
+  return $ \ ~(WithEscrows inputEscrows x) ->
     mapMonad (flip evalStateT Escrows{nextID = seedID, ..}) $ do
       _escrowMap %= Map.union inputEscrows
-      f x
+      lazify $ f x
 
 -- | Takes care of running the contract coroutine and extracting the
 -- continuation.  It also correctly retrieves escrows from the argument and
--- places the escrows of the return value into the local storage.
+-- places the escrows of the return value into the local storage.  The
+-- concrete contract's evaluation is always a defined monadic defined
+-- pair; its result component is made undefined if the output escrows
+-- force to undefined.
 makeConcrete ::
   (HasEscrowIDs argType, Typeable argType) =>
   InternalContract argType valType ->
   ConcreteContract argType valType
-makeConcrete !f = ConcreteContract $ \x -> hoistFaeContract $ do
+makeConcrete f = ConcreteContract $ \x -> hoistFaeContract $ do
   xE <- internalSpend x
   result <- lift $ lift $ resume $ f xE -- ugh, double 'lift'
   let 
-    (gM, WithEscrows outputEscrows z) =
+    ~(gM, ~(WithEscrows outputEscrows z)) =
       case result of
-        Left (Request y !g) -> (Just g, y)
+        Left ~(Request y g) -> (Just g, y)
         Right y -> (Nothing, y)
-  _escrowMap %= Map.union outputEscrows
+  when (unsafeIsDefined outputEscrows) $ _escrowMap %= Map.union outputEscrows
   let gConcM = makeConcrete <$> gM
-  return (gConcM, z)
+  -- If the escrows get polluted, this contract has failed.
+  return (gConcM, outputEscrows `deepseq` z)
 
 -- | An abstract escrow just needs to check the type of its input and clear
 -- the type of its output.  The 'AbstractEscrow' result does not force its
--- return value.
+-- return value; it really should, but that's for a major release.
 makeEscrowAbstract ::
   forall argType valType.
   (
@@ -245,7 +255,7 @@ makeEscrowAbstract ::
     Typeable argType, Typeable valType
   ) =>
   ConcreteContract argType valType -> AbstractEscrow 
-makeEscrowAbstract (ConcreteContract !f) = ConcreteContract $ \xDyn -> do
+makeEscrowAbstract (ConcreteContract f) = ConcreteContract $ \xDyn -> do
   let 
     x = unBear xDyn $
       throw $ BadArgType (typeRep (Proxy @argType)) (bearerType xDyn)
@@ -255,7 +265,8 @@ makeEscrowAbstract (ConcreteContract !f) = ConcreteContract $ \xDyn -> do
 -- | An abstract contract needs to parse its input, clear the
 -- output type, and also resolve version IDs in the input and save new
 -- versions in the output.  The 'AbstractContract' result deeply forces its
--- return value.
+-- return value.  The result is always a defined monadic defined pair whose
+-- second component is also defined.
 makeContractAbstract ::
   forall argType valType.
   (
@@ -264,7 +275,7 @@ makeContractAbstract ::
     Typeable argType, Typeable valType
   ) =>
   ConcreteContract argType valType -> AbstractContract
-makeContractAbstract (ConcreteContract !f) = ConcreteContract $ \(argS, vers) -> do
+makeContractAbstract (ConcreteContract f) = ConcreteContract $ \(argS, vers) -> do
   let 
     x = maybe 
       (throw $ BadInputParse argS $ typeRep $ Proxy @argType) 
@@ -288,7 +299,7 @@ unmakeAbstractEscrow ::
   ) =>
   AbstractEscrow -> ConcreteContract argType valType
 unmakeAbstractEscrow (ConcreteContract f) = ConcreteContract $ \x -> do
-  (gAbsM, yDyn) <- f $ bearer x
+  ~(gAbsM, yDyn) <- f $ bearer x
   let 
     y = unBear yDyn $
       throw $ BadValType (typeRep (Proxy @valType)) (bearerType yDyn)
@@ -329,12 +340,13 @@ takeEscrow eID = do
     Nothing -> throw $ BadEscrowID $ entID eID
 
 -- | Because we need to essentially 'spend' a value internally, and we
--- haven't defined that function yet.
+-- haven't defined that function yet.  The result is defined (its fields
+-- may not be).
 internalSpend :: 
   (HasEscrowIDs valType, Typeable valType, MonadState Escrows m) => 
   valType -> m (WithEscrows valType)
 internalSpend x = do
-  Escrows{..} <- takeEscrows [bearer x]
+  ~Escrows{..} <- takeEscrows [bearer x]
   -- We need to force both the escrows and the value because they may have
   -- nonterminating computations in them, which we want to be suffered by
   -- the originating contract and not by its victims.
@@ -345,7 +357,7 @@ internalNewEscrow ::
   (
     HasEscrowIDs argType, HasEscrowIDs valType,
     Typeable argType, Typeable valType,
-    Functor s, Monad m, Monad (FaeContractT s m)
+    Functor s, Monad m, Monad (FaeContract s), Monad (FaeContractT s m)
   ) =>
   [BearsValue] -> 
   ContractT (FaeContract (FaeRequest argType valType)) argType valType -> 
@@ -354,8 +366,9 @@ internalNewEscrow eIDs f = do
   entID <- use _nextID
   -- modifies nextID
   cAbs <- makeEscrowAbstract . makeConcrete <$> makeInternalT eIDs f
-  -- Initial version is entry ID
-  _escrowMap %= Map.insert entID (cAbs, VersionID entID)
+  -- Initial version is entry ID.  Function is forced to prevent it from
+  -- being stored undefined.
+  _escrowMap %= Map.insert entID (f `seq` cAbs, VersionID entID)
   return $ EscrowID entID
 
 -- | A summary monad-running function.  You start with no escrows and the
@@ -386,3 +399,24 @@ hoistFaeRWT (WriterT p) = WriterT $ hoistFaeReaderT p
 
 hoistFaeReaderT :: (Monad m) => Reader r a -> ReaderT r m a
 hoistFaeReaderT (ReaderT f) = reader $ runIdentity . f
+
+-- | It's possible that the monad itself, and not just the value it
+-- "contains", is bottom.  This function lazily unwraps the monad, pushing
+-- the bottom into the contained value and, if it is actually bottom,
+-- resetting the state and outputs.
+lazify :: (Functor s, Monad (FaeContract s)) => FaeContract s a -> FaeContract s a
+lazify cr = do
+  (escrows, outputs) <- listen get
+  let
+    lazifyC (Coroutine eithM) = Coroutine $ lazifyS eithM
+    lazifyS (StateT f) = StateT $ lazifyW . f
+    lazifyW (WriterT p) = WriterT $ lazifyR p
+    lazifyR (ReaderT f) = ReaderT $ lazifyX . f
+    lazifyX (Identity ~(~(xE, s), w))
+      | successful = Identity ((bimap (fmap lazify) id xE', s), w)
+      | ~(Right x) <- xE' = Identity ((Right x, escrows), outputs)
+      where 
+        xE' = s `deepseq` w `deepseq` xE
+        successful = unsafeIsDefined xE'
+  lazifyC cr
+
