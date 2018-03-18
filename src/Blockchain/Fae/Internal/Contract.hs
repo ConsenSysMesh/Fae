@@ -191,8 +191,12 @@ makeLenses ''TXData
 instance DS.NFData (RNF (ConcreteContract argType valType)) where
   rnf (RNF (ConcreteContract !f)) = ()
 
+-- | Really annoying, and undecidable, necessity because we have
+-- overlapping instances for @'FaeContract' s@
 deriving instance (Functor (FaeContract s)) => Functor (FaeM s)
+-- | -
 deriving instance (Applicative (FaeContract s)) => Applicative (FaeM s)
+-- | -
 deriving instance (Monad (FaeContract s)) => Monad (FaeM s)
 
 -- * Functions
@@ -386,17 +390,21 @@ runFaeContract thisTXID@(ShortContractID dig) txSigners =
 liftFaeContract :: (Monad m, Functor s) => m a -> FaeContractT s m a
 liftFaeContract = lift . lift . lift . lift
 
+-- | Lifts the base monad of the 'FaeContract'.
 hoistFaeContract :: 
   (Monad m, Functor s, Monad (FaeContract s)) => 
   FaeContract s a -> FaeContractT s m a
 hoistFaeContract = mapMonad hoistFaeRWST
 
+-- | Lifts the base monad of our 'StateT'
 hoistFaeRWST :: (Monad m) => FaeRWS a -> FaeRWST m a
 hoistFaeRWST (StateT f) = StateT $ hoistFaeRWT . f
 
+-- | Lifts the base monad of our 'WriterT'
 hoistFaeRWT :: (Monad m) => FaeRW a -> FaeRWT m a
 hoistFaeRWT (WriterT p) = WriterT $ hoistFaeReaderT p
 
+-- | Lifts the base monad of our 'ReaderT'
 hoistFaeReaderT :: (Monad m) => Reader r a -> ReaderT r m a
 hoistFaeReaderT (ReaderT f) = reader $ runIdentity . f
 

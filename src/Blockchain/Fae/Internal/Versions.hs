@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds, UndecidableInstances #-}
 {- |
 Module: Blockchain.Fae.Internal.Versions
-Description: The core 'Contract' type that underlies Fae
+Description: Versioning for contract return values
 Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
@@ -40,9 +40,12 @@ import Numeric.Natural
 
 -- * Types
 
--- | The inverse to the map of subobjects to their versions.
+-- | Generalization of the two kinds of version maps.  The difference is
+-- that one only retains type information.
 newtype VersionMapT a = VersionMap { getVersionMap :: Map VersionID a }
+-- | The inverse to the map of subobjects to their versions.
 type VersionMap = VersionMapT BearsValue
+-- | The one that only retains the types.
 type VersionRepMap = VersionMapT TypeRep
 -- | Versions by contract ID
 newtype VersionMap' = VersionMap' (Map ShortContractID VersionMap)

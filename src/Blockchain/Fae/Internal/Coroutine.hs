@@ -27,6 +27,9 @@ import Control.Monad.Writer
 
 import Data.Bifunctor
 
+-- | Lazy specialization of 'mapMonad' for @'Coroutine' 'Naught'@,
+-- isomorphic to the identity functor and therefore not actually a sum
+-- type.
 mapMonadNaught :: 
   (Monad m, Monad n) =>
   (forall x. m x -> n x) -> Coroutine Naught m a -> Coroutine Naught n a

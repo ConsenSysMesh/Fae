@@ -82,6 +82,7 @@ instance Digestible TX
 instance Show UnquotedString where
   show (UnquotedString s) = s
 
+-- | Since the interpreter is actually at the bottom of the stack.
 instance MonadInterpreter FaeInterpret where
   fromSession f = lift $ fromSession f
   modifySessionRef f g = lift $ modifySessionRef f g

@@ -32,14 +32,29 @@ module Blockchain.Fae.FrontEnd
 
 import Blockchain.Fae.Internal.Block
 import Blockchain.Fae.Internal.Crypto hiding
-  (compareSerialize, putPartialSerialize, getPartialSerialize, readsPrecSer)
-import Blockchain.Fae.Internal.Exceptions
+  (
+    Serialize, PassFail, PartialSerialize,
+    compareSerialize, putPartialSerialize, 
+    getPartialSerialize, readsPrecSer
+  )
+import Blockchain.Fae.Internal.Exceptions hiding (unsafeIsDefined)
+import Blockchain.Fae.Internal.IDs hiding
+  (
+    GHasEscrowIDs,
+    defaultTraverseEscrowIDs
+  )
 import Blockchain.Fae.Internal.IDs.Types
 import Blockchain.Fae.Internal.NFData hiding (GNFData)
 import Blockchain.Fae.Internal.PrettyFae (showTransaction)
 import Blockchain.Fae.Internal.Storage hiding 
-  (nonceAt, checkNonce, nonceSetter, intMapList)
+  (
+    hoistFaeStorage, nonceAt, checkNonce, nonceSetter,
+    listToOutputs, emptyOutputs, combineIOV, combineO
+  )
 import Blockchain.Fae.Internal.Transaction hiding
-  (doTX, doFallback, runInputContracts, runInputContract)
+  (
+    TXStorageM, doTX, doFallback, runInputContracts, 
+    runInputContract, runContract, hoistFaeContractNaught
+  )
 import Blockchain.Fae.Internal.TX
 

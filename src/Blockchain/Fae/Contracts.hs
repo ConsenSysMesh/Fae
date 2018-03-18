@@ -7,7 +7,8 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module provides some contracts that would seem to be of very common and general utility in a smart contract economy.
+This module provides some contracts that would seem to be of very common
+and general utility in a smart contract economy.
 -}
 module Blockchain.Fae.Contracts 
   (
@@ -19,7 +20,7 @@ module Blockchain.Fae.Contracts
     sell, redeem,
     -- * Possession
     -- $possession
-    signOver, signOverTo, deposit, depositAs
+    signOver, deposit
   )
   where
 
@@ -58,9 +59,32 @@ data TwoPartyException =
 -- | Of course
 instance Exception TwoPartyException
 
--- | This contract accepts both offerings on creation; the intention is
+-- | This function accepts both offerings on creation; the intention is
 -- that it is created in a single transaction signed jointly by both
 -- parties, who withdraw their values from their respective "accounts".
+--
+-- The result of calling @'twoPartySwap' itemA itemB@ in a transaction
+-- signed by two parties "partyA" and "partyB"  is that a contract is
+-- created with signature
+--
+-- > Contract (Maybe Bool) (Maybe (Either (Versioned a) (Versioned b)))
+--
+-- that possesses both items.  This contract has two phases; in each one,
+-- the party performing the action must sign the transaction as "self".
+--
+-- 1. Approval: each party may submit an argument of the form @Just True@
+-- or @Just False@ to indicate if they approve or, respectively, disapprove
+-- of the swap.  Only one vote is allowed per party, and a successful vote
+-- returns 'Nothing'.
+--
+-- 2. Retrieval: This phase begins when either one party votes 'False' or
+-- both parties vote 'True'.  Each party may call the contract once with
+-- 'Nothing' to retrieve the item they are owed.  If there was a 'False'
+-- vote, they get their own item back; if not, they get the other's item.
+-- Either way, "partyA" gets the 'Left' value and "partyB" gets the
+-- 'Right'.
+--
+-- Once both items are returned, the contract is deleted.
 twoPartySwap ::
   (
     HasEscrowIDs a, HasEscrowIDs b, 
@@ -125,18 +149,55 @@ twoPartySwapC partyA partyB x y choice1 = do
 
 -- $vendor
 -- Direct sales are contracts in which the seller delivers the product
--- automatically, allowing Fae-powered stores.  This exposes the seller to
--- the risk of accepting a nonterminating computation embedded in the
--- payment, so they should have some way of limiting their customers to
--- a trusted subset.
+-- automatically, allowing Fae-powered stores.  This requires the seller as
+-- well as the buyer to sign the transaction (like the two-party swap),
+-- which can be automated by whatever front-end interface manages the sale.
+
+-- | In a vendor contract, the payment could be bad in one form or another,
+-- or the seller may not have authorized the sale.
+data VendorError =
+  UnauthorizedSeller PublicKey |
+  NotEnough |
+  BadToken
+
+-- | -
+instance Show VendorError where
+  show (UnauthorizedSeller pubkey) =
+    "Signer with public key " ++ show pubkey ++ " is not the seller."
+  show NotEnough = "Insufficient payment"
+  show BadToken = "Payment token is invalid"
+
+-- | -
+instance Exception VendorError
 
 -- | The first argument is an escrow-backed value to sell; the second is
--- its price; the third is the seller's public key.  The contract has two
--- stages: first, it makes change for the payment and returns it with the
--- product; this requires that the seller have signed the transaction.
--- Second, it waits for the seller to retrieve the payment.
+-- its price; the third is the seller's public key.
+--
+-- The sales contract has signature
+--
+-- @
+--  Contract 
+--  (Versioned coin)
+--  (Either 
+--    (Versioned coin) 
+--    (Versioned a, Maybe (Versioned coin))
+--  )
+-- @
+--
+-- and possesses the item for sale.  It has two phases:
+-- 
+-- 1. Purchase: the prospective buyer offers payment in the form of the
+-- contract argument.  This is accepted unless either the seller did not
+-- sign the transaction as "seller" or the payment is insufficient.  If
+-- accepted, the item is returned to the buyer along with any change as
+-- a 'Right' value.
+--
+-- 2. Collection: the seller calls the contract (providing an 'undefined'
+-- argument; beware, any money offered will be lost), and, if the "self"
+-- public key matches the actual seller's, the payment is returned to them
+-- as a 'Left' value.
 sell :: 
-  forall a m tok coin.
+  forall a coin m.
   (
     HasEscrowIDs a, Typeable a, Versionable a, NFData a,
     Currency coin, MonadTX m
@@ -193,56 +254,39 @@ redeem x valid seller = newContract [bearer x] redeemC where
 -- A possession contract is simply one that marks a value as being owned by
 -- a particular cryptographically-identified entity.
 
--- | Checks that the sender is the owner, in which case it returns the value.
--- The type signature is a little weird; we don't use @Contract String a@
--- for the return value because we want to be able to compose this contract
--- function with something that changes the argument type.
-signOverC :: 
-  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadContract b a m) =>
-  a -> PublicKey -> String -> m (WithEscrows a)
-signOverC x owner name = do
-  who <- signer name
-  unless (owner == who) $ throw $ NotOwner who
-  spend x
+-- | The only kind of error that can arise in a possession contract is that
+-- the caller is not entitled to the value.
+data PossessionError = NotOwner PublicKey
+
+-- | -
+instance Show PossessionError where
+  show (NotOwner pubkey) = 
+    "Signer with public key " ++ show pubkey ++ 
+    " is not the owner of the requested value"
+
+-- | -
+instance Exception PossessionError
 
 -- | The first argument is a value to assign possession; the second is the
--- public key of the recipient.  
---
--- This function is not flexible enough; use 'signOverTo'.
+-- public key of the recipient.  A new contract is created that takes no
+-- arguments (that is, takes @()@) and checks that "self" is the owner, in
+-- which case it returns the value.
 signOver ::
+  forall a m.
   (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
   a -> PublicKey -> m ()
-signOver x owner = 
-  newContract [bearer x] (signOverC x owner . \() -> "self")
-
--- | Like 'signOver', creates a 'signOverC' contract, but doesn't fix the
--- signer name that it accepts.
-signOverTo ::
-  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
-  a -> PublicKey -> m ()
-signOverTo x owner = newContract [bearer x] $ signOverC x owner
+signOver x owner = newContract [bearer x] signOverC where
+  signOverC :: Contract () a
+  signOverC _ = do
+    who <- signer "self"
+    unless (owner == who) $ throw $ NotOwner who
+    spend x
 
 -- | Sign over a value to a named owner.
---
--- This function is not flexible enough; use 'depositAs'.
 deposit ::
   (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
   a -> String -> m ()
 deposit x name = do
   owner <- signer name
   signOver x owner
-
--- | Sign over a value to a named owner.
-depositAs ::
-  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
-  a -> String -> m ()
-depositAs x name = do
-  owner <- signer name
-  signOverTo x owner
-
-data ContractsError =
-  NotEnough | NotOwner PublicKey | UnauthorizedSeller PublicKey | BadToken
-  deriving (Show)
-
-instance Exception ContractsError
 

@@ -62,7 +62,7 @@ data TransactionEntryT c =
     result :: Result
   }
 
--- The result can be anything, but should be 'show'able so that it has
+-- | The result can be anything, but should be 'show'able so that it has
 -- outside meaning.  This is an existential type, so the record names are
 -- just there for documentation; values have to be extracted by
 -- pattern-matching.

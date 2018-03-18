@@ -6,7 +6,9 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-There are several identifier types in Fae: two kinds of contract ID (one detailed, one convenient but lossy), transaction IDs, and escrow IDs.  In addition, the escrow IDs in particular have a lot of ritual surrounding them.
+There are several identifier types in Fae: two kinds of contract ID (one
+detailed, one convenient but lossy), transaction IDs, escrow IDs, and
+version IDs.
 -}
 module Blockchain.Fae.Internal.IDs.Types where
 

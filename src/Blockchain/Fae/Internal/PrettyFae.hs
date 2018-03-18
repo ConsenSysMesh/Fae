@@ -28,7 +28,6 @@ import Data.List
 import Data.Void
 
 import Text.PrettyPrint.Annotated
-import Text.PrettyPrint.Annotated.HughesPJClass
 
 -- | Outputs decorated with what they were output from.  Sort of
 -- a proto-ContractID.
@@ -51,9 +50,11 @@ type VDoc = Doc Void
 class PrettyFae a where
   prettyFae :: (MonadCatch m, MonadIO m) => a -> FaeStorageT m c VDoc
 
-instance Pretty Signers where
-  pPrint = prettyList "signers" . Map.toList . getSigners 
+-- | -
+instance PrettyFae Signers where
+  prettyFae = return . prettyList "signers" . Map.toList . getSigners 
 
+-- | -
 instance PrettyFae (OutputOf c) where
   prettyFae outs = return $
     prettyHeader (text "outputs") $
@@ -67,11 +68,13 @@ instance PrettyFae (OutputOf c) where
       makeOutputCIDs makeCID OutputsT{..} = 
         IntMap.mapWithKey (\i _ -> makeCID i) outputMap
 
+-- | -
 instance PrettyFae VersionRepMap where
   prettyFae vers = return $
     prettyHeader (text "versions") $
       prettyPairs $ map (_1 %~ show) $ Map.toList $ getVersionMap vers
 
+-- | -
 instance PrettyFae (InputOf c) where
   prettyFae (InputOf txID scID n ~InputOutputVersions{..}) = do
     outputsD <- prettyFae (OutputOfContract txID scID iOutputs)
@@ -86,6 +89,7 @@ instance PrettyFae (InputOf c) where
     return $ prettyHeader header inputBody
     where header = labelHeader "input" scID
 
+-- | -
 instance PrettyFae (InputsOf c) where
   prettyFae (InputsOf txID inputSCIDs ~(InputOutputs inputMap)) = 
     fmap vcat $ forM (nub inputSCIDs) $ \scID -> do
@@ -96,16 +100,18 @@ instance PrettyFae (InputsOf c) where
       let n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
       prettyFae $ InputOf txID scID n input
 
+-- | -
 instance PrettyFae (EntryOf c) where
   prettyFae (EntryOf txID ~TransactionEntry{..}) = do
     resultD <- displayException $ text $ show result
     outputsD <- prettyFae $ OutputOfTransaction txID outputs
     inputsD <- prettyFae $ InputsOf txID inputOrder inputOutputs
+    signersD <- prettyFae signers
     return $ prettyHeader header $ vcat
       [
         prettyPair ("result", resultD),
         outputsD,
-        pPrint signers,
+        signersD,
         inputsD
       ]
     where header = labelHeader "Transaction" txID
@@ -122,6 +128,7 @@ showTransaction txID = do
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   render <$> prettyFae (EntryOf txID entry)
 
+-- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc ann
 labelHeader h l = text h <+> text (show l)
 
@@ -149,6 +156,7 @@ displayException ::
 displayException doc = 
   catchAll (liftIO $ evaluate $ force doc) (return . showException)
 
+-- | Actually prints the exception nicely.
 showException :: SomeException -> VDoc
 showException e = text "<exception>" <+> text (show e)
 

@@ -44,6 +44,7 @@ class
   data Valuation coin
 
   -- | Like the name says.  Sometimes useful; should satisfy
+  -- 
   -- prop> zero >>= value = return 0
   zero :: (MonadTX m) => m coin
   -- | Peek at the value inside.  The ID remains valid.  Careful!  For
@@ -98,11 +99,15 @@ class
   moreThan :: (MonadTX m) => coin -> Valuation coin -> m Bool
   moreThan c n = (== GT) <$> valCompare c n
 
+  -- | A mixed 'Eq'-style comparison
+  atMost :: (MonadTX m) => coin -> Valuation coin -> m Bool
+  atMost c n = not <$> moreThan c n
+
   -- | Reversed strict mixed 'Eq'-style comparison
   lessThan :: (MonadTX m) => coin -> Valuation coin -> m Bool
   lessThan c n = (== LT) <$> valCompare c n
 
-  -- | A pure 'Ord'-style comparison
+  -- | A pure 'Eq'-style comparison
   coinCompare :: (MonadTX m) => coin -> coin -> m Ordering
   coinCompare c1 c2 = do
     n <- value c2
