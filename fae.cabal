@@ -34,7 +34,6 @@ library
   other-modules:
     Blockchain.Fae.Internal.Block
     Blockchain.Fae.Internal.Contract
-    Blockchain.Fae.Internal.Coroutine
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.GenericInstances
@@ -42,10 +41,10 @@ library
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
     Blockchain.Fae.Internal.Lens
-    Blockchain.Fae.Internal.NFData
     Blockchain.Fae.Internal.PrettyFae
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Storage
+    Blockchain.Fae.Internal.Suspend
     Blockchain.Fae.Internal.Transaction
     Blockchain.Fae.Internal.TX
     Blockchain.Fae.Internal.Versions

@@ -6,6 +6,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 
 import Control.Monad
+import Control.DeepSeq
 
 import Data.ByteString.Builder
 import qualified Data.ByteString as B
@@ -65,7 +66,7 @@ serverApp txQueue request respond = do
         Nothing -> respond $ buildResponse $ 
           intercalate "\n" $ 
           map (\(x,y) -> x ++ ": " ++ show y) $
-          Map.toList $
+          Map.toList $ 
           getSigners pubKeys
         Just mainFile -> send $ \callerTID resultVar -> TXExecData{..} 
 

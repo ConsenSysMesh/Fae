@@ -38,7 +38,7 @@ import Numeric.Natural
 
 -- | Interface for a currency type.
 class 
-  (Versionable coin, NFData coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
+  (Versionable coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
   Currency coin where
 
   data Valuation coin

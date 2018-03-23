@@ -36,16 +36,20 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 
+import Control.DeepSeq
+
 import Control.Monad 
 import Control.Monad.State
 
+import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 import GHC.Generics
 
-import Language.Haskell.Interpreter as Int 
+import Language.Haskell.Interpreter hiding (set,get)
+import qualified Language.Haskell.Interpreter as Int (set,get)
 import Language.Haskell.Interpreter.Unsafe as Int 
 
 import System.FilePath
@@ -67,9 +71,8 @@ data TX =
 -- | Helpful for printing strings without the surrounding quotes.
 newtype UnquotedString = UnquotedString String
 
--- | This builds on 'FaeStorage' because the interpreter has to access the
--- storage as part of 'runTransaction'.
-type FaeInterpret = FaeStorageM Interpreter 
+-- | Monad for interpreting Fae transactions
+type FaeInterpret = InterpreterT (FaeStorageT IO)
 
 {- Instances -}
 
@@ -77,16 +80,17 @@ type FaeInterpret = FaeStorageM Interpreter
 instance Serialize TX
 -- | Default instance
 instance Digestible TX
+-- | Default instance
+instance NFData TX
 
 -- | Prints a string without the quotes
 instance Show UnquotedString where
   show (UnquotedString s) = s
 
--- | Since the interpreter is actually at the bottom of the stack.
-instance MonadInterpreter FaeInterpret where
-  fromSession f = lift $ fromSession f
-  modifySessionRef f g = lift $ modifySessionRef f g
-  runGhc x = lift $ runGhc x
+instance MonadState Storage FaeInterpret where
+  state = lift . state
+  put = lift . put
+  get = lift get
 
 -- * Functions
 
@@ -103,8 +107,9 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
   loadModules [txSrc]
   setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]
   run <- interpret runString infer
-  hoistFaeStorage $ getFaeStorage $ run inputs txID pubKeys isReward 
+  liftFaeStorage $ run inputs txID pubKeys isReward 
   where
+    liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
     runString = unwords
       [
         "runTransaction",
@@ -129,10 +134,10 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
 runFaeInterpret :: FaeInterpret a -> IO a
 runFaeInterpret x = 
   fmap (either throw id) $
-  runInterpreter $ 
-  flip evalStateT (Storage Map.empty) $ do
+  flip evalStateT (Storage Map.empty) $ 
+  runInterpreter $ do
     Int.set [languageExtensions := languageExts]
-    mapM_ Int.unsafeSetGhcOption $
+    mapM_ unsafeSetGhcOption $
       "-fpackage-trust" :
 -- For some reason, this makes the interpreter hang.  Unfortunate, as it
 -- rather weakens the trust situation not to have it.

@@ -11,21 +11,22 @@ This module provides the code that navigates the intricacies of executing a tran
 module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae.Internal.Contract
-import Blockchain.Fae.Internal.Coroutine
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Lens
-import Blockchain.Fae.Internal.NFData
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
+
+import Control.DeepSeq
 
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
+import Data.Bifunctor
 import Data.Foldable
 import Data.Functor.Identity
 
@@ -33,69 +34,40 @@ import qualified Data.Map as Map
 
 -- * Types
 
--- | 'StorageT' is only parametrized because 'AbstractContract' isn't
--- defined in "Storage", which is because it would cause an import cycle.
--- Storage always contains abstract contracts.
-type Storage = StorageT AbstractContract
--- | Likewise
-type Outputs = OutputsT AbstractContract
--- | Likewise
-type InputOutputs = InputOutputsT AbstractContract
--- | Likewise
-type InputOutputVersions = InputOutputVersionsT AbstractContract
--- | Likewise
-type FaeStorageM m = FaeStorageT m AbstractContract
--- | Likewise
-newtype FaeStorage a = FaeStorage { getFaeStorage :: FaeStorageM Identity a }
--- | Likewise
-type TransactionEntry = TransactionEntryT AbstractContract
--- | Likewise
-type ExplicitContract = 
-  ContractF Naught Identity (String, VersionMap') (BearsValue, VersionMap) 
-
 -- | How inputs are provided to transactions.
 type Inputs = [(ContractID, String)]
 
--- | Transactions, though similar to contracts in many internal ways,
--- differ greatly in their inputs and outputs.  The argument of type 'a' is
--- constructed from the return values of the input contracts according to
--- its 'GetInputValues' instance.  The return value need not and can not
--- contain escrows (or rather, the escrow IDs it contains will not be
--- transferred anywhere).
-type Transaction a b = a -> FaeM Naught b
-
--- | This monad is a little different from 'FaeTX' in that it is built on
--- 'FaeStorage', meaning it has direct access to the storage and also to
--- 'IO'.  Needless to say, we don't want any of that near user-defined
--- contracts.
-type TXStorageM = FaeContractT Naught (FaeStorageM Identity)
+-- | The version used for running pure transactions
+newtype FaeStorage a = FaeStorage { getFaeStorage :: FaeStorageT Identity a }
+-- | Transaction monad with storage access, for executing contracts and
+-- saving the results.
+type TXStorageM = StateT Storage FaeTXM
+-- | A general storage transformer; used for running transactions in IO.
+type FaeStorageT = StateT Storage
 
 -- * Functions
 
 -- | Runs a transaction on its inputs, with some basic information about
 -- the context.
 runTransaction :: 
-  forall a inputs.
-  (
-    GetInputValues inputs, HasEscrowIDs inputs, Typeable inputs, 
-    Typeable a, Show a
-  ) =>
+  forall inputs a.
+  (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
   Transaction inputs a -> [Transaction inputs ()] -> 
   Inputs -> TransactionID -> Signers -> Bool ->
   FaeStorage ()
-runTransaction f fallback inputArgs txID signers isReward = FaeStorage $ do
+runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
   txStorage ?= 
     TransactionEntry
     {
-      inputOutputs = InputOutputs $ Map.fromList defaultIOs,
+      inputOutputs = Map.fromList defaultIOs,
       inputOrder = inputOrder,
       outputs = emptyOutputs,
-      signers,
+      txSigners,
       result = Result (undefined :: a)
     }
-  ~(result, outputs) <- runFaeContract txID signers $ do
+  ~(result, outputs) <- runTX $ do
     inputsL <- runInputContracts inputArgs
-    hoistFaeContract $ doTX inputsL fallback isReward f
+    lift $ doTX inputsL fallback isReward f
   txStorage %= fmap (\txE -> txE{result, outputs})
 
   where 
@@ -107,41 +79,39 @@ runTransaction f fallback inputArgs txID signers isReward = FaeStorage $ do
         InputOutputVersions (withoutNonce cID) emptyOutputs emptyVersionMap
       )
     inputOrder = map fst defaultIOs
+    runTX = mapStateT $ 
+      fmap fst . runWriterT . flip runReaderT txData . flip evalStateT escrows
+    txData = TXData{ thisTXSigners = txSigners, thisTXID = txID }
+    escrows = Escrows { escrowMap = Map.empty, nextID }
+    ShortContractID nextID = txID
  
 -- | Actually perform the transaction
 doTX :: 
-  (HasEscrowIDs inputs, GetInputValues inputs, Typeable inputs, Show a) => 
+  (HasEscrowIDs inputs, GetInputValues inputs, Show a) => 
   [BearsValue] -> [Transaction inputs ()] -> Bool -> 
-  Transaction inputs a -> FaeContract Naught (Result, Outputs)
+  Transaction inputs a -> FaeTXM (Result, Outputs)
 doTX inputsL fallbacks isReward f = do
-  (input, unused) <- getInputValues <$> withReward inputsL
-  ~(result, outputsL) <- lazify $ -- In case the conditional itself throws
-    if null unused
-    then listen $ do
-      ~(result, outputsL) <- listen $ lazify $ getFae $ f input
-      let successful = unsafeIsDefined $ outputsL `deepseq` result
-      unless successful $ do
-        -- If the transaction fails, it has to be rolled back.  Also, this
-        -- ensures that this failure can't pollute the outputs that the
-        -- fallbacks might create
-        censor (const []) $ return ()
-        doFallback fallbacks input
-      return result
-    else return $ throw TooManyInputs
-  censor (const []) $ return (Result result, listToOutputs outputsL)
+  ~(input, unused) <- getInputValues <$> withReward inputsL
+  if null unused
+  then fmap (bimap Result listToOutputs) . listen $ do
+    result <- getFae $ f input
+    unless (unsafeIsDefined result) $ do
+      -- If the transaction fails, it has to be rolled back.
+      censor (const []) $ return ()
+      doFallback fallbacks input
+  else return $ throw TooManyInputs
 
   where
     withReward inputsL
       | isReward = do
-          eID <- internalNewEscrow [] $ \Token -> internalSpend Reward
+          eID <- getFae $ newEscrow [] $ \Token -> spend Reward
           return $ bearer eID : inputsL
       | otherwise = return inputsL
 
 -- | Performs all fallback transactions, ignoring errors.
-doFallback :: [Transaction inputs ()] -> inputs -> FaeContract Naught ()
+doFallback :: [Transaction inputs ()] -> inputs -> FaeTXM ()
 doFallback fallbacks input = forM_ fallbacks $ \tx -> do
-  -- input is already forced from the main transaction
-  result <- lazify $ getFae $ tx input 
+  result <- getFae $ tx input 
   let 
     successful = unsafeIsDefined result
     act = if successful then id else censor (const [])
@@ -160,25 +130,20 @@ runInputContract ::
   ContractID -> String ->
   ([BearsValue], VersionMap') -> TXStorageM ([BearsValue], VersionMap')
 runInputContract cID arg (results, vers) = do
-  escrows <- get
-  ~(ConcreteContract fAbs) <- liftFaeContract $ use $
-    at cID . defaultLens (throw $ BadInput cID)
-  ~(result, ioV, vers', gAbsM) <- 
-    hoistFaeContractNaught $ lazify $ runContract cID vers fAbs arg
+  ~(result, ioV, vers', gAbsM) <- do
+    fAbs <- use $ at cID . defaultLens (throw $ BadInput cID)
+    lift $ runContract cID vers fAbs arg
   -- Success means that the result and continuation are defined.
-  -- Because of the internal use of 'lazify', this also includes the
-  -- escrows and outputs.
   let 
     testVal = gAbsM `deepseq` result
     ioV' = testVal `seq` ioV
     successful = unsafeIsDefined testVal
-  when successful $ liftFaeContract $ at cID .= gAbsM
+  when successful $ at cID .= gAbsM
   txID <- view _thisTXID
-  liftFaeContract $ _getStorage . at txID %= 
-    -- Important here that 'ioV', the new versions, are the /first/
-    -- argument to 'combineIOV'; see the comments for that function.
-    fmap (_inputOutputs . _getInputOutputs . at (shorten cID) %~ 
-      Just . maybe ioV' (combineIOV ioV'))
+  -- Important here that 'ioV', the new versions, are the /first/
+  -- argument to 'combineIOV'; see the comments for that function.
+  _getStorage . at txID %= 
+    fmap (_inputOutputs . at (shorten cID) %~ Just . maybe ioV' (combineIOV ioV'))
   return (results |> result, vers')
 
 -- | Executes the contract function, returning the result, the structured
@@ -187,19 +152,18 @@ runInputContract cID arg (results, vers) = do
 runContract ::
   ContractID ->
   VersionMap' ->
-  ExplicitContract -> 
+  AbstractGlobalContract -> 
   String ->
-  FaeContract Naught 
-    (BearsValue, InputOutputVersions, VersionMap', 
-    Maybe AbstractContract)
+  FaeTXM 
+    (BearsValue, InputOutputVersions, VersionMap', Maybe AbstractGlobalContract)
 runContract cID vers fAbs arg = do
-  ((gAbsM, (result, vMap)), outputsL) <- listen $ fAbs (arg, vers)
+  ~(~(~(result, vMap), gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
   let 
     iRealID = withoutNonce cID
     iOutputs = listToOutputs outputsL
     -- Only nonce-protected contract calls are allowed to return
     -- versioned values.
-    (iVersions, vers')
+    ~(iVersions, vers')
       | hasNonce cID = 
           (
             VersionMap $ bearerType <$> getVersionMap vMap, 
@@ -207,9 +171,3 @@ runContract cID vers fAbs arg = do
           )
       | otherwise = (emptyVersionMap, vers)
   censor (const []) $ return (result, InputOutputVersions{..}, vers', gAbsM)
-
--- | Boosts the base monad from 'Identity'.
-hoistFaeContractNaught :: 
-  (Monad m) => FaeContract Naught a -> FaeContractT Naught m a
-hoistFaeContractNaught = mapMonadNaught hoistFaeRWST
-

@@ -6,7 +6,8 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-A class for pretty-printing Fae storage.  This has to be done in a 'FaeStorageT' monad, so the class can't just be 'Pretty'.
+A class for pretty-printing Fae storage.  This has to be done in
+a 'FaeStorage' monad, so the class can't just be 'Pretty'.
 -}
 module Blockchain.Fae.Internal.PrettyFae where
 
@@ -31,16 +32,16 @@ import Text.PrettyPrint.Annotated
 
 -- | Outputs decorated with what they were output from.  Sort of
 -- a proto-ContractID.
-data OutputOf c = 
-  OutputOfTransaction TransactionID (OutputsT c) |
-  OutputOfContract TransactionID ShortContractID (OutputsT c)
+data OutputOf = 
+  OutputOfTransaction TransactionID Outputs |
+  OutputOfContract TransactionID ShortContractID Outputs
 
 -- | Single input entry decorated with the nonce and transaction.
-data InputOf c = InputOf TransactionID ShortContractID Int (InputOutputVersionsT c)
+data InputOf = InputOf TransactionID ShortContractID Int InputOutputVersions
 -- | Inputs map decorated with call order and transaction.
-data InputsOf c = InputsOf TransactionID [ShortContractID] (InputOutputsT c)
+data InputsOf = InputsOf TransactionID [ShortContractID] InputOutputs
 -- | Transaction entry decorated with transaction.
-data EntryOf c = EntryOf TransactionID (TransactionEntryT c)
+data EntryOf = EntryOf TransactionID TransactionEntry
 
 -- | Helpful shorthand; we don't use annotations.
 type VDoc = Doc Void
@@ -48,34 +49,35 @@ type VDoc = Doc Void
 -- | This class isn't really necessary, as it's not used outside this
 -- module, but it helps keep the number of function names down.
 class PrettyFae a where
-  prettyFae :: (MonadCatch m, MonadIO m) => a -> FaeStorageT m c VDoc
+  prettyFae :: (MonadState Storage m, MonadCatch m, MonadIO m) => a -> m VDoc
 
 -- | -
 instance PrettyFae Signers where
-  prettyFae = return . prettyList "signers" . Map.toList . getSigners 
+  prettyFae = return . prettyList "txSigners" . Map.toList . getSigners
 
 -- | -
-instance PrettyFae (OutputOf c) where
-  prettyFae outs = return $
-    prettyHeader (text "outputs") $
-      prettyPairs $ outputsToList $ outputCIDs outs
+instance PrettyFae OutputOf where
+  prettyFae outs = do
+    outputBody <- displayException $ prettyPairs $ outputsToList $ outputCIDs outs
+    return $ prettyHeader (text "outputs") outputBody
     where
       outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
       outputCIDs (OutputOfTransaction txID outputs) = 
         makeOutputCIDs (TransactionOutput txID) outputs
       outputCIDs (OutputOfContract txID scID outputs) =
         makeOutputCIDs (InputOutput txID scID) outputs
-      makeOutputCIDs makeCID OutputsT{..} = 
+      makeOutputCIDs makeCID Outputs{..} = 
         IntMap.mapWithKey (\i _ -> makeCID i) outputMap
 
 -- | -
 instance PrettyFae VersionRepMap where
-  prettyFae vers = return $
-    prettyHeader (text "versions") $
+  prettyFae vers = do
+    versionBody <- displayException $
       prettyPairs $ map (_1 %~ show) $ Map.toList $ getVersionMap vers
+    return $ prettyHeader (text "versions") versionBody
 
 -- | -
-instance PrettyFae (InputOf c) where
+instance PrettyFae InputOf where
   prettyFae (InputOf txID scID n ~InputOutputVersions{..}) = do
     outputsD <- prettyFae (OutputOfContract txID scID iOutputs)
     versionsD <- prettyFae iVersions
@@ -90,8 +92,8 @@ instance PrettyFae (InputOf c) where
     where header = labelHeader "input" scID
 
 -- | -
-instance PrettyFae (InputsOf c) where
-  prettyFae (InputsOf txID inputSCIDs ~(InputOutputs inputMap)) = 
+instance PrettyFae InputsOf where
+  prettyFae (InputsOf txID inputSCIDs inputMap) = 
     fmap vcat $ forM (nub inputSCIDs) $ \scID -> do
       let 
         input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
@@ -101,12 +103,12 @@ instance PrettyFae (InputsOf c) where
       prettyFae $ InputOf txID scID n input
 
 -- | -
-instance PrettyFae (EntryOf c) where
+instance PrettyFae EntryOf where
   prettyFae (EntryOf txID ~TransactionEntry{..}) = do
     resultD <- displayException $ text $ show result
     outputsD <- prettyFae $ OutputOfTransaction txID outputs
     inputsD <- prettyFae $ InputsOf txID inputOrder inputOutputs
-    signersD <- prettyFae signers
+    signersD <- prettyFae txSigners
     return $ prettyHeader header $ vcat
       [
         prettyPair ("result", resultD),
@@ -122,7 +124,7 @@ instance PrettyFae (EntryOf c) where
 -- an error message instead; thus, whatever actually did complete is part
 -- of the output.
 showTransaction ::
-  (MonadCatch m, MonadIO m) => TransactionID -> FaeStorageT m c String
+  (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m String
 showTransaction txID = do
   entry <- use $ 
     _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)

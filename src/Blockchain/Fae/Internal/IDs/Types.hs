@@ -10,12 +10,14 @@ There are several identifier types in Fae: two kinds of contract ID (one
 detailed, one convenient but lossy), transaction IDs, escrow IDs, and
 version IDs.
 -}
+{-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.IDs.Types where
 
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Lens
 
 import Control.DeepSeq
+import Data.Map (Map)
 import Data.Serialize
 import Data.String
 import GHC.Generics
@@ -45,7 +47,13 @@ data ContractID =
 -- contracts that are outputs of ... that are outputs of some long-ago
 -- transaction.
 newtype ShortContractID = ShortContractID Digest
-  deriving (Eq, Ord, Serialize, IsString, Generic)
+  deriving (Eq, Ord, Serialize, IsString, Generic, NFData)
+
+-- | Transactions can have many named signatories, which are available in
+-- all contract code.  It has to be a newtype so that we don't need to
+-- import more modules in the interpreter to get 'Map'.
+newtype Signers = Signers { getSigners :: Map String PublicKey }
+  deriving (Serialize, NFData)
 
 -- | For simplicity
 type TransactionID = ShortContractID
@@ -56,7 +64,7 @@ type BlockID = Digest
 type EntryID = Digest
 -- | For convenience
 newtype VersionID = VersionID Digest 
-  deriving (Generic, Eq, Ord, Serialize)
+  deriving (Generic, Eq, Ord, Serialize, NFData)
 
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
@@ -77,6 +85,8 @@ newtype EscrowID argType valType = EscrowID { entID :: EntryID }
 instance Serialize ContractID
 -- | So we can get a 'ShortContractID' from a regular one.
 instance Digestible ContractID
+-- | -
+instance NFData ContractID
 
 -- | 'ShortContractID's and, by extension, 'TransactionIDs', are read as
 -- the digests they wrap.
@@ -95,4 +105,9 @@ instance Read VersionID where
 -- | -
 instance Show VersionID where
   show (VersionID ver) = show ver
+
+-- * Template Haskell
+
+makeLenses ''Signers
+
 

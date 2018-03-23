@@ -22,8 +22,6 @@ module Blockchain.Fae.FrontEnd
     showTransaction,
     -- * Cryptography types and functions
     module Blockchain.Fae.Internal.Crypto,
-    -- * Specialized 'NFData' instances
-    module Blockchain.Fae.Internal.NFData,
     -- * Fae exceptions
     module Blockchain.Fae.Internal.Exceptions,
     -- * Fae ID types
@@ -44,7 +42,6 @@ import Blockchain.Fae.Internal.IDs hiding
     defaultTraverseEscrowIDs
   )
 import Blockchain.Fae.Internal.IDs.Types
-import Blockchain.Fae.Internal.NFData hiding (GNFData)
 import Blockchain.Fae.Internal.PrettyFae (showTransaction)
 import Blockchain.Fae.Internal.Storage hiding 
   (

@@ -90,7 +90,6 @@ twoPartySwap ::
     HasEscrowIDs a, HasEscrowIDs b, 
     Versionable a, Versionable b,
     Typeable a, Typeable b,
-    NFData a, NFData b,
     MonadTX m
   ) =>
   a -> b -> m ()
@@ -199,7 +198,7 @@ instance Exception VendorError
 sell :: 
   forall a coin m.
   (
-    HasEscrowIDs a, Typeable a, Versionable a, NFData a,
+    HasEscrowIDs a, Typeable a, Versionable a, 
     Currency coin, MonadTX m
   ) =>
   a -> Valuation coin -> PublicKey -> m ()
@@ -232,7 +231,6 @@ redeem ::
     HasEscrowIDs a, HasEscrowIDs b, 
     Versionable a, Versionable b, 
     Typeable a, Typeable b, 
-    NFData a, NFData b,
     Read b, MonadTX m
   ) =>
   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
@@ -273,7 +271,7 @@ instance Exception PossessionError
 -- which case it returns the value.
 signOver ::
   forall a m.
-  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
+  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
   a -> PublicKey -> m ()
 signOver x owner = newContract [bearer x] signOverC where
   signOverC :: Contract () a
@@ -284,7 +282,7 @@ signOver x owner = newContract [bearer x] signOverC where
 
 -- | Sign over a value to a named owner.
 deposit ::
-  (HasEscrowIDs a, NFData a, Versionable a, Typeable a, MonadTX m) =>
+  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
   a -> String -> m ()
 deposit x name = do
   owner <- signer name

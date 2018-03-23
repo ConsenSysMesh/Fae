@@ -15,7 +15,6 @@ module Blockchain.Fae.Internal.IDs
     module Blockchain.Fae.Internal.IDs
   ) where
 
-import Blockchain.Fae.Internal.Coroutine
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs.Types
@@ -45,16 +44,13 @@ import Type.Reflection
 -- value, in the sense that it is backed by a scarce resource contained in
 -- an escrow.  This is a restricted form of 'Dynamic' bearing
 -- a 'HasEscrowIDs' constraint.
-data BearsValue = forall a. (HasEscrowIDs a, Typeable a) => BearsValue a
+data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 
 -- | A map of escrow IDs that preserves input and output types, regardless
 -- of what they are.
 type EscrowIDMap f =
   forall argType valType. 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) =>
+  (HasEscrowIDs argType, HasEscrowIDs valType) =>
   EscrowID argType valType -> f (EscrowID argType valType)
 
 -- | The type of a traversal by an 'EscrowIDMap', used in 'HasEscrowIDs'.
@@ -73,8 +69,9 @@ type EscrowIDTraversal a =
 -- returned from a contract.  
 --
 -- We do not export the class members, so that only the default (automatic,
--- undecidable) instance may be used.
-class HasEscrowIDs a where
+-- undecidable) instance may be used.  'Typeable' is a constraint because
+-- 'BearsValue' requires it.
+class (Typeable a) => HasEscrowIDs a where
   -- | Like 'traverse' from 'Traversable', except that it only covers the
   -- escrow IDs, which may be of heterogeneous types.
   traverseEscrowIDs :: EscrowIDTraversal a
@@ -89,10 +86,7 @@ class GHasEscrowIDs f where
 -- that the transactional variants contain escrows in their argument or
 -- value as well.
 instance 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) =>
+  (HasEscrowIDs argType, HasEscrowIDs valType) =>
   HasEscrowIDs (EscrowID argType valType) where
 
   -- Not point-free; we need to specialize the forall.
@@ -159,17 +153,17 @@ shorten :: ContractID -> ShortContractID
 shorten = ShortContractID . digest . withoutNonce
 
 -- | Mark a value backed by escrows as such.
-bearer :: (HasEscrowIDs a, Typeable a) => a -> BearsValue
+bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue 
 
 -- | Like 'fromDynamic'.
-unBearer :: forall a. (HasEscrowIDs a, Typeable a) => BearsValue -> Maybe a
+unBearer :: forall a. (HasEscrowIDs a) => BearsValue -> Maybe a
 unBearer (BearsValue x)
   | Just HRefl <- typeOf x `eqTypeRep` (typeRep :: TypeRep a) = Just x
   | otherwise = Nothing
 
 -- | Like 'fromDyn'.
-unBear :: forall a. (HasEscrowIDs a, Typeable a) => BearsValue -> a -> a
+unBear :: forall a. (HasEscrowIDs a) => BearsValue -> a -> a
 unBear (BearsValue x) x0 
   | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
   | otherwise = x0
