@@ -159,7 +159,7 @@ nonceSetter Nothing (Just y) = Just (y, 0)
 nonceSetter _ _ = Nothing
 
 -- | Just an 'IntMap' constructor, indexing consecutively from 0.
-listToOutputs :: [AbstractGlobalContract] -> Outputs
+listToOutputs :: OutputsList -> Outputs
 listToOutputs l = 
   Outputs
   {

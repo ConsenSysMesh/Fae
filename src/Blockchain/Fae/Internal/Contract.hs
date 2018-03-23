@@ -74,10 +74,11 @@ data TXData =
 
 -- ** Internal contract monads
 
+type OutputsList = [AbstractGlobalContract]
 -- | Monad modifier; several of ours use escrows.
 type EscrowsT = StateT Escrows
 -- | The internal operational monad for Fae contracts.
-type FaeExternalM = ReaderT TXData (Writer [AbstractGlobalContract])
+type FaeExternalM = ReaderT TXData (Writer OutputsList)
 -- | The authoring monad for Fae contracts (when wrapped in 'FaeM')
 type FaeContractM argType valType = 
   EscrowsT (SuspendT (WithEscrows argType) (WithEscrows valType) FaeExternalM)
@@ -411,11 +412,11 @@ takeEscrow eID = do
 
 -- ** Laziness
 
--- | Tethers the possible errors in the internal contract state to the
--- validity of the return value, as well as sanitizing the monad itself if
--- it has become undefined.
+-- | So that a contract with a bad escrow map doesn't get saved.  Note that
+-- this doesn't detect deep errors, i.e. errors that only arise when an
+-- escrow is called.  Caveat emptor!
 protect :: valType -> FaeTXM valType
 protect y = do
-  ~(escrows, outputs) <- listen get
-  return $ escrows `deepseq` outputs `deepseq` y
+  escrows <- get 
+  return $ escrows `deepseq` y
 

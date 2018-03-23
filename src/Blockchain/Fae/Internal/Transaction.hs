@@ -47,6 +47,8 @@ type FaeStorageT = StateT Storage
 
 -- * Functions
 
+-- ** Running transactions
+
 -- | Runs a transaction on its inputs, with some basic information about
 -- the context.
 runTransaction :: 
@@ -65,13 +67,13 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
       txSigners,
       result = Result (undefined :: a)
     }
-  ~(result, outputs) <- runTX $ do
-    inputsL <- runInputContracts inputArgs
-    lift $ doTX inputsL fallback isReward f
+  ~(result, outputs) <- runTX $ runInputContracts inputArgs >>= 
+    lift . (withReward >=> doTX f fallback . getInputValues)
   txStorage %= fmap (\txE -> txE{result, outputs})
 
   where 
     txStorage = _getStorage . at txID
+
     inputIDs = map fst inputArgs
     defaultIOs = flip map inputIDs $ \cID ->
       (
@@ -79,43 +81,48 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
         InputOutputVersions (withoutNonce cID) emptyOutputs emptyVersionMap
       )
     inputOrder = map fst defaultIOs
+    
     runTX = mapStateT $ 
       fmap fst . runWriterT . flip runReaderT txData . flip evalStateT escrows
     txData = TXData{ thisTXSigners = txSigners, thisTXID = txID }
     escrows = Escrows { escrowMap = Map.empty, nextID }
     ShortContractID nextID = txID
- 
--- | Actually perform the transaction
-doTX :: 
-  (HasEscrowIDs inputs, GetInputValues inputs, Show a) => 
-  [BearsValue] -> [Transaction inputs ()] -> Bool -> 
-  Transaction inputs a -> FaeTXM (Result, Outputs)
-doTX inputsL fallbacks isReward f = do
-  ~(input, unused) <- getInputValues <$> withReward inputsL
-  if null unused
-  then fmap (bimap Result listToOutputs) . listen $ do
-    result <- getFae $ f input
-    unless (unsafeIsDefined result) $ do
-      -- If the transaction fails, it has to be rolled back.
-      censor (const []) $ return ()
-      doFallback fallbacks input
-  else return $ throw TooManyInputs
 
-  where
     withReward inputsL
       | isReward = do
           eID <- getFae $ newEscrow [] $ \Token -> spend Reward
           return $ bearer eID : inputsL
       | otherwise = return inputsL
+ 
+-- | Actually perform the transaction.
+doTX :: 
+  (HasEscrowIDs inputs, GetInputValues inputs, Show a) => 
+  Transaction inputs a -> [Transaction inputs ()] -> 
+  inputs -> FaeTXM (Result, Outputs)
+doTX f fallbacks x = 
+  (_2 %~ listToOutputs . force) <$> callTX (doFallbacks fallbacks) x f
 
 -- | Performs all fallback transactions, ignoring errors.
-doFallback :: [Transaction inputs ()] -> inputs -> FaeTXM ()
-doFallback fallbacks input = forM_ fallbacks $ \tx -> do
-  result <- getFae $ tx input 
-  let 
-    successful = unsafeIsDefined result
-    act = if successful then id else censor (const [])
-  act $ return ()
+doFallbacks :: [Transaction inputs ()] -> inputs -> FaeTXM OutputsList
+doFallbacks fallbacks x = fmap concat . 
+  forM fallbacks $ fmap snd . callTX (const $ return []) x
+
+-- | Calls the transaction function, keeping the metadata safe.  Escrows
+-- are saved in advance and restored before running the fallback function,
+-- and errors in the call itself or its outputs are deferred to the return
+-- value.
+callTX :: 
+  (Show a) =>
+  (inputs -> FaeTXM OutputsList) -> inputs -> 
+  Transaction inputs a -> FaeTXM (Result, OutputsList)
+callTX g x f = do
+  escrows <- get
+  let fallback = put escrows >> g x
+  ~(y, w) <- listen . getFae $ f x
+  let result = w `deepseq` Result y
+  (result,) <$> if unsafeIsDefined result then return w else fallback
+
+-- ** Running contracts
 
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
@@ -133,17 +140,16 @@ runInputContract cID arg (results, vers) = do
   ~(result, ioV, vers', gAbsM) <- do
     fAbs <- use $ at cID . defaultLens (throw $ BadInput cID)
     lift $ runContract cID vers fAbs arg
-  -- Success means that the result and continuation are defined.
-  let 
-    testVal = gAbsM `deepseq` result
-    ioV' = testVal `seq` ioV
-    successful = unsafeIsDefined testVal
+
+  -- We don't update the contract if it didn't return cleanly
+  let successful = unsafeIsDefined result
   when successful $ at cID .= gAbsM
+
   txID <- view _thisTXID
   -- Important here that 'ioV', the new versions, are the /first/
   -- argument to 'combineIOV'; see the comments for that function.
   _getStorage . at txID %= 
-    fmap (_inputOutputs . at (shorten cID) %~ Just . maybe ioV' (combineIOV ioV'))
+    fmap (_inputOutputs . at (shorten cID) %~ Just . maybe ioV (combineIOV ioV))
   return (results |> result, vers')
 
 -- | Executes the contract function, returning the result, the structured
@@ -170,4 +176,10 @@ runContract cID vers fAbs arg = do
             addContractVersions cID vMap vers
           )
       | otherwise = (emptyVersionMap, vers)
-  censor (const []) $ return (result, InputOutputVersions{..}, vers', gAbsM)
+  let 
+    -- The actual result of the contract includes both 'result' and also
+    -- the outputs and continuation function, so we link their fates.
+    result' = gAbsM `deepseq` outputsL `seq` result
+    iov = result' `seq` InputOutputVersions{..} 
+  return (result', iov, vers', gAbsM)
+

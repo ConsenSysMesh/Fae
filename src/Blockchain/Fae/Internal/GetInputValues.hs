@@ -31,11 +31,10 @@ import Numeric.Natural
 -- the moment, the member function is not exported, so you can't write your
 -- own implementations.
 class GetInputValues a where
-  getInputValues :: [BearsValue] -> (a, [BearsValue])
-  default 
-    getInputValues :: 
-      (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
-  getInputValues = defaultGetInputValues
+  getInputValues :: [BearsValue] -> a
+  default getInputValues :: (HasEscrowIDs a, Typeable a) => [BearsValue] -> a
+  -- Dangerous, ignores excess inputs
+  getInputValues = fst . defaultGetInputValues
 
 -- | Generic helper class
 class GGetInputValues f where

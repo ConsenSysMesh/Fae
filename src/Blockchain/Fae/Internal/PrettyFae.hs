@@ -158,7 +158,10 @@ displayException ::
 displayException doc = 
   catchAll (liftIO $ evaluate $ force doc) (return . showException)
 
--- | Actually prints the exception nicely.
+-- | Actually prints the exception nicely.  Due to call stack cruft we only
+-- take the first line.
 showException :: SomeException -> VDoc
-showException e = text "<exception>" <+> text (show e)
+showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
+  safeHead [] = []
+  safeHead (x : _) = x
 
