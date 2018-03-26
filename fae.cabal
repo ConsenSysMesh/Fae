@@ -5,7 +5,7 @@ name:                fae
 --   *.*.c.* -> *.*.(c + 1).0 : Bugfixes that may change the (incorrect) behavior of existing code
 --                              or minor, compatible new features
 --   *.*.*.d -> *.*.*.(d + 1) : Adding omitted exports, GHC extensions, cosmetic stuff, demos ...
-version:             1.0.1.0
+version:             1.0.2.0
 -- synopsis:
 -- description:
 homepage:            https://github.com/Consensys/Fae

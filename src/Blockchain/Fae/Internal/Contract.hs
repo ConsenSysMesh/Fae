@@ -74,6 +74,7 @@ data TXData =
 
 -- ** Internal contract monads
 
+-- | Useful alias for a rather long term.
 type OutputsList = [AbstractGlobalContract]
 -- | Monad modifier; several of ours use escrows.
 type EscrowsT = StateT Escrows

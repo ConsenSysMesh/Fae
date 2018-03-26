@@ -41,6 +41,7 @@ newtype SuspendStepF a b m =
 
 {- Instances -}
 
+-- | -
 instance MonadTrans (SuspendT a b) where
   lift = SuspendT . lift . lift
 
