@@ -67,10 +67,10 @@ type PublicKey = EdPublicKey
 data PrivateKey = PrivateKey EdPublicKey EdSecretKey deriving (Generic)
 -- | We include the public key along with the signature because there
 -- appears to be no public-key recovery function from Ed25519 signatures.
-data Signature = Signature EdPublicKey EdSignature deriving (Generic)
+data Signature = Signature EdPublicKey EdSignature deriving (Generic, Eq)
 
 -- | A useful abstraction, again allowing semantic improvements in 'sign'.
-data Signed a = Signed {sig :: Signature, body :: a} deriving (Generic)
+data Signed a = Signed {body :: a, sig :: Signature} deriving (Generic)
 
 -- * Type classes
 -- | This is probably a duplicate of some @Hashable@ class, but I want
@@ -213,6 +213,8 @@ instance Digestible Double
 -- | -
 instance Digestible Natural
 -- | -
+instance Digestible BS.ByteString
+-- | -
 instance (Serialize a, Serialize b) => Digestible (a, b)
 -- | -
 instance (Serialize a) => Digestible [a]
@@ -312,6 +314,10 @@ unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig)
   | Ed.verify edPublicKey dig sig = Just pubKey
   | otherwise = Nothing
   where HashDigest dig = digest msg
+
+-- | When we need the public key without validating the signature
+getSigner :: Signature -> PublicKey
+getSigner (Signature pubKey _) = pubKey
 
 -- | Randomly creates a new private key using 'generateSecretKey', which
 -- itself relies on 'MonadRandom'.  Fortunately @cryptonite@ handles the

@@ -11,6 +11,8 @@ If you are writing a Fae client, this module is for you.  It exposes the functio
 -}
 module Blockchain.Fae.FrontEnd
   (
+    -- * Messages
+    module Blockchain.Fae.Internal.Messages,
     -- * Interpreting transactions
     module Blockchain.Fae.Internal.TX,
     -- * Running transactions without interpreting
@@ -42,6 +44,10 @@ import Blockchain.Fae.Internal.IDs hiding
     defaultTraverseEscrowIDs
   )
 import Blockchain.Fae.Internal.IDs.Types
+import Blockchain.Fae.Internal.Messages hiding
+  (
+    unsignedTXMessage, unsignTXMessage
+  )
 import Blockchain.Fae.Internal.PrettyFae (showTransaction)
 import Blockchain.Fae.Internal.Storage hiding 
   (

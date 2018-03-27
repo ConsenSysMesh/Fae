@@ -40,6 +40,7 @@ library
     Blockchain.Fae.Internal.GetInputValues
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
+    Blockchain.Fae.Internal.Messages,
     Blockchain.Fae.Internal.PrettyFae
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Storage
