@@ -2,11 +2,16 @@ module FaeServer.Modules where
 
 import Blockchain.Fae.FrontEnd
 
+import Control.DeepSeq
+
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import qualified Data.ByteString.Char8 as C8
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+
+import Data.Maybe
+import Data.Serialize
 
 import FaeServer.Git
 
@@ -17,18 +22,24 @@ import System.FilePath
 
 makeFilesMap :: 
   [(C8.ByteString, FileInfo LC8.ByteString)] ->
-  TransactionID ->
-  (Maybe C8.ByteString, Map String C8.ByteString)
-makeFilesMap files txID = (txMain, modules) where
-  txMain = addHeader txID . LC8.toStrict . fileContent <$> mainFileM
-  modules = 
-    Map.mapWithKey (fixHeader txID) $ 
-    Map.fromList 
-      [
-        (C8.unpack fileName, LC8.toStrict fileContent) 
-          | ("other", FileInfo{..}) <- files
-      ]
-  mainFileM = lookup "body" files
+  (TX, C8.ByteString, Map String C8.ByteString)
+makeFilesMap files = (tx, mainFile, modules) where
+  tx@TX{..} = 
+    maybe (error "Invalid transaction message") force $
+    txMessageToTX $
+    either (error "Couldn't decode transaction message") id $ 
+    decode $
+    fromMaybe (error "Missing transaction message") $ 
+    getFile "message"
+  mainFile = maybe (error "Missing main module") (addHeader txID) $ getFile "body"
+  modules = Map.mapWithKey (fixHeader txID) $ Map.fromList $ getFiles "other"
+
+  getFile = last . (Nothing :) . map (Just . snd) . getFiles 
+  getFiles name =
+    [
+      (C8.unpack fileName, LC8.toStrict fileContent) 
+        | (name, FileInfo{..}) <- files
+    ]
 
 writeModules :: 
   C8.ByteString -> Map String C8.ByteString -> TransactionID -> IO ()

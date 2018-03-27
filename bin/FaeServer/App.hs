@@ -6,7 +6,6 @@ import Control.Concurrent
 import Control.Concurrent.STM
 
 import Control.Monad
-import Control.DeepSeq
 
 import Data.ByteString.Builder
 import qualified Data.ByteString as B
@@ -45,30 +44,18 @@ serverApp txQueue request respond = do
     viewM = getLast Nothing Just $ getParams "view" 
     lazy = getLast False id $ getParams "lazy" 
     fake = getLast False id $ getParams "fake" 
-    reward = getLast False id $ getParams "reward"
-    keyNames = if null keyNames0 then [("self", "key1")] else keyNames0 where
-      keyNames0 = map uncolon $ getParams "key"
-      uncolon s = (x, tail y) where (x, y) = break (== ':') s
-    inputs = fromMaybe inputsErr $ mapM readMaybe $ getParams "input" where
-      inputsErr = error "Couldn't parse inputs"
-    fallback = getParams "fallback"
+    reward = getLast False id $ getParams "reward" 
 
-  let send = sendTXExecData respond txQueue
   case viewM of
     Just txID 
       | fake -> error "'fake' and 'view' are incompatible parameters"
       | lazy -> error "'lazy and 'view' are incompatible parameters"
       | otherwise -> send $ \callerTID resultVar -> View{..}
-    Nothing -> do
-      tx@TX{pubKeys, txID} <- nextTX keyNames inputs fallback >>= evaluate . force
-      let (mainFileM, modules) = makeFilesMap files txID
-      case mainFileM of
-        Nothing -> respond $ buildResponse $ 
-          intercalate "\n" $ 
-          map (\(x,y) -> x ++ ": " ++ show y) $
-          Map.toList $ 
-          getSigners pubKeys
-        Just mainFile -> send $ \callerTID resultVar -> TXExecData{..} 
+    Nothing -> 
+      let (tx, mainFile, modules) = makeFilesMap files
+      in  send $ \callerTID resultVar -> TXExecData{..} 
+
+  where send = sendTXExecData respond txQueue
 
 sendTXExecData :: 
   (Response -> IO ResponseReceived) -> 
