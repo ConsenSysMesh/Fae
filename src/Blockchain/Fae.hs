@@ -87,11 +87,12 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
+
+import Common.Lens
 
 import qualified Control.DeepSeq as DS
 

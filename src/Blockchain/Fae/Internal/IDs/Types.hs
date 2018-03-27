@@ -14,8 +14,7 @@ version IDs.
 module Blockchain.Fae.Internal.IDs.Types where
 
 import Blockchain.Fae.Internal.Crypto
-import Blockchain.Fae.Internal.Lens
-
+import Common.Lens
 import Control.DeepSeq
 import Data.Map (Map)
 import Data.Serialize

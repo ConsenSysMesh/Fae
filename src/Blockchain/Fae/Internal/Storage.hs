@@ -15,8 +15,9 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Versions
+
+import Common.Lens
 
 import Control.Monad.IO.Class
 import Control.Monad.State

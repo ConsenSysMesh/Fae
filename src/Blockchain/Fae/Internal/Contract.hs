@@ -17,9 +17,10 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Suspend
 import Blockchain.Fae.Internal.Versions
+
+import Common.Lens
 
 import Control.Monad.Reader
 import Control.Monad.State

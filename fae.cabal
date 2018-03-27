@@ -24,7 +24,7 @@ flag static
   default: False
 
 library
-  hs-source-dirs:      src
+  hs-source-dirs:      src, common
   exposed-modules:     
     Blockchain.Fae
     Blockchain.Fae.FrontEnd
@@ -40,7 +40,6 @@ library
     Blockchain.Fae.Internal.GetInputValues
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
-    Blockchain.Fae.Internal.Lens
     Blockchain.Fae.Internal.PrettyFae
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Storage
@@ -48,6 +47,7 @@ library
     Blockchain.Fae.Internal.Transaction
     Blockchain.Fae.Internal.TX
     Blockchain.Fae.Internal.Versions
+    Common.Lens
   build-depends:       
     base >= 4.10 && < 5,
     base16-bytestring,

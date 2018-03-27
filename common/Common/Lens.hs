@@ -1,5 +1,5 @@
 {- |
-Module: Blockchain.Fae.Internal.Lens
+Module: Common.Lens
 Description: Wrapper library for "Control.Lens"
 Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
@@ -8,9 +8,9 @@ Stability: experimental
 
 This module just re-exports "Control.Lens", replacing 'makeLenses' with one that works exactly oppositely to the default one regarding underscored names, and including a utility function.
 -}
-module Blockchain.Fae.Internal.Lens 
+module Common.Lens
   (
-    module Blockchain.Fae.Internal.Lens,
+    module Common.Lens,
     module Control.Lens
   ) where
 

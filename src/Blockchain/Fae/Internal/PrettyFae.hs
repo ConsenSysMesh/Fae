@@ -13,9 +13,10 @@ module Blockchain.Fae.Internal.PrettyFae where
 
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Lens
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
+
+import Common.Lens
 
 import Control.DeepSeq
 import Control.Monad
