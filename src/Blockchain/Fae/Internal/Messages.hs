@@ -28,8 +28,6 @@ import Data.Map (Map)
 
 import GHC.Generics
 
-import Numeric.Natural
-
 -- * Types
 
 -- | The transaction message as transmitted.  This does not include the
@@ -54,7 +52,7 @@ data ModulePreview =
   ModulePreview
   {
     moduleDigest :: Digest,
-    moduleSize :: Natural
+    moduleSize :: Integer
   }
   deriving (Generic)
 
