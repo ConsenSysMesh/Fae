@@ -94,7 +94,7 @@ signTXMessage name privKey txm = txm & _signatures . at name ?~ Right sig where
 unsignTXMessage :: TXMessage -> Maybe TXMessage
 unsignTXMessage txm = do
   signedPubKeys <- mapM getTXSigner $ signatures txm
-  guard $ signedPubKeys == actualPubKeys
+  guard $ not (Map.null signedPubKeys) && signedPubKeys == actualPubKeys
   return utxm
   where
     getTXSigner = either (const Nothing) (fmap Left . unsign . Signed utxm)

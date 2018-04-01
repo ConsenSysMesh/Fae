@@ -38,7 +38,7 @@ makeFilesMap files = (tx, mainFile, modules) where
   getFiles name =
     [
       (C8.unpack fileName, LC8.toStrict fileContent) 
-        | (name, FileInfo{..}) <- files
+        | (name', FileInfo{..}) <- files, name' == name
     ]
 
 writeModules :: 

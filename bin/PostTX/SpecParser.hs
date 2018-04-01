@@ -1,31 +1,18 @@
 {-# LANGUAGE TemplateHaskell #-}
-module PostTX.TXMessage where
-
-import PostTX.EnvVars
+module PostTX.SpecParser where
 
 import Blockchain.Fae (ContractID, TransactionID)
 
-import Control.Lens hiding ((<.>))
+import Common.Lens hiding ((<.>))
 
 import Data.Char
 import Data.List
 import Data.Maybe
 
+import PostTX.EnvVars
+import PostTX.TXSpec
+
 import Prelude hiding (readList)
-
-data TXData =
-  TXData
-  {
-    _bodyM :: Maybe String,
-    _others :: [String],
-    _fallback :: [String],
-    _inputs :: [(ContractID, String)],
-    _keys :: [(String, String)],
-    _reward :: Bool,
-    _parent :: Maybe TransactionID
-  }
-
-makeLenses ''TXData
 
 buildTXData :: String -> IO TXData
 buildTXData txSpec = do
@@ -33,13 +20,13 @@ buildTXData txSpec = do
   readData specLines 
     TXData
     {
-      _bodyM = Nothing, 
-      _others = [], 
-      _fallback = [],
-      _inputs = [],
-      _keys = [], 
-      _reward = False,
-      _parent = Nothing
+      bodyM = Nothing, 
+      others = [], 
+      fallback = [],
+      inputs = [],
+      keys = [], 
+      reward = False,
+      parent = Nothing
     } 
 
 readData :: [String] -> TXData -> IO TXData
@@ -47,18 +34,18 @@ readData [] txData = return txData
 readData (line1 : rest) txData =
   case breakEquals line1 of
     ("", Nothing) -> readData rest txData
-    ("body", _bodyM) -> readData rest txData{_bodyM} 
+    ("body", bodyM) -> readData rest txData{bodyM} 
     ("reward", Just rewardS) -> 
-      let _reward = read rewardS in
-      readData rest txData{_reward} 
+      let reward = read rewardS in
+      readData rest txData{reward} 
     ("parent", Just parentS) -> do
-      _parent <- Just . read <$> resolveLine parentS 
-      readData rest txData{_parent} 
+      parent <- Just . read <$> resolveLine parentS 
+      readData rest txData{parent} 
     ("others", sM) 
-      | maybe True null sM -> readList "others" others rest txData 
+      | maybe True null sM -> readList "others" _others rest txData 
       | otherwise -> forbiddenArgument "others" sM
     ("fallback", sM)
-      | maybe True null sM -> readList "fallback" fallback rest txData
+      | maybe True null sM -> readList "fallback" _fallback rest txData
       | otherwise -> forbiddenArgument "fallback" sM
     ("inputs", sM) 
       | maybe True null sM -> readInputs rest txData
@@ -83,13 +70,13 @@ readList name listLens lines txData
 
 readInputs :: [String] -> TXData -> IO TXData
 readInputs lines txData@TXData{..} = do
-  (pairs, rest) <- readEqualsSpec (null _inputs) "inputs" read lines
-  readData rest txData{_inputs = pairs} 
+  (pairs, rest) <- readEqualsSpec (null inputs) "inputs" read lines
+  readData rest txData{inputs = pairs} 
 
 readKeys :: [String] -> TXData -> IO TXData
 readKeys lines txData@TXData{..} = do
-  (pairs, rest) <- readEqualsSpec (null _keys) "keys" id lines
-  readData rest txData{_keys = pairs} 
+  (pairs, rest) <- readEqualsSpec (null keys) "keys" id lines
+  readData rest txData{keys = pairs} 
 
 readEqualsSpec :: 
   Bool -> String -> (String -> a) -> [String] -> IO ([(a, String)], [String])

@@ -25,17 +25,28 @@ import Control.Concurrent.STM
 
 import Control.Monad
 
+import Data.Maybe
+
 import FaeServer.App
 import FaeServer.Fae
 import FaeServer.Git
 
 import Network.Wai.Handler.Warp hiding (FileInfo)
 
+import System.Directory
+import System.Environment
+import System.FilePath
+
 main :: IO ()
 main = do
+  userHome <- getHomeDirectory
+  faeHome <- fromMaybe (userHome </> "fae") <$> lookupEnv "FAE_HOME"
+  createDirectoryIfMissing True faeHome
+  setCurrentDirectory faeHome
   gitInit
   txQueue <- atomically newTQueue
   tID <- myThreadId
   void $ forkIO $ runFae txQueue tID
   runSettings faeSettings $ serverApp txQueue
+
 

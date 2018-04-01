@@ -135,14 +135,16 @@ executable faeServer
 
 executable postTX
   buildable: True
-  hs-source-dirs: bin
+  hs-source-dirs: bin, common
   main-is: PostTX.hs
   other-modules:
+    Common.Lens
     PostTX.Args
     PostTX.EnvVars
     PostTX.Network
+    PostTX.SpecParser
     PostTX.Submit
-    PostTX.TXMessage
+    PostTX.TXSpec
     PostTX.View
   if flag(static)
     ld-options: -static
@@ -150,12 +152,15 @@ executable postTX
   build-depends:
     base,
     bytestring,
+    cereal,
+    containers,
     directory,
     fae,
     filepath,
     http-client,
     lens,
     process,
+    template-haskell,
     text
   default-language: Haskell2010
   default-extensions:

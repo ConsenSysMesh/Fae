@@ -60,22 +60,3 @@ reThrow tID = handleAll (liftIO . throwTo tID)
 ioAtomically :: (MonadIO m) => STM a -> m a
 ioAtomically = liftIO . atomically
 
-nextTX :: [(String, String)] -> Inputs -> [String] -> IO TX
-nextTX keyNames inputs fallback = do
-  signerNonces <- forM keyNames $ \(signer, keyName) -> do
-    keyExists <- doesFileExist keyName
-    unless keyExists $ do
-      privKey <- newPrivateKey
-      B.writeFile keyName $ S.encode (privKey, 0 :: Int) 
-    decodeE <- S.decode <$> B.readFile keyName
-    let (privKey, nonce :: Int) = either error id decodeE
-    B.writeFile keyName $ S.encode (privKey, nonce + 1)
-    let Just pubKey = public privKey
-    return (signer, (pubKey, nonce))
-  let 
-    pubKeys = Signers $ fmap fst $ Map.fromList signerNonces
-    txID = ShortContractID $ digest signerNonces
-  return TX{..}
-
-
-

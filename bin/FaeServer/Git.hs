@@ -11,8 +11,9 @@ import System.Process
 
 gitInit :: IO ()
 gitInit = do
-  setEnv "GIT_DIR" "./.fae-git"
-  removePathForcibly "./.fae-git"
+  setEnv "GIT_DIR" "git"
+  removePathForcibly "git"
+  removePathForcibly "Blockchain"
   runGitWithArgs "init" ["--quiet"]
   runGitWithArgs "config" ["user.name", "Fae"]
   runGitWithArgs "config" ["user.email", "fae"]
