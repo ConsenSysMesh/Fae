@@ -30,7 +30,7 @@ submit txName host fake lazy txSpec =
 
 buildRequest :: 
   String -> String -> Bool -> Bool -> TXSpec -> IO Request
-buildRequest txName host fake lazy TXSpec{..} =
+buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
   flip formDataBody (requestURL host) $
     modulePart "message" txName (S.encode txMessage) : 
     uncurry (modulePart "body") mainModule :

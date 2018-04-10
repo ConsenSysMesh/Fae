@@ -5,8 +5,10 @@ import Blockchain.Fae (ContractID, TransactionID)
 
 import Common.Lens hiding ((<.>))
 
+import qualified Data.ByteString.Char8 as C8
 import Data.Char
 import Data.List
+import qualified Data.Map as Map
 import Data.Maybe
 
 import PostTX.EnvVars
@@ -14,27 +16,43 @@ import PostTX.TXSpec
 
 import Prelude hiding (readList)
 
-buildTXData :: String -> IO TXData
-buildTXData txSpec = do
-  specLines <- lines <$> readFile txSpec
-  readData specLines 
+import System.FilePath
+
+buildTXData :: String -> IO (TXData LoadedModules)
+buildTXData txName = do
+  specLines <- lines <$> readFile txName
+  parsedData@TXData{dataModules = ParsedModules{..}, ..} <- readData specLines 
     TXData
     {
-      bodyM = Nothing, 
-      others = [], 
+      dataModules = 
+        ParsedModules
+        {
+          bodyM = Nothing, 
+          others = []
+        },
       fallback = [],
       inputs = [],
       keys = [], 
       reward = False,
       parent = Nothing
     } 
+  mainModule <- readResolved $ fromMaybe txName bodyM
+  otherModules <- Map.fromList <$> mapM readResolved others
+  return parsedData{dataModules = LoadedModules{..}}
 
-readData :: [String] -> TXData -> IO TXData
+  where 
+    readResolved name = do
+      rawFile <- readFile fName
+      fixedFile <- fmap unlines $ resolveImportVars $ lines rawFile
+      return (fName, C8.pack fixedFile)
+      where fName = name <.> "hs"
+
+readData :: [String] -> TXData ParsedModules -> IO (TXData ParsedModules)
 readData [] txData = return txData
 readData (line1 : rest) txData =
   case breakEquals line1 of
     ("", Nothing) -> readData rest txData
-    ("body", bodyM) -> readData rest txData{bodyM} 
+    ("body", bodyM) -> readData rest (txData & _dataModules . _bodyM .~ bodyM)
     ("reward", Just rewardS) -> 
       let reward = read rewardS in
       readData rest txData{reward} 
@@ -42,7 +60,8 @@ readData (line1 : rest) txData =
       parent <- Just . read <$> resolveLine parentS 
       readData rest txData{parent} 
     ("others", sM) 
-      | maybe True null sM -> readList "others" _others rest txData 
+      | maybe True null sM -> 
+          readList "others" (_dataModules . _others) rest txData 
       | otherwise -> forbiddenArgument "others" sM
     ("fallback", sM)
       | maybe True null sM -> readList "fallback" _fallback rest txData
@@ -58,7 +77,9 @@ readData (line1 : rest) txData =
     forbiddenArgument name (Just s) = 
       error $ "Forbidden argument to '" ++ name ++ "': " ++ s
 
-readList :: String -> Lens' TXData [String] -> [String] -> TXData -> IO TXData
+readList :: 
+  String -> Lens' (TXData ParsedModules) [String] -> [String] -> 
+  TXData ParsedModules -> IO (TXData ParsedModules)
 readList name listLens lines txData 
   | null $ txData ^. listLens = readData rest $ txData & listLens .~ list
   | otherwise = error $ "Multiple '" ++ name ++ "' blocks"
@@ -68,12 +89,12 @@ readList name listLens lines txData
     catchInvalid l = fromMaybe (error $ "Invalid " ++ name ++ " spec: " ++ l) 
     (dashList, rest) = span (isPrefixOf "  -") lines
 
-readInputs :: [String] -> TXData -> IO TXData
+readInputs :: [String] -> TXData ParsedModules -> IO (TXData ParsedModules)
 readInputs lines txData@TXData{..} = do
   (pairs, rest) <- readEqualsSpec (null inputs) "inputs" read lines
   readData rest txData{inputs = pairs} 
 
-readKeys :: [String] -> TXData -> IO TXData
+readKeys :: [String] -> (TXData ParsedModules) -> IO (TXData ParsedModules)
 readKeys lines txData@TXData{..} = do
   (pairs, rest) <- readEqualsSpec (null keys) "keys" id lines
   readData rest txData{keys = pairs} 

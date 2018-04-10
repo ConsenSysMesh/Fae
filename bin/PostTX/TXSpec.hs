@@ -17,20 +17,16 @@ import Data.Serialize (Serialize)
 
 import Data.Maybe
 
-import PostTX.EnvVars
-
 import System.Directory
 import System.Environment
-import System.FilePath
 
 import Debug.Trace
 
 -- * Spec types
-data TXData =
+data TXData a =
   TXData
   {
-    bodyM :: Maybe String,
-    others :: [String],
+    dataModules :: a,
     fallback :: [String],
     inputs :: [(ContractID, String)],
     keys :: [(String, String)],
@@ -42,10 +38,23 @@ data TXSpec =
   TXSpec
   {
     txMessage :: TXMessage,
-    mainModule :: (FileName, Module),
-    otherModules :: ModuleMap,
+    specModules :: LoadedModules,
     isReward :: Bool,
     parentM :: Maybe TransactionID
+  }
+
+data ParsedModules =
+  ParsedModules
+  {
+    bodyM :: Maybe String,
+    others :: [String]
+  }
+
+data LoadedModules =
+  LoadedModules
+  {
+    mainModule :: (FileName, Module),
+    otherModules :: ModuleMap
   }
 
 type Modules = ModuleMap
@@ -56,30 +65,26 @@ type Identifier = String
 -- * Template Haskell
 makeLenses ''TXData
 makeLenses ''TXSpec
+makeLenses ''ParsedModules
 
 -- * Spec constructor
-txDataToSpec :: String -> TXData -> IO TXSpec
-txDataToSpec txName TXData{..} = do
-  mainModule <- readResolved $ fromMaybe txName bodyM
-  otherModules <- Map.fromList <$> mapM readResolved others
-  let keys' = if null keys then [("self", "self")] else keys
-  privKeys <- Map.fromList <$> mapM (sequence . over _2 getPrivateKey) keys'
+txDataToSpec :: TXData LoadedModules -> IO TXSpec
+txDataToSpec TXData{..} = do
+  let 
+    keys' = if null keys then [("self", "self")] else keys
+    (signerNames, keyNames) = unzip keys'
+  (privKeys, keyNonces) <- unzip <$> mapM getPrivateKey keyNames
+  let 
+    salt = show $ sum keyNonces
+    privKeyMap = Map.fromList $ zip signerNames privKeys 
   return $ 
-    makeTXSpec mainModule otherModules inputs privKeys fallback parent reward
-
-  where 
-    readResolved name = do
-      rawFile <- readFile fName
-      fixedFile <- fmap unlines $ resolveImportVars $ lines rawFile
-      return (fName, C8.pack fixedFile)
-      where fName = name <.> "hs"
+    makeTXSpec dataModules inputs privKeyMap fallback parent reward salt
 
 makeTXSpec ::
-  (FileName, Module) -> ModuleMap -> Inputs -> Keys -> 
-  [Identifier] -> Maybe TransactionID -> Bool -> 
+  LoadedModules -> Inputs -> Keys -> [Identifier] -> 
+  Maybe TransactionID -> Bool -> String ->
   TXSpec
-makeTXSpec mainModule otherModules inputCalls keys fallbackFunctions 
-           parentM isReward = 
+makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt = 
   TXSpec
   {
     txMessage = addSignatures keys $
@@ -88,13 +93,14 @@ makeTXSpec mainModule otherModules inputCalls keys fallbackFunctions
         mainModulePreview = uncurry makePreview mainModule,
         otherModulePreviews = Map.mapWithKey makePreview otherModules,
         signatures = fmap (maybe (error "Bad private key") Left . public) keys,
-        salt = "",
         ..
       },
     ..
   }
 
   where
+    LoadedModules{..} = specModules
+
     makePreview :: FileName -> Module -> ModulePreview
     makePreview fName moduleBS =
       ModulePreview
@@ -106,18 +112,19 @@ makeTXSpec mainModule otherModules inputCalls keys fallbackFunctions
     addSignatures :: Keys -> TXMessage -> TXMessage
     addSignatures keys m = Map.foldrWithKey signTXMessage m keys
 
-getPrivateKey :: String -> IO PrivateKey
+getPrivateKey :: String -> IO (PrivateKey, Int)
 getPrivateKey name = do
-  userHome <- getHomeDirectory
-  faeHome <- fromMaybe (userHome </> "fae") <$> lookupEnv "FAE_HOME"
-  createDirectoryIfMissing True faeHome
-  let fName = faeHome </> name
-  keyExists <- doesFileExist fName
+  keyExists <- doesFileExist name
   if keyExists
-  then either (error $ "Couldn't decode private key: " ++ name) id . 
-    S.decode <$> BS.readFile fName
+  then do
+    p@(key, nonce) <- 
+      either (error $ "Couldn't decode private key: " ++ name) id . 
+        S.decode <$> BS.readFile name
+    BS.writeFile name $ S.encode (key, nonce + 1)
+    return p
   else do
     privKey <- newPrivateKey
-    BS.writeFile fName $ S.encode privKey
-    setPermissions fName $ setOwnerReadable True emptyPermissions
-    return privKey
+    let p = (privKey, 0)
+    BS.writeFile name $ S.encode p
+    return p
+
