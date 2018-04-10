@@ -62,7 +62,6 @@ library
     hint,
     lens,
     memory,
-    monad-coroutine,
     mtl,
     pretty,
     template-haskell,
@@ -96,18 +95,23 @@ library
 
 executable faeServer
   buildable: True
-  hs-source-dirs:      bin
+  hs-source-dirs:      bin, common
   main-is:             FaeServer.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   other-modules:
+    Common.Lens
+    Common.ProtocolT
     FaeServer.App
     FaeServer.Concurrency
     FaeServer.Fae
+    FaeServer.Faeth
     FaeServer.Git
     FaeServer.History
     FaeServer.Modules
   build-depends:       
+    aeson,
     base, 
+    base16-bytestring,
     bytestring,
     cereal,
     containers,
@@ -116,19 +120,30 @@ executable faeServer
     fae,
     filepath,
     http-types,
+    lens,
+    lifted-base,
     mtl,
     process,
     stm,
+    template-haskell,
+    text,
     transformers,
     unix,
     wai,
     wai-extra,
-    warp
+    warp,
+    websockets
   default-language:    Haskell2010
   default-extensions:
+    DeriveGeneric
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
     LambdaCase
+    MultiParamTypeClasses
     NamedFieldPuns
     OverloadedStrings
+    RankNTypes
     RecordWildCards
     ScopedTypeVariables
     TypeApplications
@@ -139,8 +154,10 @@ executable postTX
   main-is: PostTX.hs
   other-modules:
     Common.Lens
+    Common.ProtocolT
     PostTX.Args
     PostTX.EnvVars
+    PostTX.Faeth
     PostTX.Network
     PostTX.SpecParser
     PostTX.Submit
@@ -150,7 +167,9 @@ executable postTX
     ld-options: -static
     ghc-options: -fPIC
   build-depends:
+    aeson,
     base,
+    base16-bytestring,
     bytestring,
     cereal,
     containers,
@@ -159,13 +178,20 @@ executable postTX
     filepath,
     http-client,
     lens,
+    mtl,
     process,
     template-haskell,
-    text
+    text,
+    websockets
   default-language: Haskell2010
   default-extensions:
+    DeriveGeneric
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
     RankNTypes
     RecordWildCards
+    MultiParamTypeClasses
     NamedFieldPuns
     OverloadedStrings
     TupleSections
