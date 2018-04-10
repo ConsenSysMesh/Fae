@@ -55,6 +55,3 @@ runGitWithArgs cmd args = do
           ]
       exitFailure
  
-nullID :: TransactionID
-nullID = ShortContractID $ digest ()
-

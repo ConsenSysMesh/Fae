@@ -6,6 +6,8 @@ import Control.Concurrent
 import Control.Concurrent.STM
 
 import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.Trans
 
 import Data.ByteString.Builder
 import qualified Data.ByteString as B
@@ -30,14 +32,20 @@ import Network.Wai.Parse
 
 import Text.Read (readMaybe)
 
+runFaeServer :: 
+  SendTXExecData (TXQueueT IO) -> TXQueueT IO ()
+runFaeServer sendTXExecData = do
+  app <- serverApp sendTXExecData 
+  liftIO $ runSettings faeSettings app
+
 faeSettings :: Settings
 faeSettings = defaultSettings &
   setPort 27182 &
   setOnExceptionResponse exceptionResponse
 
-serverApp :: TXQueue -> Application
-serverApp txQueue request respond = do
-  (params, files) <- parseRequestBody lbsBackEnd request
+serverApp :: SendTXExecData (TXQueueT IO) -> TXQueueT IO Application
+serverApp sendTXExecData = bringOut $ \request respond -> do
+  (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
   let 
     getParams = getParameters params
     parentM = getLast Nothing Just $ getParams "parent" 
@@ -46,8 +54,9 @@ serverApp txQueue request respond = do
     fake = getLast False id $ getParams "fake" 
     reward = getLast False id $ getParams "reward" 
 
+  let send = waitResponse respond sendTXExecData
   case viewM of
-    Just txID 
+    Just viewTXID 
       | fake -> error "'fake' and 'view' are incompatible parameters"
       | lazy -> error "'lazy and 'view' are incompatible parameters"
       | otherwise -> send $ \callerTID resultVar -> View{..}
@@ -55,20 +64,22 @@ serverApp txQueue request respond = do
       let (tx, mainFile, modules) = makeFilesMap files
       in  send $ \callerTID resultVar -> TXExecData{..} 
 
-  where send = sendTXExecData respond txQueue
+  where
+    bringOut txqApp =
+      ReaderT $ \txq -> return $ \req resp -> runReaderT (txqApp req resp) txq
 
-sendTXExecData :: 
+waitResponse :: 
+  (TXQueueM m) =>
   (Response -> IO ResponseReceived) -> 
-  TXQueue -> 
+  SendTXExecData m -> 
   (ThreadId -> TMVar String -> TXExecData) -> 
-  IO ResponseReceived
-sendTXExecData respond txQueue constr = do
-  callerTID <- myThreadId
-  resultVar <- atomically newEmptyTMVar
+  m ResponseReceived
+waitResponse respond sendTXExecData constr = do
+  callerTID <- liftIO myThreadId
+  resultVar <- ioAtomically newEmptyTMVar
   let txExecData = constr callerTID resultVar
-  atomically $ writeTQueue txQueue txExecData
-  result <- atomically $ takeTMVar resultVar
-  respond $ buildResponse result
+  result <- waitRunTXExecData sendTXExecData txExecData
+  liftIO $ respond $ buildResponse result
 
 getParameters :: [(C8.ByteString, C8.ByteString)] -> C8.ByteString -> [String]
 getParameters params paramName = 

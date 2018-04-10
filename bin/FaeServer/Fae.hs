@@ -22,13 +22,15 @@ import FaeServer.Modules
 import System.Directory
 import System.Exit
 
-runFae :: TXQueue -> ThreadId -> IO ()
-runFae txQueue mainTID = reThrow mainTID $ runFaeInterpretWithHistory $ 
+runFae :: ThreadId -> TXQueueT IO ()
+runFae mainTID = reThrow mainTID $ runFaeInterpretWithHistory $ 
   forever $ do
-    txExecData <- ioAtomically $ readTQueue txQueue
+    txExecData <- readTXExecData
     reThrowExit mainTID (callerTID txExecData) $ runTXExecData mainTID txExecData
 
-runTXExecData :: ThreadId -> TXExecData -> FaeInterpretWithHistory ()
+runTXExecData :: 
+  (MonadIO m, MonadMask m) => 
+  ThreadId -> TXExecData -> FaeInterpretWithHistoryT m ()
 runTXExecData mainTID TXExecData{tx=tx@TX{..}, ..} = do
   dup <- gets $ Map.member txID . txStorageAndCounts
   when dup $ error $ "Duplicate transaction ID: " ++ show txID
@@ -47,16 +49,6 @@ runTXExecData mainTID TXExecData{tx=tx@TX{..}, ..} = do
 
 runTXExecData mainTID View{..} = do
   void $ recallHistory parentM
-  txResult <- lift $ showTransaction txID
+  txResult <- lift $ showTransaction viewTXID
   ioAtomically $ putTMVar resultVar txResult
-
-reThrowExit :: (MonadIO m, MonadCatch m) => ThreadId -> ThreadId -> m () -> m ()
-reThrowExit mainTID callerTID =
-  reThrow callerTID . handle (liftIO . throwTo @ExitCode mainTID)
-
-reThrow :: (MonadIO m, MonadCatch m) => ThreadId -> m () -> m ()
-reThrow tID = handleAll (liftIO . throwTo tID)
-
-ioAtomically :: (MonadIO m) => STM a -> m a
-ioAtomically = liftIO . atomically
 

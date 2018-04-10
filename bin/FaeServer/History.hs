@@ -2,6 +2,8 @@ module FaeServer.History where
 
 import Blockchain.Fae.FrontEnd
 
+import Common.Lens ((&))
+
 import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Trans.Class
@@ -11,6 +13,7 @@ import qualified Data.Map as Map
 
 import Data.Maybe
 
+import FaeServer.Concurrency
 import FaeServer.Git
 
 -- | Tracks all post-transaction states for the purpose of rolling back.
@@ -23,9 +26,10 @@ data TXHistory =
   }
 
 -- | Monad for tracking history
-type FaeInterpretWithHistory = StateT TXHistory FaeInterpret
+type FaeInterpretWithHistoryT m = StateT TXHistory (FaeInterpretT m)
 
-recallHistory :: Maybe TransactionID -> FaeInterpretWithHistory Integer
+recallHistory :: 
+  (MonadIO m) => Maybe TransactionID -> FaeInterpretWithHistoryT m Integer
 recallHistory parentM = do
   TXHistory{..} <- get
   let parent = fromMaybe bestTXID parentM
@@ -36,7 +40,8 @@ recallHistory parentM = do
   lift $ put s
   return n
 
-updateHistory :: TransactionID -> Integer -> FaeInterpretWithHistory ()
+updateHistory :: 
+  (MonadIO m) => TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
 updateHistory txID txCount = do
   TXHistory{..} <- get
   s <- lift get
@@ -48,13 +53,16 @@ updateHistory txID txCount = do
   liftIO $ gitCommit txID
   put $ TXHistory txStorageAndCounts' bestTXID' bestTXCount'
 
-runFaeInterpretWithHistory :: FaeInterpretWithHistory () -> IO ()
-runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory where
-  emptyTXHistory = 
-    TXHistory
-    {
-      txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 0),
-      bestTXID = nullID,
-      bestTXCount = 0
-    }
+runFaeInterpretWithHistory :: 
+  (MonadMask m, MonadIO m) => FaeInterpretWithHistoryT m () -> m ()
+runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory 
+
+  where
+    emptyTXHistory = 
+      TXHistory
+      {
+        txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 0),
+        bestTXID = nullID,
+        bestTXCount = 0
+      }
 

@@ -20,18 +20,25 @@
 - transaction input list.
 -}
 
+import Common.ProtocolT
+
 import Control.Concurrent
+import Control.Concurrent.Lifted (fork)
 import Control.Concurrent.STM
 
 import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.Trans
 
 import Data.Maybe
 
 import FaeServer.App
+import FaeServer.Concurrency
 import FaeServer.Fae
+import FaeServer.Faeth
 import FaeServer.Git
 
-import Network.Wai.Handler.Warp hiding (FileInfo)
+import qualified Network.WebSockets as WS
 
 import System.Directory
 import System.Environment
@@ -44,9 +51,17 @@ main = do
   createDirectoryIfMissing True faeHome
   setCurrentDirectory faeHome
   gitInit
-  txQueue <- atomically newTQueue
-  tID <- myThreadId
-  void $ forkIO $ runFae txQueue tID
-  runSettings faeSettings $ serverApp txQueue
 
+  tID <- myThreadId
+  txQueue <- atomically newTQueue
+  args <- getArgs
+
+  flip runReaderT txQueue $ do
+    void $ fork $ runFae tID
+    case args of
+      [] -> runFaeServer queueTXExecData 
+      ["--faeth"] -> runFaeth tID
+      ["--new-faeth-account", passphrase] -> runProtocolT nullAddress $ do
+        EthAccount{address} <- newAccount "faeth" passphrase
+        liftIO $ putStrLn $ "New Faeth account: " ++ show address
 

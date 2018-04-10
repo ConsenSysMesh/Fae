@@ -22,7 +22,7 @@ import System.FilePath
 
 makeFilesMap :: 
   [(C8.ByteString, FileInfo LC8.ByteString)] ->
-  (TX, C8.ByteString, Map String C8.ByteString)
+  (TX, Module, ModuleMap)
 makeFilesMap files = (tx, mainFile, modules) where
   tx@TX{..} = 
     maybe (error "Invalid transaction message") force $
@@ -42,7 +42,7 @@ makeFilesMap files = (tx, mainFile, modules) where
     ]
 
 writeModules :: 
-  C8.ByteString -> Map String C8.ByteString -> TransactionID -> IO ()
+  Module -> ModuleMap -> TransactionID -> IO ()
 writeModules mainFile modules txID = do
   let
     txIDName = "TX" ++ show txID
@@ -56,7 +56,7 @@ writeModules mainFile modules txID = do
   C8.writeFile (txDir </> txIDName <.> "hs") mainFile
   sequence_ $ Map.mapWithKey writeModule modules
 
-privateModule :: TransactionID -> String -> C8.ByteString
+privateModule :: TransactionID -> String -> Module
 privateModule txID fileName = C8.pack $
   "module " ++ moduleName ++ "(module " ++ realModuleName ++ ") where\n\n" ++
   "import " ++ realModuleName ++ "\n" 
@@ -64,16 +64,16 @@ privateModule txID fileName = C8.pack $
     moduleName = takeBaseName fileName
     realModuleName = txModuleName txID ++ "." ++ moduleName
 
-addHeader :: TransactionID -> C8.ByteString -> C8.ByteString
+addHeader :: TransactionID -> Module -> Module
 addHeader txID = C8.append $ C8.pack $
   "module " ++ txModuleName txID ++ " where\n\n" ++
   "import Blockchain.Fae\n\n"
 
-fixHeader :: TransactionID -> String -> C8.ByteString -> C8.ByteString
+fixHeader :: TransactionID -> String -> Module -> Module
 fixHeader txID fileName = replaceModuleNameWith $ 
   txModuleName txID ++ "." ++ takeBaseName fileName
 
-replaceModuleNameWith :: String -> C8.ByteString -> C8.ByteString
+replaceModuleNameWith :: String -> Module -> Module
 replaceModuleNameWith moduleName contents = 
   pre `C8.append` C8.pack ("module " ++ moduleName ++ " ") `C8.append` post 
   where
