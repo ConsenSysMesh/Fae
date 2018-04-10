@@ -72,7 +72,7 @@ data TX =
 newtype UnquotedString = UnquotedString String
 
 -- | Monad for interpreting Fae transactions
-type FaeInterpret = InterpreterT (FaeStorageT IO)
+type FaeInterpretT m = InterpreterT (FaeStorageT m)
 
 {- Instances -}
 
@@ -88,12 +88,16 @@ instance Show UnquotedString where
   show (UnquotedString s) = s
 
 -- | -
-instance MonadState Storage FaeInterpret where
+instance (Monad m) => MonadState Storage (FaeInterpretT m) where
   state = lift . state
   put = lift . put
   get = lift get
 
 -- * Functions
+
+-- | The transaction ID of the "genesis transaction"
+nullID :: TransactionID
+nullID = ShortContractID $ digest ()
 
 -- | Interprets a transaction, looking it up as a module named after its
 -- transaction ID; the first argument is whether or not the transaction
@@ -102,7 +106,7 @@ instance MonadState Storage FaeInterpret where
 -- of other transactions.  Now that we dynamically link @faeServer@, the
 -- load-up time for the first transaction is pretty short; subsequent
 -- transactions are faster still.
-interpretTX :: Bool -> TX -> FaeInterpret ()
+interpretTX :: (MonadMask m, MonadIO m) => Bool -> TX -> FaeInterpretT m ()
 interpretTX isReward TX{..} = handle fixGHCErrors $ do
   Int.set [searchPath := thisTXPath]
   loadModules [txSrc]
@@ -132,7 +136,7 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
     qualified varName = txSrc ++ "." ++ varName
 
 -- | Runs the interpreter.
-runFaeInterpret :: FaeInterpret a -> IO a
+runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = 
   fmap (either throw id) $
   flip evalStateT (Storage Map.empty) $ 

@@ -109,4 +109,3 @@ instance Show VersionID where
 
 makeLenses ''Signers
 
-
