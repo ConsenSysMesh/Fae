@@ -40,7 +40,7 @@ runTXExecData mainTID TXExecData{tx=tx@TX{..}, ..} = do
   lift $ interpretTX reward tx
   txResult <-
     if lazy
-    then return $ "Transaction " ++ show txID
+    then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
     else lift $ showTransaction txID
   if fake
   then liftIO gitClean
