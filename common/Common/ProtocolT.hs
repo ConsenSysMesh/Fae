@@ -4,6 +4,8 @@ import Blockchain.Fae.FrontEnd
 
 import Common.Lens hiding ((.=))
 
+import Control.Concurrent
+
 import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
@@ -255,7 +257,20 @@ runProtocolT address x = do
     flip runReaderT address $
     flip evalStateT 0 $
     splitProtocolT x
-  liftIO $ WS.runClient "localhost" 8546 "" $ runReader xWS
+  liftIO $ do
+    tryConnectWS xWS err1
+    threadDelay (30 * 10^6)
+    tryConnectWS xWS err2
+  where 
+    tryConnectWS xWS err = handleAll err $ 
+      WS.runClient host port "" $ runReader xWS
+    err1 _ = putStrLn $ errMsg ++ "  Waiting 30s."
+    err2 _ = error $ errMsg ++ "  Quitting."
+    errMsg =
+      "Couldn't open a websocket connection to the Ethereum client" ++
+      " (" ++ host ++ ":" ++ show port ++ ")."
+    host = "localhost"
+    port = 8546
 
 sendProtocolT :: (ToJSON a, ToRequest a, MonadProtocol m) => a -> m Int
 sendProtocolT sendReqParams = do
