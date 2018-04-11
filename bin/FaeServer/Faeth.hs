@@ -64,7 +64,8 @@ newtype HexInteger = HexInteger { getHexInteger :: Integer }
   deriving (Eq, Ord, Show, Num, Real, Enum, Integral) 
 
 type FaethM = ProtocolT (TXQueueT IO)
-type FaethWatcherM = ContT () (StateT BlockLastTXs (ReaderT ThreadId FaethM))
+type FaethWatcherM = 
+  ContT () (StateT BlockLastTXs (ReaderT (ThreadId, Hex) FaethM))
 type BlockLastTXs = Map EthBlockID TransactionID
 
 instance FromJSON HexInteger where
@@ -128,21 +129,9 @@ faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}
 faethSendTXExecData txED = queueTXExecData txED
 
 runFaethWatcher :: ThreadId -> ThreadId -> FaethM ()
-runFaethWatcher mainTID tID = reThrow mainTID $ do
-  flip runReaderT tID . flip evalStateT Map.empty . evalContT $ do
-    subIDE <- sendReceiveProtocolT ParitySubscribe
-    case subIDE of
-      Left e -> error $ 
-        "Ethereum client returned an error: " ++ show e
-      Right subID -> forever $ getNewBlock subID 
-
-getNewBlock :: Hex -> FaethWatcherM ()
-getNewBlock subID = do
-  EthNewBlock{..} <- receiveRequest "parity_subscription"
-  unless (ethSubID == subID) $ error $
-    "parity_subscribe notification has subscription ID " ++ show ethSubID ++
-    "; expected " ++ show subID
-  either (error . errMessage) (void . recurseBlocks) ethBlockE
+runFaethWatcher mainTID tID = 
+  reThrow mainTID $ runFaethWatcherM tID $ 
+    forever $ receiveSubscription >>= void . recurseBlocks
 
 recurseBlocks :: PartialEthBlock -> FaethWatcherM TransactionID
 recurseBlocks PartialEthBlock{..} = do
@@ -156,20 +145,27 @@ recurseBlocks PartialEthBlock{..} = do
             parentBlock <- either (error . show) id <$> 
               sendReceiveProtocolT (EthGetBlockByHash ethParentHash)
             recurseBlocks parentBlock
-  thisTXID <- foldl (>>=) (return lastTXID) $ map processEthTX ethBlockTXs
+  thisTXID <- processEthTXs ethBlockTXs lastTXID
   at ethBlockHash ?= thisTXID
   return thisTXID
 
+processEthTXs :: 
+  [PartialEthTransaction] -> TransactionID -> FaethWatcherM TransactionID
+processEthTXs ethBlockTXs lastTXID = do
+  faethEthAddress <- askAddress
+  foldl (>>=) (return lastTXID) $ 
+    map processEthTX $
+      filter ((faethEthAddress ==) . ethTXTo) ethBlockTXs
+
 processEthTX :: 
   PartialEthTransaction -> TransactionID -> FaethWatcherM TransactionID
-processEthTX PartialEthTransaction{..} lastTXID = do
-  faethEthAddress <- askAddress
-  if ethTXTo == faethEthAddress
-  then decodeAndQueue ethTXID lastTXID ethTXData
-  else return lastTXID
+processEthTX PartialEthTransaction{..} = do
+  guardFee ethValue
+  decodeAndQueue ethTXID ethTXData
+  where guardFee _ = return () -- For now
 
-decodeAndQueue :: Hex -> TransactionID -> FaeTX -> FaethWatcherM TransactionID
-decodeAndQueue ethTXID lastTXID (FaeTX txMessage mainFile0 modules0) = 
+decodeAndQueue :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
+decodeAndQueue ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = 
   lift $ handleAll ethTXError $ do
     let 
       tx = maybe (error "Invalid transaction message") id $ 
@@ -178,7 +174,7 @@ decodeAndQueue ethTXID lastTXID (FaeTX txMessage mainFile0 modules0) =
       mainFile = addHeader thisTXID mainFile0
       modules = Map.mapWithKey (fixHeader thisTXID) modules0
     resultVar <- ioAtomically newEmptyTMVar
-    callerTID <- ask
+    callerTID <- view _1
     txResult <- handleAll (execError thisTXID) $ 
       waitRunTXExecData queueTXExecData
         TXExecData
@@ -202,4 +198,22 @@ decodeAndQueue ethTXID lastTXID (FaeTX txMessage mainFile0 modules0) =
       "Error while executing Fae transaction " ++ show txID ++
       "in Ethereum transaction " ++ show ethTXID ++
       "\nError was: " ++ show e
- 
+
+runFaethWatcherM :: ThreadId -> FaethWatcherM () -> FaethM ()
+runFaethWatcherM tID xFW = do
+  subIDE <- sendReceiveProtocolT ParitySubscribe
+  case subIDE of
+    Left e -> error $ 
+      "Ethereum client returned an error: " ++ show e
+    Right subID -> 
+      flip runReaderT (tID, subID) $ flip evalStateT Map.empty $ evalContT xFW
+
+receiveSubscription :: FaethWatcherM PartialEthBlock
+receiveSubscription = do
+  EthNewBlock{..} <- receiveRequest "parity_subscription"
+  subID <- view _2
+  unless (ethSubID == subID) $ error $
+    "parity_subscribe notification has subscription ID " ++ show ethSubID ++
+    "; expected " ++ show subID
+  either (error . errMessage) return ethBlockE
+
