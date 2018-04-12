@@ -121,17 +121,16 @@ runFaeth :: ThreadId -> TXQueueT IO ()
 runFaeth mainTID = reThrow mainTID $ do
   EthAccount{..} <- readAccount "faeth"
   tID <- myThreadId
-  fork $ runProtocolT address $ runFaethWatcher mainTID tID
+  fork $ runProtocolT address $ runFaethWatcher tID
   runFaeServer faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
 faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}
 faethSendTXExecData txED = queueTXExecData txED
 
-runFaethWatcher :: ThreadId -> ThreadId -> FaethM ()
-runFaethWatcher mainTID tID = 
-  reThrow mainTID $ runFaethWatcherM tID $ 
-    forever $ receiveSubscription >>= void . recurseBlocks
+runFaethWatcher :: ThreadId -> FaethM ()
+runFaethWatcher tID = runFaethWatcherM tID $ 
+  forever $ receiveSubscription >>= void . recurseBlocks
 
 recurseBlocks :: PartialEthBlock -> FaethWatcherM TransactionID
 recurseBlocks PartialEthBlock{..} = do
@@ -159,13 +158,13 @@ processEthTXs ethBlockTXs lastTXID = do
 
 processEthTX :: 
   PartialEthTransaction -> TransactionID -> FaethWatcherM TransactionID
-processEthTX PartialEthTransaction{..} = do
+processEthTX PartialEthTransaction{..} lastTXID = do
   guardFee ethValue
-  decodeAndQueue ethTXID ethTXData
+  runFaethTX ethTXID ethTXData lastTXID
   where guardFee _ = return () -- For now
 
-decodeAndQueue :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
-decodeAndQueue ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = 
+runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
+runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = 
   lift $ handleAll ethTXError $ do
     let 
       tx = maybe (error "Invalid transaction message") id $ 

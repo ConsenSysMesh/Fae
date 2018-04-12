@@ -257,18 +257,16 @@ runProtocolT address x = do
     flip runReaderT address $
     flip evalStateT 0 $
     splitProtocolT x
-  liftIO $ do
-    tryConnectWS xWS err1
+  liftIO $ forever $ do
+    tryConnectWS xWS 
     threadDelay (30 * 10^6)
-    tryConnectWS xWS err2
   where 
-    tryConnectWS xWS err = handleAll err $ 
+    tryConnectWS xWS = handleAll err $ 
       WS.runClient host port "" $ runReader xWS
-    err1 _ = putStrLn $ errMsg ++ "  Waiting 30s."
-    err2 _ = error $ errMsg ++ "  Quitting."
-    errMsg =
-      "Couldn't open a websocket connection to the Ethereum client" ++
-      " (" ++ host ++ ":" ++ show port ++ ")."
+    err _ = putStrLn $ 
+      "Websocket connection to Ethereum client failed" ++
+      " (" ++ host ++ ":" ++ show port ++ ")." ++
+      "  Waiting 30s."
     host = "localhost"
     port = 8546
 
