@@ -36,6 +36,7 @@ import qualified Text.ParserCombinators.ReadPrec as R
 
 import System.Directory
 import System.FilePath
+import System.IO
 
 import Text.Read hiding (lift)
 
@@ -259,14 +260,20 @@ runProtocolT address x = do
     splitProtocolT x
   liftIO $ forever $ do
     tryConnectWS xWS 
-    threadDelay (30 * 10^6)
+    isInput <- hWaitForInput stdin (30 * 10^3)
+    when isInput discard 
   where 
     tryConnectWS xWS = handleAll err $ 
       WS.runClient host port "" $ runReader xWS
+    discard = do
+      more <- hReady stdin
+      when more $ do
+        void $ hGetChar stdin
+        discard
     err _ = putStrLn $ 
       "Websocket connection to Ethereum client failed" ++
       " (" ++ host ++ ":" ++ show port ++ ")." ++
-      "  Waiting 30s."
+      "  Waiting 30s.  Press Enter to continue immediately."
     host = "localhost"
     port = 8546
 
