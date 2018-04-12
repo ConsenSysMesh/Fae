@@ -5,6 +5,8 @@ import Blockchain.Fae.FrontEnd
 import Control.Concurrent
 import Control.Concurrent.STM
 
+import Control.Exception.Base
+
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State
@@ -21,19 +23,20 @@ import FaeServer.Modules
 
 import System.Directory
 import System.Exit
+import System.IO.Error
 
 runFae :: ThreadId -> TXQueueT IO ()
 runFae mainTID = reThrow mainTID $ runFaeInterpretWithHistory $ 
   forever $ do
     txExecData <- readTXExecData
-    reThrowExit mainTID (callerTID txExecData) $ runTXExecData mainTID txExecData
+    reThrowExit mainTID (callerTID txExecData) $ runTXExecData txExecData
 
 runTXExecData :: 
   (MonadIO m, MonadMask m) => 
-  ThreadId -> TXExecData -> FaeInterpretWithHistoryT m ()
-runTXExecData mainTID TXExecData{tx=tx@TX{..}, ..} = do
+  TXExecData -> FaeInterpretWithHistoryT m ()
+runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
   dup <- gets $ Map.member txID . txStorageAndCounts
-  when dup $ error $ "Duplicate transaction ID: " ++ show txID
+  when dup $ throw $ ErrorCall $ "Duplicate transaction ID: " ++ show txID
 
   txCount <- recallHistory parentM
   liftIO $ writeModules mainFile modules txID
@@ -47,7 +50,7 @@ runTXExecData mainTID TXExecData{tx=tx@TX{..}, ..} = do
   else updateHistory txID txCount
   ioAtomically $ putTMVar resultVar txResult
 
-runTXExecData mainTID View{..} = do
+runTXExecData View{..} = do
   void $ recallHistory parentM
   txResult <- lift $ showTransaction viewTXID
   ioAtomically $ putTMVar resultVar txResult

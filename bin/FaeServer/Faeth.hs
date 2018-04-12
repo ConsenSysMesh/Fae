@@ -120,8 +120,9 @@ instance ToRequest EthGetBlockByHash where
 runFaeth :: ThreadId -> TXQueueT IO ()
 runFaeth mainTID = reThrow mainTID $ do
   EthAccount{..} <- readAccount "faeth"
-  tID <- myThreadId
-  fork $ runProtocolT address $ runFaethWatcher tID
+  fork $ do
+    tID <- myThreadId
+    runProtocolT address $ runFaethWatcher tID
   runFaeServer faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
@@ -174,8 +175,8 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID =
       modules = Map.mapWithKey (fixHeader thisTXID) modules0
     resultVar <- ioAtomically newEmptyTMVar
     callerTID <- view _1
-    txResult <- handleAll (execError thisTXID) $ 
-      waitRunTXExecData queueTXExecData
+    handleAll (execError thisTXID) $ do
+      txResult <- waitRunTXExecData queueTXExecData
         TXExecData
         {
           parentM = Just lastTXID,
@@ -184,18 +185,18 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID =
           reward = False, -- When can this be True?
           ..
         }
-    liftIO $ putStrLn txResult
+      liftIO $ putStrLn txResult
     return thisTXID
 
   where
     ethTXError e = do
       liftIO . putStrLn $
-        "Error while processing Ethereum transaction " ++ show ethTXID ++
+        "\nError while processing Ethereum transaction " ++ show ethTXID ++
         "\nError was: " ++ show e
       return lastTXID
-    execError txID e = return $
-      "Error while executing Fae transaction " ++ show txID ++
-      "in Ethereum transaction " ++ show ethTXID ++
+    execError txID e = liftIO . putStrLn $
+      "\nError while executing Fae transaction " ++ show txID ++
+      "\n  in Ethereum transaction " ++ show ethTXID ++
       "\nError was: " ++ show e
 
 runFaethWatcherM :: ThreadId -> FaethWatcherM () -> FaethM ()
