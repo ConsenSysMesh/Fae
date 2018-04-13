@@ -119,19 +119,15 @@ instance ToRequest EthGetBlockByHash where
 
 runFaeth :: ThreadId -> TXQueueT IO ()
 runFaeth mainTID = reThrow mainTID $ do
-  EthAccount{..} <- readAccount "faeth"
-  fork $ do
-    tID <- myThreadId
-    runProtocolT address $ runFaethWatcher tID
+  fork $ runFaethWatcherM faethWatcher 
   runFaeServer faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
 faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}
 faethSendTXExecData txED = queueTXExecData txED
 
-runFaethWatcher :: ThreadId -> FaethM ()
-runFaethWatcher tID = runFaethWatcherM tID $ 
-  forever $ receiveSubscription >>= void . recurseBlocks
+faethWatcher :: FaethWatcherM ()
+faethWatcher = forever $ receiveSubscription >>= void . recurseBlocks
 
 recurseBlocks :: PartialEthBlock -> FaethWatcherM TransactionID
 recurseBlocks PartialEthBlock{..} = do
@@ -199,14 +195,17 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID =
       "\n  in Ethereum transaction " ++ show ethTXID ++
       "\nError was: " ++ show e
 
-runFaethWatcherM :: ThreadId -> FaethWatcherM () -> FaethM ()
-runFaethWatcherM tID xFW = do
-  subIDE <- sendReceiveProtocolT ParitySubscribe
-  case subIDE of
-    Left e -> error $ 
-      "Ethereum client returned an error: " ++ show e
-    Right subID -> 
-      flip runReaderT (tID, subID) $ flip evalStateT Map.empty $ evalContT xFW
+runFaethWatcherM :: FaethWatcherM () -> TXQueueT IO ()
+runFaethWatcherM xFW = do
+  EthAccount{..} <- readAccount "faeth"
+  tID <- myThreadId
+  runProtocolT address $ do
+    subIDE <- sendReceiveProtocolT ParitySubscribe
+    case subIDE of
+      Left e -> error $ 
+        "Ethereum client returned an error: " ++ show e
+      Right subID -> 
+        flip runReaderT (tID, subID) $ flip evalStateT Map.empty $ evalContT xFW
 
 receiveSubscription :: FaethWatcherM PartialEthBlock
 receiveSubscription = do
