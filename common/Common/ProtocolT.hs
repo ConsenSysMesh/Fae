@@ -4,8 +4,6 @@ import Blockchain.Fae.FrontEnd
 
 import Common.Lens hiding ((.=))
 
-import Control.Concurrent
-
 import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
@@ -36,7 +34,6 @@ import qualified Text.ParserCombinators.ReadPrec as R
 
 import System.Directory
 import System.FilePath
-import System.IO
 
 import Text.Read hiding (lift)
 
@@ -125,6 +122,8 @@ instance Serialize FaeTX
 
 instance Show Error where
   show Error{..} = errMessage ++ maybe "" (\d -> "\n" ++ show d) errData
+
+instance Exception Error
 
 instance Show Hex where
   show = ("0x" ++) . C8.unpack . B16.encode . getHex
@@ -251,6 +250,8 @@ runProtocolT ::
   (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
   EthAddress -> ProtocolT m () -> m ()
 runProtocolT address x = do
+  liftIO $ putStrLn $
+    "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")"
   xWS <- 
     commute $ 
     reader $
@@ -258,22 +259,9 @@ runProtocolT address x = do
     flip runReaderT address $
     flip evalStateT 0 $
     splitProtocolT x
-  liftIO $ forever $ do
-    tryConnectWS xWS 
-    isInput <- hWaitForInput stdin (30 * 10^3)
-    when isInput discard 
-  where 
-    tryConnectWS xWS = handleAll err $ 
-      WS.runClient host port "" $ runReader xWS
-    discard = do
-      more <- hReady stdin
-      when more $ do
-        void $ hGetChar stdin
-        discard
-    err _ = putStrLn $ 
-      "Websocket connection to Ethereum client failed" ++
-      " (" ++ host ++ ":" ++ show port ++ ")." ++
-      "  Waiting 30s.  Press Enter to continue immediately."
+  liftIO $ WS.runClient host port "" $ runReader xWS
+
+  where
     host = "localhost"
     port = 8546
 
@@ -285,12 +273,12 @@ sendProtocolT sendReqParams = do
   liftWS $ flip WS.sendTextData $ A.encode SendRequest{..}
   return sendReqID
 
-receiveProtocolT :: (FromJSON a, MonadProtocol m) => Int -> m (Either Error a)
+receiveProtocolT :: (FromJSON a, MonadProtocol m) => Int -> m a
 receiveProtocolT reqID = do
   Response{..} <- either error id . A.eitherDecode <$> liftWS WS.receiveData
   return $
     if respReqID == reqID
-    then respData
+    then either throw id respData
     else error $ 
       "Expected response with ID " ++ show reqID ++ 
       "; got " ++ show respReqID
@@ -305,7 +293,7 @@ receiveRequest method = do
   return receiveReqParams
 
 sendReceiveProtocolT :: 
-  (ToJSON a, ToRequest a, FromJSON b, MonadProtocol m) => a -> m (Either Error b)
+  (ToJSON a, ToRequest a, FromJSON b, MonadProtocol m) => a -> m b
 sendReceiveProtocolT x = do
   reqID <- sendProtocolT x
   receiveProtocolT reqID
@@ -318,8 +306,7 @@ readAccount name = liftIO $
 
 newAccount :: (MonadProtocol m) => String -> String -> m EthAccount
 newAccount name passphrase = do
-  address <- either (error . show) id <$> 
-    sendReceiveProtocolT (NewAccount passphrase)
+  address <- sendReceiveProtocolT (NewAccount passphrase)
   let account = EthAccount{..}
   writeAccount name account
   return account

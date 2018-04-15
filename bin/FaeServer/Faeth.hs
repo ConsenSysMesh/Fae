@@ -7,9 +7,9 @@ import Common.ProtocolT
 
 import Control.Concurrent.Lifted
 import Control.Concurrent.STM.TMVar
+import Control.Concurrent.STM.TVar
 
 import Control.Monad
-import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans
@@ -31,6 +31,8 @@ import FaeServer.Concurrency
 import FaeServer.Modules
 
 import GHC.Generics
+
+import System.IO
 
 data EthNewBlock =
   EthNewBlock
@@ -64,8 +66,7 @@ newtype HexInteger = HexInteger { getHexInteger :: Integer }
   deriving (Eq, Ord, Show, Num, Real, Enum, Integral) 
 
 type FaethM = ProtocolT (TXQueueT IO)
-type FaethWatcherM = 
-  ContT () (StateT BlockLastTXs (ReaderT (ThreadId, Hex) FaethM))
+type FaethWatcherM = StateT (TVar BlockLastTXs) (ReaderT (ThreadId, Hex) FaethM)
 type BlockLastTXs = Map EthBlockID TransactionID
 
 instance FromJSON HexInteger where
@@ -131,18 +132,20 @@ faethWatcher = forever $ receiveSubscription >>= void . recurseBlocks
 
 recurseBlocks :: PartialEthBlock -> FaethWatcherM TransactionID
 recurseBlocks PartialEthBlock{..} = do
-  lastTXIDM <- use $ at ethParentHash
+  blockLastTXsVar <- get
+  blockLastTXs <- liftIO $ readTVarIO blockLastTXsVar
+  let lastTXIDM = Map.lookup ethParentHash blockLastTXs
   lastTXID <-
     case lastTXIDM of
-      x | Just txID <- x -> return txID
+      Just lastTXID -> return lastTXID
       Nothing 
         | ethBlockNumber == 0 -> return nullID
         | otherwise -> do
-            parentBlock <- either (error . show) id <$> 
-              sendReceiveProtocolT (EthGetBlockByHash ethParentHash)
+            parentBlock <- sendReceiveProtocolT (EthGetBlockByHash ethParentHash)
             recurseBlocks parentBlock
   thisTXID <- processEthTXs ethBlockTXs lastTXID
-  at ethBlockHash ?= thisTXID
+  ioAtomically $ writeTVar blockLastTXsVar $ 
+    Map.insert ethBlockHash thisTXID blockLastTXs
   return thisTXID
 
 processEthTXs :: 
@@ -192,20 +195,31 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID =
       return lastTXID
     execError txID e = liftIO . putStrLn $
       "\nError while executing Fae transaction " ++ show txID ++
-      "\n  in Ethereum transaction " ++ show ethTXID ++
+      "\n                   in Ethereum transaction " ++ show ethTXID ++
       "\nError was: " ++ show e
 
 runFaethWatcherM :: FaethWatcherM () -> TXQueueT IO ()
 runFaethWatcherM xFW = do
   EthAccount{..} <- readAccount "faeth"
   tID <- myThreadId
-  runProtocolT address $ do
-    subIDE <- sendReceiveProtocolT ParitySubscribe
-    case subIDE of
-      Left e -> error $ 
-        "Ethereum client returned an error: " ++ show e
-      Right subID -> 
-        flip runReaderT (tID, subID) $ flip evalStateT Map.empty $ evalContT xFW
+  blockTXIDs <- liftIO $ newTVarIO Map.empty
+  forever $ handleAll waitRestart $ 
+    runProtocolT address $ do
+      subID <- sendReceiveProtocolT ParitySubscribe
+      (runReaderT . flip evalStateT blockTXIDs) xFW (tID, subID) 
+
+  where
+    waitRestart e = liftIO $ do
+      putStrLn $
+        "Faeth watcher threw an error: " ++ show e ++
+        "\nWaiting 30s to restart.  Press Enter to continue immediately."
+      isInput <- hWaitForInput stdin (30 * 10^3)
+      when isInput discard 
+    discard = do
+      more <- hReady stdin
+      when more $ do
+        void $ hGetChar stdin
+        discard
 
 receiveSubscription :: FaethWatcherM PartialEthBlock
 receiveSubscription = do

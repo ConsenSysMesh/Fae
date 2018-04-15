@@ -14,16 +14,15 @@ submitFaeth host TXSpec{specModules = LoadedModules{..}, ..} = do
   senderEthAccount <- readAccount "sender"
   EthAccount{address = faethEthAddress} <- readAccount "faeth"
   runProtocolT faethEthAddress $ do
-    respE <- sendReceiveProtocolT 
+    ethTXID <- handleAll err $ sendReceiveProtocolT 
       FaethTXData
       {
         faeTX = txMessage, 
         mainModule = snd mainModule, 
         ..
       }
-    case respE of
-      Left e -> error $ "Ethereum client returned an error: " ++ show e
-      Right ethTXID -> liftIO . putStrLn $ 
-        "Ethereum transaction ID: " ++ ethTXID ++
-        "\nFae transaction ID: " ++ show (getTXID txMessage)
+    liftIO . putStrLn $ 
+      "Ethereum transaction ID: " ++ ethTXID ++
+      "\nFae transaction ID: " ++ show (getTXID txMessage)
 
+  where err e = error $ "Ethereum client returned an error: " ++ show e
