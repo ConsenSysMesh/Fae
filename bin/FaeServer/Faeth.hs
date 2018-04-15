@@ -66,7 +66,7 @@ newtype HexInteger = HexInteger { getHexInteger :: Integer }
   deriving (Eq, Ord, Show, Num, Real, Enum, Integral) 
 
 type FaethM = ProtocolT (TXQueueT IO)
-type FaethWatcherM = StateT (TVar BlockLastTXs) (ReaderT (ThreadId, Hex) FaethM)
+type FaethWatcherM = ReaderT (ThreadId, Hex, TVar BlockLastTXs) FaethM
 type BlockLastTXs = Map EthBlockID TransactionID
 
 instance FromJSON HexInteger where
@@ -128,25 +128,31 @@ faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}
 faethSendTXExecData txED = queueTXExecData txED
 
 faethWatcher :: FaethWatcherM ()
-faethWatcher = forever $ receiveSubscription >>= void . recurseBlocks
+faethWatcher = forever $ receiveSubscription >>= processNewBlock
 
-recurseBlocks :: PartialEthBlock -> FaethWatcherM TransactionID
-recurseBlocks PartialEthBlock{..} = do
-  blockLastTXsVar <- get
+processNewBlock :: PartialEthBlock -> FaethWatcherM TransactionID
+processNewBlock b@PartialEthBlock{ethBlockHash} = do
+  blockLastTXsVar <- view _3
   blockLastTXs <- liftIO $ readTVarIO blockLastTXsVar
-  let lastTXIDM = Map.lookup ethParentHash blockLastTXs
-  lastTXID <-
-    case lastTXIDM of
-      Just lastTXID -> return lastTXID
-      Nothing 
-        | ethBlockNumber == 0 -> return nullID
-        | otherwise -> do
-            parentBlock <- sendReceiveProtocolT (EthGetBlockByHash ethParentHash)
-            recurseBlocks parentBlock
+  maybe (addNewBlock b) return $ Map.lookup ethBlockHash blockLastTXs 
+
+addNewBlock :: PartialEthBlock -> FaethWatcherM TransactionID
+addNewBlock b@PartialEthBlock{..} = do
+  blockLastTXsVar <- view _3
+  blockLastTXs <- liftIO $ readTVarIO blockLastTXsVar
+  lastTXID <- maybe (recurseBlock b) return $
+    Map.lookup ethParentHash blockLastTXs 
   thisTXID <- processEthTXs ethBlockTXs lastTXID
   ioAtomically $ writeTVar blockLastTXsVar $ 
     Map.insert ethBlockHash thisTXID blockLastTXs
   return thisTXID
+
+recurseBlock :: PartialEthBlock -> FaethWatcherM TransactionID
+recurseBlock PartialEthBlock{..}
+  | ethBlockNumber == 0 = return nullID
+  | otherwise = do
+      parentBlock <- sendReceiveProtocolT (EthGetBlockByHash ethParentHash)
+      addNewBlock parentBlock
 
 processEthTXs :: 
   [PartialEthTransaction] -> TransactionID -> FaethWatcherM TransactionID
@@ -165,7 +171,7 @@ processEthTX PartialEthTransaction{..} lastTXID = do
 
 runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
 runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = 
-  lift $ handleAll ethTXError $ do
+  handleAll ethTXError $ do
     let 
       tx = maybe (error "Invalid transaction message") id $ 
         txMessageToTX txMessage
@@ -191,12 +197,12 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID =
     ethTXError e = do
       liftIO . putStrLn $
         "\nError while processing Ethereum transaction " ++ show ethTXID ++
-        "\nError was: " ++ show e
+        "\nError was: " ++ show e ++ "\n"
       return lastTXID
     execError txID e = liftIO . putStrLn $
       "\nError while executing Fae transaction " ++ show txID ++
-      "\n                   in Ethereum transaction " ++ show ethTXID ++
-      "\nError was: " ++ show e
+      "\n              in Ethereum transaction " ++ show ethTXID ++
+      "\nError was: " ++ show e ++ "\n"
 
 runFaethWatcherM :: FaethWatcherM () -> TXQueueT IO ()
 runFaethWatcherM xFW = do
@@ -206,7 +212,7 @@ runFaethWatcherM xFW = do
   forever $ handleAll waitRestart $ 
     runProtocolT address $ do
       subID <- sendReceiveProtocolT ParitySubscribe
-      (runReaderT . flip evalStateT blockTXIDs) xFW (tID, subID) 
+      runReaderT xFW (tID, subID, blockTXIDs) 
 
   where
     waitRestart e = liftIO $ do

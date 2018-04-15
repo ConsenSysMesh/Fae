@@ -251,7 +251,7 @@ runProtocolT ::
   EthAddress -> ProtocolT m () -> m ()
 runProtocolT address x = do
   liftIO $ putStrLn $
-    "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")"
+    "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"
   xWS <- 
     commute $ 
     reader $
