@@ -65,12 +65,37 @@ data EthGetBlockByHash = EthGetBlockByHash EthBlockID
 newtype HexInteger = HexInteger { getHexInteger :: Integer }
   deriving (Eq, Ord, Show, Num, Real, Enum, Integral) 
 
-type FaethM = ProtocolT (TXQueueT IO)
-type FaethWatcherM = ReaderT (ThreadId, Hex, TVar BlockLastTXs) FaethM
 type BlockLastTXs = Map EthBlockID TransactionID
+newtype FaethWatcherM a = 
+  FaethWatcherM
+  {
+    getFaethWatcherM :: 
+      ReaderT (ThreadId, Hex, TVar BlockLastTXs) (ProtocolT (TXQueueT IO)) a
+  }
+  deriving
+  (
+    Functor, Applicative, Monad, 
+    MonadThrow, MonadCatch, MonadIO,
+    MonadProtocol, TXQueueM,
+    MonadReader (ThreadId, Hex, TVar BlockLastTXs)
+  )
 
 instance FromJSON HexInteger where
   parseJSON x = either error fst . T.hexadecimal <$> parseJSON x
+
+instance MonadState BlockLastTXs FaethWatcherM where
+  state f = do
+    sVar <- view _3
+    s <- liftIO $ readTVarIO sVar
+    let (result, s') = f s
+    ioAtomically $ writeTVar sVar s'
+    return result
+  get = do
+    sVar <- view _3
+    liftIO $ readTVarIO sVar
+  put s = do
+    sVar <- view _3
+    ioAtomically $ writeTVar sVar s
 
 instance ToJSON ParitySubscribe where
   toJSON ParitySubscribe = 
@@ -132,19 +157,15 @@ faethWatcher = forever $ receiveSubscription >>= processNewBlock
 
 processNewBlock :: PartialEthBlock -> FaethWatcherM TransactionID
 processNewBlock b@PartialEthBlock{ethBlockHash} = do
-  blockLastTXsVar <- view _3
-  blockLastTXs <- liftIO $ readTVarIO blockLastTXsVar
-  maybe (addNewBlock b) return $ Map.lookup ethBlockHash blockLastTXs 
+  thisBlockHashM <- use $ at ethBlockHash
+  maybe (addNewBlock b) return thisBlockHashM
 
 addNewBlock :: PartialEthBlock -> FaethWatcherM TransactionID
 addNewBlock b@PartialEthBlock{..} = do
-  blockLastTXsVar <- view _3
-  blockLastTXs <- liftIO $ readTVarIO blockLastTXsVar
-  lastTXID <- maybe (recurseBlock b) return $
-    Map.lookup ethParentHash blockLastTXs 
+  lastTXIDM <- use $ at ethParentHash
+  lastTXID <- maybe (recurseBlock b) return lastTXIDM
   thisTXID <- processEthTXs ethBlockTXs lastTXID
-  ioAtomically $ writeTVar blockLastTXsVar $ 
-    Map.insert ethBlockHash thisTXID blockLastTXs
+  modify $ Map.insert ethBlockHash thisTXID
   return thisTXID
 
 recurseBlock :: PartialEthBlock -> FaethWatcherM TransactionID
@@ -212,7 +233,7 @@ runFaethWatcherM xFW = do
   forever $ handleAll waitRestart $ 
     runProtocolT address $ do
       subID <- sendReceiveProtocolT ParitySubscribe
-      runReaderT xFW (tID, subID, blockTXIDs) 
+      runReaderT (getFaethWatcherM xFW) (tID, subID, blockTXIDs) 
 
   where
     waitRestart e = liftIO $ do
