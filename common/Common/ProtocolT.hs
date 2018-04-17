@@ -49,7 +49,7 @@ data FaethTXData =
     otherModules :: ModuleMap,
     senderEthAccount :: EthAccount,
     faethEthAddress :: EthAddress,
-    faethEthValue :: Maybe Integer
+    faethEthValue :: Maybe HexInteger
   }
 
 data FaeTX = 
@@ -64,7 +64,7 @@ data Salt =
   Salt
   {
     faeSalt :: String,
-    ethFee :: Maybe Integer
+    ethFee :: Maybe HexInteger
   }
   deriving (Generic)
 
@@ -111,7 +111,7 @@ newtype NewAccount = NewAccount String
 newtype Hex = Hex { getHex :: ByteString } deriving (Eq, Ord, Serialize)
 
 newtype HexInteger = HexInteger { getHexInteger :: Integer }
-  deriving (Eq, Ord, Num, Real, Enum, Integral) 
+  deriving (Serialize, Eq, Ord, Num, Real, Enum, Integral) 
 
 newtype ProtocolT m a = 
   ProtocolT
@@ -186,7 +186,7 @@ instance ToJSON FaethTXData where
     toJSON
     [
       A.object $
-        (maybe id (:) $ ("value" .=) . HexInteger <$> faethEthValue) $
+        (maybe id (:) $ ("value" .=) <$> faethEthValue) $
         [
           "from" .= address,
           "to" .= faethEthAddress,

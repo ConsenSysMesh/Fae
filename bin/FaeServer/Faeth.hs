@@ -25,7 +25,6 @@ import qualified Data.Aeson as A
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
-import qualified Data.Text.Read as T
 
 import Data.Aeson.Parser
 import Data.Monoid
@@ -185,16 +184,15 @@ processEthTXs ethBlockTXs lastTXID = do
 processEthTX :: 
   PartialEthTransaction -> TransactionID -> FaethWatcherM TransactionID
 processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
-  case (val >=) <$> fee of
+  case (ethValue >=) <$> feeM of
     Just False -> error $
       "Insufficient Ether provided: " ++ 
-      "needed " ++ show fee ++ "; got " ++ show val
+      "needed " ++ show (fromJust feeM) ++ "; got " ++ show ethValue
     _ -> return ()
   runFaethTX ethTXID ethTXData lastTXID
 
   where
-    fee = ethFee $ faethSalt $ faeTXMessage ethTXData
-    val = getHexInteger ethValue
+    feeM = ethFee . faethSalt . faeTXMessage $ ethTXData
     ethTXError e = do
       liftIO . putStrLn $
         "\nError while processing Ethereum transaction " ++ show ethTXID ++

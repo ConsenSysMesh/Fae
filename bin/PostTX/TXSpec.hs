@@ -81,7 +81,7 @@ txDataToSpec TXData{..} FaethArgs{..} = do
           Salt
           {
             faeSalt = show totalNonce, 
-            ethFee = faethFee 
+            ethFee = HexInteger <$> faethFee 
           }
       | otherwise = S.encode $ show totalNonce
     totalNonce = sum keyNonces

@@ -10,7 +10,7 @@ import Control.Monad.Trans
 import PostTX.TXSpec
 
 submitFaeth :: String -> Maybe Integer -> TXSpec -> IO ()
-submitFaeth host faethEthValue TXSpec{specModules = LoadedModules{..}, ..} = do
+submitFaeth host valM TXSpec{specModules = LoadedModules{..}, ..} = do
   senderEthAccount <- readAccount "sender"
   EthAccount{address = faethEthAddress} <- readAccount "faeth"
   runProtocolT faethEthAddress $ do
@@ -19,6 +19,7 @@ submitFaeth host faethEthValue TXSpec{specModules = LoadedModules{..}, ..} = do
       {
         faeTX = txMessage, 
         mainModule = snd mainModule, 
+        faethEthValue = HexInteger <$> valM,
         ..
       }
     liftIO . putStrLn $ 
