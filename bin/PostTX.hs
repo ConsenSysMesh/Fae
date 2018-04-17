@@ -29,8 +29,10 @@ main = do
       txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
       txSpec <- txDataToSpec txData postArgFaeth
       if useFaeth 
-      then submitFaeth postArgHost faethEthValue txSpec
+      then submitFaeth postArgHost faethValue txSpec
       else submit postArgTXName postArgHost postArgFake postArgLazy txSpec
+    x@OngoingFaethArgs{..} -> 
+      resubmitFaeth ongoingFaethHost ongoingNewSignerNames ongoingEthTXID
     ViewArgs{..} -> view viewArgTXID viewArgHost
     SenderArgs{..} -> runProtocolT nullAddress $ 
       case senderAddressM of

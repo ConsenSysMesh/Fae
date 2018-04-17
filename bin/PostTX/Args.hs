@@ -34,6 +34,12 @@ data FinalizedPostTXArgs =
     postArgLazy :: Bool,
     postArgFaeth :: FaethArgs
   } |
+  OngoingFaethArgs
+  {
+    ongoingFaethHost :: String,
+    ongoingNewSignerNames :: [String],
+    ongoingEthTXID :: EthTXID
+  } |
   ViewArgs
   {
     viewArgTXID :: TransactionID,
@@ -50,7 +56,8 @@ data FaethArgs =
   {
     useFaeth :: Bool,
     faethFee :: Maybe Integer,
-    faethEthValue :: Maybe Integer
+    faethValue :: Maybe Integer,
+    addSignerNames :: [String]
   }
 
 makeLenses ''PostTXArgs
@@ -65,7 +72,7 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
-    argFaeth = FaethArgs False Nothing Nothing,
+    argFaeth = FaethArgs False Nothing Nothing [],
     argNewSender = False,
     argUseSender = False
   }
@@ -78,10 +85,14 @@ argGetter st "--new-sender-account" = st & _argNewSender .~ True
 argGetter st "--use-sender-account" = st & _argUseSender .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
+  | ("--faeth-add-signature", '=' : newSigner) <- break (== '=') x
+    = st
+      & _argFaeth . _useFaeth .~ True
+      & _argFaeth . _addSignerNames %~ (newSigner :)
   | ("--faeth-eth-value", '=' : faethValueArg ) <- break (== '=') x
     = st
       & _argFaeth . _useFaeth .~ True
-      & _argFaeth . _faethEthValue .~ readMaybe faethValueArg
+      & _argFaeth . _faethValue .~ readMaybe faethValueArg
   | ("--faeth-fee", '=' : faethFeeArg) <- break (== '=') x
     = st 
       & _argFaeth . _useFaeth .~ True
@@ -95,17 +106,31 @@ finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | argFake && (argView || argLazy || useFaeth || argNewSender || argUseSender)
     = error $
-        "--fake is incompatible with --view, --lazy, --faeth, " ++
+        "--fake is incompatible with --view, --lazy, --faeth*, " ++
         "and --new-sender-account"
   | argView && (argLazy || useFaeth || argNewSender || argUseSender)
-    = error "--view is incompatible with --lazy, --faeth, and --new-sender-account"
+    = error
+        "--view is incompatible with --lazy, --faeth*, and --new-sender-account"
   | useFaeth && (argNewSender || argUseSender)
-    = error "--faeth and --new-sender-account are incompatible options"
+    = error "--faeth* and --new-sender-account are incompatible options"
+  | not (null addSignerNames) && (isJust faethFee || isJust faethValue)
+    = error $
+      "--faeth-add-signature is incompatible with " ++
+      "--faeth-fee and --faeth-eth-value"
   | argNewSender && argUseSender
     = error
         "--new-sender-account and --use-sender-account are incompatible options"
   | argView, Nothing <- argDataM
     = error "--view requires a transaction ID"
+  | not (null addSignerNames), Just ethTXIDS <- argDataM =
+    OngoingFaethArgs
+    {
+      ongoingNewSignerNames = addSignerNames,
+      ongoingEthTXID =
+        fromMaybe (error $ "Couldn't parse Ethereum TXID: " ++ ethTXIDS) $
+        readMaybe ethTXIDS,
+      ongoingFaethHost = justHost argHostM
+    }
   | argView, Just txIDS <- argDataM =
     ViewArgs
     {

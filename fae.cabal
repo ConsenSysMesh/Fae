@@ -182,6 +182,7 @@ executable postTX
     process,
     template-haskell,
     text,
+    time,
     websockets
   default-language: Haskell2010
   default-extensions:

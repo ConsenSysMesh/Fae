@@ -1,10 +1,10 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Common.ProtocolT where
 
 import Blockchain.Fae.FrontEnd
 
 import Common.Lens hiding ((.=))
 
-import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans
@@ -129,7 +129,7 @@ newtype ProtocolT m a =
 class ToRequest a where
   requestMethod :: a -> String
 
-class (MonadIO m) => MonadProtocol m where
+class (MonadIO m, MonadCatch m) => MonadProtocol m where
   liftProtocolT :: ProtocolT IO a -> m a
 
 class Commutes b m n where
@@ -138,6 +138,8 @@ class Commutes b m n where
 type EthAddress = Hex
 type EthBlockID = Hex
 type EthTXID = Hex
+
+makeLenses ''FaethTXData
 
 instance Serialize EthAccount
 instance Serialize FaeTX
@@ -195,6 +197,25 @@ instance ToJSON FaethTXData where
       toJSON passphrase
     ]
 
+instance FromJSON FaethTXData where
+  parseJSON = A.withObject "FaethTXData" $ \obj -> do
+    FaeTX{..} <- obj .: "input"
+    faethEthAddress <- obj .: "to"
+    faethEthValue <- obj .: "value"
+    address <- obj .: "from"
+    let
+      passphrase = 
+        error $ "Unknown passphrase for Ethereum account: " ++ show address
+    return
+      FaethTXData
+      {
+        faeTX = faeTXMessage,
+        mainModule = faeMainModule,
+        otherModules = faeOtherModules,
+        senderEthAccount = EthAccount{..},
+        ..
+      }
+
 instance ToJSON FaeTX where
   toJSON = toJSON . Hex . S.encode
 
@@ -243,7 +264,9 @@ instance ToRequest NewAccount where
 instance ToRequest FaethTXData where
   requestMethod = const "personal_sendTransaction"
 
-instance {-# OVERLAPPING #-} (MonadIO m) => MonadProtocol (ProtocolT m) where
+instance {-# OVERLAPPING #-} 
+  (MonadIO m, MonadCatch m) => MonadProtocol (ProtocolT m) where
+
   liftProtocolT pio =
     ProtocolT $
     StateT $ \s ->
@@ -257,9 +280,6 @@ instance (MonadProtocol m, Monoid w) => MonadProtocol (WriterT w m) where
   liftProtocolT = lift . liftProtocolT
 
 instance (MonadProtocol m) => MonadProtocol (StateT s m) where
-  liftProtocolT = lift . liftProtocolT
-
-instance (MonadProtocol m) => MonadProtocol (ContT r m) where
   liftProtocolT = lift . liftProtocolT
 
 instance (Monad m) => Commutes m (Reader r) (ReaderT r' m) where
@@ -335,9 +355,10 @@ receiveRequest method = do
 
 sendReceiveProtocolT :: 
   (ToJSON a, ToRequest a, FromJSON b, MonadProtocol m) => a -> m b
-sendReceiveProtocolT x = do
+sendReceiveProtocolT x = handleAll err $ do
   reqID <- sendProtocolT x
   receiveProtocolT reqID
+  where err e = error $ "Ethereum client returned an error: " ++ show e
 
 readAccount :: (MonadIO m) => String -> m EthAccount
 readAccount name = liftIO $ 

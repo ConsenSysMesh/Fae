@@ -17,11 +17,14 @@ import qualified Data.Serialize as S
 import Data.Serialize (Serialize)
 
 import Data.Maybe
+import Data.Time.Clock
 
 import PostTX.Args
 
 import System.Directory
 import System.Environment
+
+import Text.Read
 
 -- * Spec types
 data TXData a =
@@ -60,7 +63,7 @@ data LoadedModules =
 
 type Modules = ModuleMap
 type FileName = String
-type Keys = Map String PrivateKey
+type Keys = Map String (Either PublicKey PrivateKey)
 type Identifier = String
 
 -- * Template Haskell
@@ -74,17 +77,17 @@ txDataToSpec TXData{..} FaethArgs{..} = do
   let 
     keys' = if null keys then [("self", "self")] else keys
     (signerNames, keyNames) = unzip keys'
-  (privKeys, keyNonces) <- unzip <$> mapM getPrivateKey keyNames
+  privKeys <- mapM resolveKeyName keyNames
+  now <- getCurrentTime
   let 
     salt
       | useFaeth = S.encode
           Salt
           {
-            faeSalt = show totalNonce, 
+            faeSalt = show now, 
             ethFee = HexInteger <$> faethFee 
           }
-      | otherwise = S.encode $ show totalNonce
-    totalNonce = sum keyNonces
+      | otherwise = S.encode $ show now
     privKeyMap = Map.fromList $ zip signerNames privKeys 
   return $ 
     makeTXSpec dataModules inputs privKeyMap fallback parent reward salt
@@ -101,7 +104,7 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
       {
         mainModulePreview = uncurry makePreview mainModule,
         otherModulePreviews = Map.mapWithKey makePreview otherModules,
-        signatures = fmap (maybe (error "Bad private key") Left . public) keys,
+        signatures = Left . either id (fromMaybe keyErr . public) <$> keys,
         ..
       },
     ..
@@ -109,6 +112,7 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
 
   where
     LoadedModules{..} = specModules
+    keyErr = error "Bad private key"
 
     makePreview :: FileName -> Module -> ModulePreview
     makePreview fName moduleBS =
@@ -119,21 +123,20 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
       }
 
     addSignatures :: Keys -> TXMessage -> TXMessage
-    addSignatures keys m = Map.foldrWithKey signTXMessage m keys
+    addSignatures keys m = Map.foldrWithKey signPrivate m keys
 
-getPrivateKey :: String -> IO (PrivateKey, Int)
-getPrivateKey name = do
+    signPrivate _ (Left k) m = m
+    signPrivate s (Right k) m = signTXMessage s k m
+
+resolveKeyName :: String -> IO (Either PublicKey PrivateKey)
+resolveKeyName pubKeyS | Just pubKey <- readMaybe pubKeyS = return $ Left pubKey
+resolveKeyName name = do
   keyExists <- doesFileExist name
   if keyExists
-  then do
-    p@(key, nonce) <- 
-      either (error $ "Couldn't decode private key: " ++ name) id . 
-        S.decode <$> BS.readFile name
-    BS.writeFile name $ S.encode (key, nonce + 1)
-    return p
+  then bimap (error $ "Couldn't decode private key: " ++ name) id . 
+    S.decode <$> BS.readFile name
   else do
     privKey <- newPrivateKey
-    let p = (privKey, 0)
-    BS.writeFile name $ S.encode p
-    return p
+    BS.writeFile name $ S.encode privKey
+    return $ Right privKey
 
