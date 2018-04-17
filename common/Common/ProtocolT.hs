@@ -12,6 +12,7 @@ import Control.Monad.Writer
 
 import Data.Aeson (FromJSON(..), ToJSON(..), (.:), (.:?), (.=))
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Types as A
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
@@ -38,7 +39,7 @@ import qualified Text.ParserCombinators.ReadPrec as R
 import System.Directory
 import System.FilePath
 
-import Text.Read hiding (lift)
+import Text.Read hiding (lift, get)
 
 data FaethTXData =
   FaethTXData
@@ -152,26 +153,33 @@ instance Show Hex where
   show = ("0x" ++) . C8.unpack . B16.encode . getHex
 
 instance Read Hex where
-  readPrec = Hex . decodeHex . strip0x <$> R.lift rest where 
-    strip0x s = fromMaybe s $ L.stripPrefix "0x" s
-    rest = RP.many RP.get
-    decodeHex = fst . B16.decode . C8.pack
+  readPrec = R.readP_to_Prec $ const $ do
+    (orig, (hexBS, rest)) <- RP.gather $ do
+      RP.optional $ RP.string "0x"
+      B16.decode . C8.pack <$> (RP.get `RP.manyTill` RP.eof)
+    if BS.null rest
+    then return $ Hex hexBS
+    else fail $ "Invalid hex string: " ++ orig
 
 instance ToJSON Hex where
   toJSON = toJSON . show
 
 instance FromJSON Hex where
-  parseJSON x = 
-    fromMaybe (error "Invalid hex string") . readMaybe <$> parseJSON x
-
-instance FromJSON HexInteger where
-  parseJSON x = either error fst . T.hexadecimal <$> parseJSON x
+  parseJSON = A.withText "Hex" $ either fail return . readEither . T.unpack
 
 instance Show HexInteger where
   show = ("0x" ++) . flip showHex ""
 
+instance Read HexInteger where
+  readPrec = HexInteger <$> R.readS_to_Prec (const readHex)
+
 instance ToJSON HexInteger where
   toJSON = toJSON . show
+
+instance FromJSON HexInteger where
+  parseJSON x = flip (A.withText "HexInteger") x $ \t -> do
+    let hexE = T.hexadecimal t
+    either (const $ A.typeMismatch "HexInteger" x) (return . fst) hexE
 
 instance ToJSON FaethTXData where
   toJSON FaethTXData{senderEthAccount = EthAccount{..}, ..} =
