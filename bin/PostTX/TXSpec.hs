@@ -4,6 +4,7 @@ module PostTX.TXSpec (module PostTX.TXSpec, Module, ModuleMap) where
 import Blockchain.Fae.FrontEnd
 
 import Common.Lens hiding ((<.>))
+import Common.ProtocolT
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
@@ -17,10 +18,10 @@ import Data.Serialize (Serialize)
 
 import Data.Maybe
 
+import PostTX.Args
+
 import System.Directory
 import System.Environment
-
-import Debug.Trace
 
 -- * Spec types
 data TXData a =
@@ -68,21 +69,29 @@ makeLenses ''TXSpec
 makeLenses ''ParsedModules
 
 -- * Spec constructor
-txDataToSpec :: TXData LoadedModules -> IO TXSpec
-txDataToSpec TXData{..} = do
+txDataToSpec :: TXData LoadedModules -> FaethArgs -> IO TXSpec
+txDataToSpec TXData{..} FaethArgs{..} = do
   let 
     keys' = if null keys then [("self", "self")] else keys
     (signerNames, keyNames) = unzip keys'
   (privKeys, keyNonces) <- unzip <$> mapM getPrivateKey keyNames
   let 
-    salt = show $ sum keyNonces
+    salt
+      | useFaeth = S.encode
+          Salt
+          {
+            faeSalt = show totalNonce, 
+            ethFee = faethFee 
+          }
+      | otherwise = S.encode $ show totalNonce
+    totalNonce = sum keyNonces
     privKeyMap = Map.fromList $ zip signerNames privKeys 
   return $ 
     makeTXSpec dataModules inputs privKeyMap fallback parent reward salt
 
 makeTXSpec ::
   LoadedModules -> Inputs -> Keys -> [Identifier] -> 
-  Maybe TransactionID -> Bool -> String ->
+  Maybe TransactionID -> Bool -> ByteString ->
   TXSpec
 makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt = 
   TXSpec

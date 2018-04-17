@@ -15,7 +15,12 @@ import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Trans.Cont
 
-import Data.Aeson (FromJSON(..), ToJSON(..), (.:), (.:?))
+import Data.Aeson 
+  (
+    FromJSON(..), ToJSON(..), 
+    genericToEncoding, Options(..), defaultOptions, 
+    (.:), (.:?)
+  )
 import qualified Data.Aeson as A
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -62,9 +67,6 @@ data PartialEthTransaction =
 data ParitySubscribe = ParitySubscribe
 data EthGetBlockByHash = EthGetBlockByHash EthBlockID
 
-newtype HexInteger = HexInteger { getHexInteger :: Integer }
-  deriving (Eq, Ord, Show, Num, Real, Enum, Integral) 
-
 type BlockLastTXs = Map EthBlockID TransactionID
 newtype FaethWatcherM a = 
   FaethWatcherM
@@ -79,9 +81,6 @@ newtype FaethWatcherM a =
     MonadProtocol, TXQueueM,
     MonadReader (ThreadId, Hex, TVar BlockLastTXs)
   )
-
-instance FromJSON HexInteger where
-  parseJSON x = either error fst . T.hexadecimal <$> parseJSON x
 
 instance MonadState BlockLastTXs FaethWatcherM where
   state f = do
@@ -185,41 +184,46 @@ processEthTXs ethBlockTXs lastTXID = do
 
 processEthTX :: 
   PartialEthTransaction -> TransactionID -> FaethWatcherM TransactionID
-processEthTX PartialEthTransaction{..} lastTXID = do
-  guardFee ethValue
+processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
+  case (val >=) <$> fee of
+    Just False -> error $
+      "Insufficient Ether provided: " ++ 
+      "needed " ++ show fee ++ "; got " ++ show val
+    _ -> return ()
   runFaethTX ethTXID ethTXData lastTXID
-  where guardFee _ = return () -- For now
-
-runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
-runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = 
-  handleAll ethTXError $ do
-    let 
-      tx = maybe (error "Invalid transaction message") id $ 
-        txMessageToTX txMessage
-      thisTXID = txID tx
-      mainFile = addHeader thisTXID mainFile0
-      modules = Map.mapWithKey (fixHeader thisTXID) modules0
-    resultVar <- ioAtomically newEmptyTMVar
-    callerTID <- view _1
-    handleAll (execError thisTXID) $ do
-      txResult <- waitRunTXExecData queueTXExecData
-        TXExecData
-        {
-          parentM = Just lastTXID,
-          lazy = True,
-          fake = False,
-          reward = False, -- When can this be True?
-          ..
-        }
-      liftIO $ putStrLn txResult
-    return thisTXID
 
   where
+    fee = ethFee $ faethSalt $ faeTXMessage ethTXData
+    val = getHexInteger ethValue
     ethTXError e = do
       liftIO . putStrLn $
         "\nError while processing Ethereum transaction " ++ show ethTXID ++
         "\nError was: " ++ show e ++ "\n"
       return lastTXID
+
+runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
+runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
+  resultVar <- ioAtomically newEmptyTMVar
+  callerTID <- view _1
+  handleAll (execError thisTXID) $ do
+    txResult <- waitRunTXExecData queueTXExecData
+      TXExecData
+      {
+        parentM = Just lastTXID,
+        lazy = True,
+        fake = False,
+        reward = False, -- When can this be True?
+        ..
+      }
+    liftIO $ putStrLn txResult
+  return thisTXID
+
+  where
+    tx = maybe (error "Invalid transaction message") id $ 
+      txMessageToTX txMessage
+    thisTXID = txID tx
+    mainFile = addHeader thisTXID mainFile0
+    modules = Map.mapWithKey (fixHeader thisTXID) modules0
     execError txID e = liftIO . putStrLn $
       "\nError while executing Fae transaction " ++ show txID ++
       "\n              in Ethereum transaction " ++ show ethTXID ++

@@ -9,8 +9,8 @@ import Control.Monad.Trans
 
 import PostTX.TXSpec
 
-submitFaeth :: String -> TXSpec -> IO ()
-submitFaeth host TXSpec{specModules = LoadedModules{..}, ..} = do
+submitFaeth :: String -> Maybe Integer -> TXSpec -> IO ()
+submitFaeth host faethEthValue TXSpec{specModules = LoadedModules{..}, ..} = do
   senderEthAccount <- readAccount "sender"
   EthAccount{address = faethEthAddress} <- readAccount "faeth"
   runProtocolT faethEthAddress $ do

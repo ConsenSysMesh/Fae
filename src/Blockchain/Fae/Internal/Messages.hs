@@ -42,7 +42,7 @@ data TXMessage =
     inputCalls :: Inputs,
     fallbackFunctions :: [String],
     signatures :: Map String (Either PublicKey Signature),
-    salt :: String
+    salt :: C8.ByteString
   }
   deriving (Generic)
 

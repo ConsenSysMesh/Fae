@@ -23,10 +23,13 @@ import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Read as T
 
 import GHC.Generics
 
 import qualified Network.WebSockets as WS
+
+import Numeric
 
 import qualified Text.Read as R
 import qualified Text.ParserCombinators.ReadP as RP
@@ -44,10 +47,25 @@ data FaethTXData =
     mainModule :: Module,
     otherModules :: ModuleMap,
     senderEthAccount :: EthAccount,
-    faethEthAddress :: EthAddress
+    faethEthAddress :: EthAddress,
+    faethEthValue :: Maybe Integer
   }
 
-data FaeTX = FaeTX TXMessage Module ModuleMap deriving (Generic)
+data FaeTX = 
+  FaeTX 
+  {
+    faeTXMessage :: TXMessage,
+    faeMainModule :: Module,
+    faeOtherModules :: ModuleMap
+  } deriving (Generic)
+
+data Salt = 
+  Salt
+  {
+    faeSalt :: String,
+    ethFee :: Maybe Integer
+  }
+  deriving (Generic)
 
 data EthAccount =
   EthAccount
@@ -91,6 +109,9 @@ newtype NewAccount = NewAccount String
 
 newtype Hex = Hex { getHex :: ByteString } deriving (Eq, Ord, Serialize)
 
+newtype HexInteger = HexInteger { getHexInteger :: Integer }
+  deriving (Eq, Ord, Num, Real, Enum, Integral) 
+
 newtype ProtocolT m a = 
   ProtocolT
   {
@@ -120,6 +141,8 @@ type EthTXID = Hex
 instance Serialize EthAccount
 instance Serialize FaeTX
 
+instance Serialize Salt
+
 instance Show Error where
   show Error{..} = errMessage ++ maybe "" (\d -> "\n" ++ show d) errData
 
@@ -141,16 +164,26 @@ instance FromJSON Hex where
   parseJSON x = 
     fromMaybe (error "Invalid hex string") . readMaybe <$> parseJSON x
 
+instance FromJSON HexInteger where
+  parseJSON x = either error fst . T.hexadecimal <$> parseJSON x
+
+instance Show HexInteger where
+  show = ("0x" ++) . flip showHex ""
+
+instance ToJSON HexInteger where
+  toJSON = toJSON . show
+
 instance ToJSON FaethTXData where
   toJSON FaethTXData{senderEthAccount = EthAccount{..}, ..} =
     toJSON
     [
-      A.object
+      A.object $
+        (maybe id (:) $ ("value" .=) . HexInteger <$> faethEthValue) $
         [
           "from" .= address,
           "to" .= faethEthAddress,
           "data" .= FaeTX faeTX mainModule otherModules
-        ],
+        ], 
       toJSON passphrase
     ]
 
@@ -319,3 +352,6 @@ writeAccount name account = liftIO $ do
 
 nullAddress :: EthAddress
 nullAddress = Hex BS.empty
+
+faethSalt :: TXMessage -> Salt
+faethSalt = either error id . S.decode . salt 

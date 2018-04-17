@@ -20,7 +20,7 @@ data PostTXArgs =
     argFake :: Bool,
     argView :: Bool,
     argLazy :: Bool,
-    argFaeth :: Bool,
+    argFaeth :: FaethArgs,
     argNewSender :: Bool,
     argUseSender :: Bool
   }
@@ -32,7 +32,7 @@ data FinalizedPostTXArgs =
     postArgHost :: String,
     postArgFake :: Bool,
     postArgLazy :: Bool,
-    postArgFaeth :: Bool
+    postArgFaeth :: FaethArgs
   } |
   ViewArgs
   {
@@ -45,7 +45,16 @@ data FinalizedPostTXArgs =
     senderPassphrase :: String
   }
 
+data FaethArgs =
+  FaethArgs
+  {
+    useFaeth :: Bool,
+    faethFee :: Maybe Integer,
+    faethEthValue :: Maybe Integer
+  }
+
 makeLenses ''PostTXArgs
+makeLenses ''FaethArgs
 
 parseArgs :: [String] -> FinalizedPostTXArgs
 parseArgs = finalize . foldl argGetter 
@@ -56,7 +65,7 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
-    argFaeth = False,
+    argFaeth = FaethArgs False Nothing Nothing,
     argNewSender = False,
     argUseSender = False
   }
@@ -65,24 +74,32 @@ argGetter :: PostTXArgs -> String -> PostTXArgs
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
-argGetter st "--faeth" = st & _argFaeth .~ True
 argGetter st "--new-sender-account" = st & _argNewSender .~ True
 argGetter st "--use-sender-account" = st & _argUseSender .~ True
+argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
+  | ("--faeth-eth-value", '=' : faethValueArg ) <- break (== '=') x
+    = st
+      & _argFaeth . _useFaeth .~ True
+      & _argFaeth . _faethEthValue .~ readMaybe faethValueArg
+  | ("--faeth-fee", '=' : faethFeeArg) <- break (== '=') x
+    = st 
+      & _argFaeth . _useFaeth .~ True
+      & _argFaeth . _faethFee .~ readMaybe faethFeeArg
   | "--" `isPrefixOf` x = error $ "Unrecognized option: " ++ x
   | Nothing <- st ^. _argDataM = st & _argDataM ?~ x
   | Nothing <- st ^. _argHostM = st & _argHostM ?~ x
   | otherwise = error "TX name and host already given"
 
 finalize :: PostTXArgs -> FinalizedPostTXArgs
-finalize PostTXArgs{..} 
-  | argFake && (argView || argLazy || argFaeth || argNewSender || argUseSender)
+finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
+  | argFake && (argView || argLazy || useFaeth || argNewSender || argUseSender)
     = error $
         "--fake is incompatible with --view, --lazy, --faeth, " ++
         "and --new-sender-account"
-  | argView && (argLazy || argFaeth || argNewSender || argUseSender)
+  | argView && (argLazy || useFaeth || argNewSender || argUseSender)
     = error "--view is incompatible with --lazy, --faeth, and --new-sender-account"
-  | argFaeth && (argNewSender || argUseSender)
+  | useFaeth && (argNewSender || argUseSender)
     = error "--faeth and --new-sender-account are incompatible options"
   | argNewSender && argUseSender
     = error

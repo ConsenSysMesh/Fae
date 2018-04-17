@@ -25,11 +25,11 @@ main = do
 
   args <- getArgs
   case parseArgs args of
-    PostArgs{..} -> do
+    PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
       txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
-      txSpec <- txDataToSpec txData
-      if postArgFaeth
-      then submitFaeth postArgHost txSpec
+      txSpec <- txDataToSpec txData postArgFaeth
+      if useFaeth 
+      then submitFaeth postArgHost faethEthValue txSpec
       else submit postArgTXName postArgHost postArgFake postArgLazy txSpec
     ViewArgs{..} -> view viewArgTXID viewArgHost
     SenderArgs{..} -> runProtocolT nullAddress $ 
