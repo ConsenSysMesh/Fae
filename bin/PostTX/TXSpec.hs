@@ -85,7 +85,8 @@ txDataToSpec TXData{..} FaethArgs{..} = do
           Salt
           {
             faeSalt = show now, 
-            ethFee = HexInteger <$> faethFee 
+            ethFee = HexInteger <$> faethFee,
+            ethRecipient = faethRecipient
           }
       | otherwise = S.encode $ show now
     privKeyMap = Map.fromList $ zip signerNames privKeys 

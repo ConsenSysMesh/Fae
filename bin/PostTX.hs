@@ -29,22 +29,9 @@ main = do
       txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
       txSpec <- txDataToSpec txData postArgFaeth
       if useFaeth 
-      then submitFaeth postArgHost faethValue txSpec
+      then submitFaeth postArgHost faethValue faethTo txSpec
       else submit postArgTXName postArgHost postArgFake postArgLazy txSpec
     x@OngoingFaethArgs{..} -> 
-      resubmitFaeth ongoingFaethHost ongoingNewSignerNames ongoingEthTXID
+      resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost
-    SenderArgs{..} -> runProtocolT nullAddress $ 
-      case senderAddressM of
-        Nothing -> do
-          EthAccount{address} <- newAccount "sender" senderPassphrase
-          liftIO $ putStrLn $ "New sender account: " ++ show address
-        Just ethAddress -> do
-          writeAccount "sender" 
-            EthAccount
-              {
-                address = ethAddress,
-                passphrase = senderPassphrase
-              }
-          liftIO $ putStrLn $ "Using sender account: " ++ show ethAddress
 

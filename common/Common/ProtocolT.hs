@@ -64,7 +64,8 @@ data Salt =
   Salt
   {
     faeSalt :: String,
-    ethFee :: Maybe HexInteger
+    ethFee :: Maybe HexInteger,
+    ethRecipient :: Maybe EthAddress
   }
   deriving (Generic)
 
@@ -116,13 +117,13 @@ newtype HexInteger = HexInteger { getHexInteger :: Integer }
 newtype ProtocolT m a = 
   ProtocolT
   {
-    getProtocolT :: StateT Int (ReaderT (WS.Connection, EthAddress) m) a
+    getProtocolT :: StateT Int (ReaderT WS.Connection m) a
   }
   deriving 
   (
     Functor, Applicative, Monad, 
     MonadIO, MonadThrow, MonadCatch,
-    MonadReader (WS.Connection, EthAddress),
+    MonadReader WS.Connection,
     MonadState Int
   )
 
@@ -294,30 +295,25 @@ nextID :: Lens' Int Int
 nextID = id
 
 liftWS :: (MonadProtocol m) => (WS.Connection -> IO a) -> m a
-liftWS f = liftProtocolT (view _1) >>= liftIO . f
-
-askAddress :: (MonadProtocol m) => m EthAddress
-askAddress = liftProtocolT $ view _2
+liftWS f = liftProtocolT ask >>= liftIO . f
 
 splitProtocolT :: 
-  ProtocolT m a -> StateT Int (ReaderT EthAddress (ReaderT WS.Connection m)) a
+  ProtocolT m a -> StateT Int (ReaderT WS.Connection m) a
 splitProtocolT x = 
   StateT $ \nextID ->
-  ReaderT $ \addr ->
   ReaderT $ \conn -> 
-    runReaderT (runStateT (getProtocolT x) nextID) (conn, addr)
+    runReaderT (runStateT (getProtocolT x) nextID) conn
 
 runProtocolT :: 
   (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
-  EthAddress -> ProtocolT m () -> m ()
-runProtocolT address x = do
+  ProtocolT m () -> m ()
+runProtocolT x = do
   liftIO $ putStrLn $
     "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"
   xWS <- 
     commute $ 
     reader $
     runReaderT $
-    flip runReaderT address $
     flip evalStateT 0 $
     splitProtocolT x
   liftIO $ WS.runClient host port "" $ runReader xWS
@@ -359,25 +355,6 @@ sendReceiveProtocolT x = handleAll err $ do
   reqID <- sendProtocolT x
   receiveProtocolT reqID
   where err e = error $ "Ethereum client returned an error: " ++ show e
-
-readAccount :: (MonadIO m) => String -> m EthAccount
-readAccount name = liftIO $ 
-  either (error $ "Couldn't decode " ++ name ++ " account file") id .
-    S.decode <$> BS.readFile accountPath
-  where accountPath = "faeth" </> (name ++ "EthAccount")
-
-newAccount :: (MonadProtocol m) => String -> String -> m EthAccount
-newAccount name passphrase = do
-  address <- sendReceiveProtocolT (NewAccount passphrase)
-  let account = EthAccount{..}
-  writeAccount name account
-  return account
-
-writeAccount :: (MonadIO m) => String -> EthAccount -> m ()
-writeAccount name account = liftIO $ do
-  let accountPath = "faeth" </> (name ++ "EthAccount")
-  createDirectoryIfMissing True "faeth"
-  BS.writeFile accountPath $ S.encode account
 
 nullAddress :: EthAddress
 nullAddress = Hex BS.empty

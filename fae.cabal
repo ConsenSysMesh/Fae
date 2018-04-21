@@ -176,6 +176,7 @@ executable postTX
     directory,
     fae,
     filepath,
+    haskeline,
     http-client,
     lens,
     mtl,

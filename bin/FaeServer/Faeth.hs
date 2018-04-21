@@ -5,6 +5,7 @@ import Blockchain.Fae.FrontEnd
 import Common.Lens
 import Common.ProtocolT
 
+import Control.Applicative
 import Control.Concurrent.Lifted
 import Control.Concurrent.STM.TMVar
 import Control.Concurrent.STM.TVar
@@ -51,13 +52,16 @@ data PartialEthBlock =
     ethBlockNumber :: HexInteger,
     ethBlockHash :: EthBlockID,
     ethParentHash :: EthBlockID,
-    ethBlockTXs :: [PartialEthTransaction]
+    ethBlockTXs :: [Deferred PartialEthTransaction]
   }
+
+newtype Deferred a = Deferred { getDeferred :: Maybe a }
 
 data PartialEthTransaction =
   PartialEthTransaction
   {
     ethTXTo :: EthAddress,
+    ethTXFrom :: EthAddress,
     ethValue :: HexInteger,
     ethTXData :: FaeTX,
     ethTXID :: EthTXID
@@ -106,6 +110,9 @@ instance ToJSON ParitySubscribe where
 instance ToJSON EthGetBlockByHash where
   toJSON (EthGetBlockByHash hash) = toJSON [toJSON hash, toJSON True]
 
+instance (FromJSON a) => FromJSON (Deferred a) where
+  parseJSON x = (Deferred . Just <$> parseJSON x) <|> return (Deferred Nothing)
+
 instance FromJSON EthNewBlock where
   parseJSON = A.withObject "EthNewHead" $ \obj -> do
     ethSubID <- obj .: "subscription"
@@ -128,6 +135,7 @@ instance FromJSON PartialEthTransaction where
   parseJSON = A.withObject "PartialEthTransaction" $ \obj ->
     PartialEthTransaction
     <$> obj .: "to"
+    <*> obj .: "from"
     <*> obj .: "value"
     <*> obj .: "input"
     <*> obj .: "hash"
@@ -162,7 +170,7 @@ addNewBlock :: PartialEthBlock -> FaethWatcherM TransactionID
 addNewBlock b@PartialEthBlock{..} = do
   lastTXIDM <- use $ at ethParentHash
   lastTXID <- maybe (recurseBlock b) return lastTXIDM
-  thisTXID <- processEthTXs ethBlockTXs lastTXID
+  thisTXID <- processEthTXs (mapMaybe getDeferred ethBlockTXs) lastTXID
   modify $ Map.insert ethBlockHash thisTXID
   return thisTXID
 
@@ -176,14 +184,17 @@ recurseBlock PartialEthBlock{..}
 processEthTXs :: 
   [PartialEthTransaction] -> TransactionID -> FaethWatcherM TransactionID
 processEthTXs ethBlockTXs lastTXID = do
-  faethEthAddress <- askAddress
   foldl (>>=) (return lastTXID) $ 
-    map processEthTX $
-      filter ((faethEthAddress ==) . ethTXTo) ethBlockTXs
+    map processEthTX ethBlockTXs
 
 processEthTX :: 
   PartialEthTransaction -> TransactionID -> FaethWatcherM TransactionID
 processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
+  case (ethTXTo ==) <$> recipM of
+    Just False -> error $
+      "Incorrect recipient: expected " ++ show (fromJust recipM) ++
+      "; got " ++ show ethTXTo
+    _ -> return ()
   case (ethValue >=) <$> feeM of
     Just False -> error $
       "Insufficient Ether provided: " ++ 
@@ -192,6 +203,7 @@ processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
   runFaethTX ethTXID ethTXData lastTXID
 
   where
+    recipM = ethRecipient . faethSalt . faeTXMessage $ ethTXData
     feeM = ethFee . faethSalt . faeTXMessage $ ethTXData
     ethTXError e = do
       liftIO . putStrLn $
@@ -229,11 +241,10 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
 
 runFaethWatcherM :: FaethWatcherM () -> TXQueueT IO ()
 runFaethWatcherM xFW = do
-  EthAccount{..} <- readAccount "faeth"
   tID <- myThreadId
   blockTXIDs <- liftIO $ newTVarIO Map.empty
   forever $ handleAll waitRestart $ 
-    runProtocolT address $ do
+    runProtocolT $ do
       subID <- sendReceiveProtocolT ParitySubscribe
       runReaderT (getFaethWatcherM xFW) (tID, subID, blockTXIDs) 
 

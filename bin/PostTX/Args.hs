@@ -20,9 +20,7 @@ data PostTXArgs =
     argFake :: Bool,
     argView :: Bool,
     argLazy :: Bool,
-    argFaeth :: FaethArgs,
-    argNewSender :: Bool,
-    argUseSender :: Bool
+    argFaeth :: FaethArgs
   }
 
 data FinalizedPostTXArgs =
@@ -37,18 +35,13 @@ data FinalizedPostTXArgs =
   OngoingFaethArgs
   {
     ongoingFaethHost :: String,
-    ongoingNewSignerNames :: [String],
-    ongoingEthTXID :: EthTXID
+    ongoingEthTXID :: EthTXID,
+    ongoingFaethArgs :: FaethArgs
   } |
   ViewArgs
   {
     viewArgTXID :: TransactionID,
     viewArgHost :: String
-  } |
-  SenderArgs
-  {
-    senderAddressM :: Maybe EthAddress,
-    senderPassphrase :: String
   }
 
 data FaethArgs =
@@ -57,7 +50,9 @@ data FaethArgs =
     useFaeth :: Bool,
     faethFee :: Maybe Integer,
     faethValue :: Maybe Integer,
-    addSignerNames :: [String]
+    faethRecipient :: Maybe EthAddress,
+    faethTo :: Maybe EthAddress,
+    newSigners :: [(String, String)]
   }
 
 makeLenses ''PostTXArgs
@@ -72,23 +67,20 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
-    argFaeth = FaethArgs False Nothing Nothing [],
-    argNewSender = False,
-    argUseSender = False
+    argFaeth = FaethArgs False Nothing Nothing Nothing Nothing []
   }
           
 argGetter :: PostTXArgs -> String -> PostTXArgs
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
-argGetter st "--new-sender-account" = st & _argNewSender .~ True
-argGetter st "--use-sender-account" = st & _argUseSender .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
-  | ("--faeth-add-signature", '=' : newSigner) <- break (== '=') x
-    = st
-      & _argFaeth . _useFaeth .~ True
-      & _argFaeth . _addSignerNames %~ (newSigner :)
+  | ("--faeth-add-signature", '=' : newSignerArg) <- break (== '=') x
+    = let (sigName, ':' : keyName) = break (== ':') newSignerArg in
+      st
+        & _argFaeth . _useFaeth .~ True
+        & _argFaeth . _newSigners %~ ((sigName, keyName) :)
   | ("--faeth-eth-value", '=' : faethValueArg ) <- break (== '=') x
     = st
       & _argFaeth . _useFaeth .~ True
@@ -97,6 +89,14 @@ argGetter st x
     = st 
       & _argFaeth . _useFaeth .~ True
       & _argFaeth . _faethFee .~ readMaybe faethFeeArg
+  | ("--faeth-eth-to", '=' : faethToArg) <- break (== '=') x
+    = st 
+      & _argFaeth . _useFaeth .~ True
+      & _argFaeth . _faethTo .~ readMaybe faethToArg
+  | ("--faeth-recipient", '=' : faethRecipArg) <- break (== '=') x
+    = st 
+      & _argFaeth . _useFaeth .~ True
+      & _argFaeth . _faethRecipient .~ readMaybe faethRecipArg
   | "--" `isPrefixOf` x = error $ "Unrecognized option: " ++ x
   | Nothing <- st ^. _argDataM = st & _argDataM ?~ x
   | Nothing <- st ^. _argHostM = st & _argHostM ?~ x
@@ -104,32 +104,27 @@ argGetter st x
 
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
-  | argFake && (argView || argLazy || useFaeth || argNewSender || argUseSender)
+  | argFake && (argView || argLazy || useFaeth)
     = error $
         "--fake is incompatible with --view, --lazy, --faeth*, " ++
         "and --new-sender-account"
-  | argView && (argLazy || useFaeth || argNewSender || argUseSender)
+  | argView && (argLazy || useFaeth)
     = error
         "--view is incompatible with --lazy, --faeth*, and --new-sender-account"
-  | useFaeth && (argNewSender || argUseSender)
-    = error "--faeth* and --new-sender-account are incompatible options"
-  | not (null addSignerNames) && (isJust faethFee || isJust faethValue)
+  | not (null newSigners) && (isJust faethFee || isJust faethRecipient)
     = error $
       "--faeth-add-signature is incompatible with " ++
-      "--faeth-fee and --faeth-eth-value"
-  | argNewSender && argUseSender
-    = error
-        "--new-sender-account and --use-sender-account are incompatible options"
+      "--faeth-fee and --faeth-recipient"
   | argView, Nothing <- argDataM
     = error "--view requires a transaction ID"
-  | not (null addSignerNames), Just ethTXIDS <- argDataM =
+  | not (null newSigners), Just ethTXIDS <- argDataM =
     OngoingFaethArgs
     {
-      ongoingNewSignerNames = addSignerNames,
       ongoingEthTXID =
         fromMaybe (error $ "Couldn't parse Ethereum TXID: " ++ ethTXIDS) $
         readMaybe ethTXIDS,
-      ongoingFaethHost = justHost argHostM
+      ongoingFaethHost = justHost argHostM,
+      ongoingFaethArgs = argFaeth
     }
   | argView, Just txIDS <- argDataM =
     ViewArgs
@@ -139,18 +134,6 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
         readMaybe txIDS,
       viewArgHost = justHost argHostM
     }
-  | argNewSender, Nothing <- argDataM
-    = error "--new-sender-account requires a passphrase"
-  | argUseSender, Nothing <- argDataM
-    = error "--use-sender-account requires ethereumAddress:passphrase"
-  | argNewSender, Just senderPassphrase <- argDataM = 
-    SenderArgs{senderAddressM = Nothing, ..}
-  | argUseSender, Just addressPassphrase <- argDataM = 
-    let 
-      (addressHex, ':' : senderPassphrase) = break (== ':') addressPassphrase 
-      address = fromMaybe (error $ "Invalid Ethereum address: " ++ addressHex) $
-        readMaybe addressHex
-    in SenderArgs{senderAddressM = Just address, ..}
   | otherwise =
     PostArgs
     {

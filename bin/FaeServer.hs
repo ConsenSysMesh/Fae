@@ -61,7 +61,4 @@ main = do
     case args of
       [] -> runFaeServer queueTXExecData 
       ["--faeth"] -> runFaeth tID
-      ["--new-faeth-account", passphrase] -> runProtocolT nullAddress $ do
-        EthAccount{address} <- newAccount "faeth" passphrase
-        liftIO $ putStrLn $ "New Faeth account: " ++ show address
 
