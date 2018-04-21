@@ -61,8 +61,8 @@ runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory
     emptyTXHistory = 
       TXHistory
       {
-        txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 0),
+        txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 1),
         bestTXID = nullID,
-        bestTXCount = 0
+        bestTXCount = 1
       }
 
