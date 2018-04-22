@@ -1,4 +1,4 @@
-# Fae: a functional alternative to Ethereum
+# Fae, a functional smart contract system
 
 Fae is a smart contract system and blockchain definition with equivalent power
 to Ethereum but with the following additional benefits:
@@ -15,3 +15,5 @@ to Ethereum but with the following additional benefits:
   - Scarcity policy is left to the discretion of each smart contract.
 
 We provide an [implementation](src/) of this system in Haskell, for which we have included the [haddocks](https://consensys.github.io/Fae/).  Prose documentation for various design aspects of Fae can be found in the [fae-documents](https://github.com/ConsenSys) repository.  As of version 0.9.9.9, there are [docker images](https://hub.docker.com/r/ryancreich/fae/tags/) for the two executables `faeServer` and `postTX` that comprise a playground environment; contact me for access as the repository is private.
+
+For the curious, the name "Fae" is inspired by an element of the setting of Patrick Rothfuss' *The Kingkiller Chronicles*: an otherworldly realm that periodically verges on the natural world.  This and other metaphorical parallels suggest the relationship between Fae and the physical world, or Fae and Ethereum.  A more direct comparison lies in the acronym "Fae: functional alternative to Ethereum".
