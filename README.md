@@ -14,8 +14,4 @@ to Ethereum but with the following additional benefits:
 
   - Scarcity policy is left to the discretion of each smart contract.
 
-We provide an [implementation](src/) of this system in Haskell, for which we have included the [haddocks](https://consensys.github.io/Fae/); if you have
-permission, you can also read [the white
-paper](https://consensys.quip.com/QsIxAHHGHz6W/Functional-principles-of-contract-design),
-which explains the rationale for the design from legal, algorithmic, and
-security perspectives.  As of version 0.9.9.9, there are [docker images](https://hub.docker.com/r/ryancreich/fae/tags/) for the two executables `faeServer` and `postTX` that comprise a playground environment; contact me for access as the repository is private.
+We provide an [implementation](src/) of this system in Haskell, for which we have included the [haddocks](https://consensys.github.io/Fae/).  Prose documentation for various design aspects of Fae can be found in the [fae-documents](https://github.com/ConsenSys) repository.  As of version 0.9.9.9, there are [docker images](https://hub.docker.com/r/ryancreich/fae/tags/) for the two executables `faeServer` and `postTX` that comprise a playground environment; contact me for access as the repository is private.
