@@ -1,0 +1,3 @@
+cmd="stack exec postTX ${ethTXID?} -- --faeth-add-signature=bob:bob --faeth-eth-value=${value?} --faeth-eth-to=$(<alice)"
+echo $cmd
+eval $cmd

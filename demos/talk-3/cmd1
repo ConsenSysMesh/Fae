@@ -1,0 +1,3 @@
+cmd="alice=alice bob=$(<bob-fae) stack exec postTX FaethService -- --faeth-fee=1 --faeth-recipient=$(<alice) --faeth-eth-to=$(<alice)"
+echo $cmd
+eval $cmd
