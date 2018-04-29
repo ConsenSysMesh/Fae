@@ -30,5 +30,6 @@ docker run \
   --rm \
   --network host \
   --mount type=bind,src=$PWD,dst=/txs/,readonly \
+  --mount type=bind,src=${FAE_HOME:-~/fae},dst=/fae/ \
   "${envlist[@]}" $imgName $txfile $@
 
