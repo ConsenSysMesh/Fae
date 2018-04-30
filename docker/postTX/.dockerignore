@@ -1,5 +1,5 @@
 Dockerfile
 build
-*~
-.gitignore
-.dockerignore
+**/*~
+**/.gitignore
+**/.dockerignore

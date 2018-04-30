@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build --no-cache -t teamfae/faeserver .
+docker build --build-arg GIT_BRANCH=$(git symbolic-ref --short HEAD) --no-cache -t teamfae/faeserver .

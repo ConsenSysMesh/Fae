@@ -15,7 +15,7 @@ apt-get -y install\
   libgmp-dev\
   libtinfo-dev\
   zlib1g-dev\
-  git\
+  git
 
 wget -q -O - https://www.stackage.org/stack/linux-x86_64\
   | tar xzf - --strip-components 1 -C /tmp
@@ -23,13 +23,13 @@ mv /tmp/stack /usr/bin
 mkdir -p $STACK_ROOT
 
 GIT_SSH_COMMAND="ssh -i /root/.ssh/id_rsa"\
-  git clone git@github.com:ConsenSys/Fae.git $FAE_HOME
+  git clone -b $GIT_BRANCH git@github.com:ConsenSys/Fae.git $FAE_HOME
 cd $FAE_HOME
 stack --local-bin-path /usr/bin install :faeServer
 
 cat >/usr/bin/faeServer.sh <<EOF
 #!/bin/bash
-GHC_PACKAGE_PATH=$(stack path --ghc-package-path) exec /usr/bin/faeServer
+GHC_PACKAGE_PATH=$(stack path --ghc-package-path) exec /usr/bin/faeServer \$@
 EOF
 chmod 755 /usr/bin/faeServer.sh
 
