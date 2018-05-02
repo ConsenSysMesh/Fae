@@ -19,10 +19,6 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
-flag static
-  description: Build postTX statically linked.
-  default: False
-
 library
   hs-source-dirs:      src, common
   exposed-modules:     
@@ -163,9 +159,6 @@ executable postTX
     PostTX.Submit
     PostTX.TXSpec
     PostTX.View
-  if flag(static)
-    ld-options: -static
-    ghc-options: -fPIC
   build-depends:
     aeson,
     base,

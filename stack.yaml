@@ -39,13 +39,9 @@ packages:
 - '.'
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps:
-  - haddock-api-2.18.1
-  - haddock-library-1.4.4
+extra-deps: []
 
-ghc-options:
-  "$everything": -dynamic-too -optl-pthread
-  cryptonite: -opta-Wa,-mrelax-relocations=no
+ghc-options: {}
 
 # Override default flag values for local packages and extra-deps
 flags: {}
