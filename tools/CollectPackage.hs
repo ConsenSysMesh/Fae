@@ -35,7 +35,6 @@ data Info =
   Info
   {
     newRoot :: FilePath,
-    relRoot :: FilePath,
     ghcVersion :: String
   }
 
@@ -46,26 +45,21 @@ makeLenses ''Info
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    [relRoot] -> do
-      newRoot <- canonicalizePath relRoot
-      exists <- doesDirectoryExist newRoot
-      when exists $ error $ "New root " ++ newRoot ++ " already exists"
-      createDirectoryIfMissing True newRoot
-      createDirectory (libSubdir newRoot)
-      createDirectory (packageConfDSubdir newRoot)
-      (ghcVersion, packageInfo, packageIndex) <- getBuildInfo
-      flip runReaderT Info{..} $
-        forM_ (packageInfo : allPackages packageIndex) copyPackage
-    _ -> do
-      progName <- getProgName
-      error $ "Usage: " ++ progName ++ " <relative path>"
+  newRoot <- getCurrentDirectory
+  projectRoot <- getProjectRoot newRoot
+  createDirectoryIfMissing True (libSubdir newRoot)
+  createDirectoryIfMissing True (packageConfDSubdir newRoot)
+  createDirectoryIfMissing True (moduleSubdir newRoot)
+  (ghcVersion, packageInfo, packageIndex) <- getBuildInfo projectRoot
+  flip runReaderT Info{..} $
+    forM_ (packageInfo : allPackages packageIndex) copyPackage
 
 copyPackage :: InstalledPackageInfo -> InfoM ()
 copyPackage packageInfo@InstalledPackageInfo{installedUnitId} = do
   Info{..} <- ask
-  let newSpecPath = packageConfDSubdir newRoot </> display installedUnitId
+  let 
+    newSpecPath = 
+      packageConfDSubdir newRoot </> display installedUnitId <.> "conf"
   writePackageSpec packageInfo newSpecPath
   copyLibraryDirs packageInfo
   copyDynLibs packageInfo
@@ -73,14 +67,14 @@ copyPackage packageInfo@InstalledPackageInfo{installedUnitId} = do
 writePackageSpec :: InstalledPackageInfo -> FilePath -> InfoM ()
 writePackageSpec packageInfo newSpecPath = do
   Info{..} <- ask
-  let newPackageInfo = minimalize $ moveRoot relRoot packageInfo
+  let newPackageInfo = minimalize $ moveRoot packageInfo
   liftIO $ writeFile newSpecPath $ showInstalledPackageInfo newPackageInfo
 
 copyLibraryDirs :: InstalledPackageInfo -> InfoM ()
 copyLibraryDirs InstalledPackageInfo{libraryDirs, importDirs} = do
   Info{..} <- ask
   liftIO $ forM_ (libraryDirs `union` importDirs) $ \libDir -> do
-    let newDir = replaceDirectory libDir newRoot
+    let newDir = replaceDirectory libDir (moduleSubdir newRoot)
     alreadyCopied <- doesDirectoryExist newDir
     unless alreadyCopied $ fastCopyDir newDir libDir
 
@@ -123,11 +117,12 @@ fastCopyDir newDir oldDir = do
     else when (takeExtension file == ".dyn_hi") $ 
       createLink oldFilePath newFilePath
 
-getBuildInfo :: IO (String, InstalledPackageInfo, InstalledPackageIndex)
-getBuildInfo = do
+getBuildInfo :: 
+  FilePath -> IO (String, InstalledPackageInfo, InstalledPackageIndex)
+getBuildInfo projectRoot = do
   distDir <- getEnv "HASKELL_DIST_DIR"
   lbi@LocalBuildInfo{compiler, installedPkgs} <- 
-    getPersistBuildConfig distDir
+    getPersistBuildConfig (projectRoot </> distDir)
   packageInfo <- getLibComponent lbi
   let CompilerId flavor version = compilerId compiler 
       ghcVersion = display flavor ++ display version
@@ -152,20 +147,32 @@ getLibComponent LocalBuildInfo{componentNameMap, withPackageDB} = do
     pkgdbPath (SpecificPackageDB path) = path
     pkgdbPath _ = error "Registration db isn't the project's"
 
+getProjectRoot :: FilePath -> IO FilePath
+getProjectRoot [pathSeparator] = error "No stack project found"
+getProjectRoot dir = do
+  atRoot <- doesFileExist $ dir </> "stack" <.> "yaml"
+  if atRoot
+  then return dir
+  else getProjectRoot (takeDirectory dir)
+
 sequencePath :: (Monad m) => [FilePath] -> (FilePath -> m (Maybe a)) -> m (Maybe a)
 sequencePath paths f = go paths Nothing where
   go [] Nothing = return Nothing
   go _ (Just x) = return $ Just x
   go (path : rest) Nothing = f path >>= go rest
 
-moveRoot :: FilePath -> InstalledPackageInfo -> InstalledPackageInfo
-moveRoot newRoot pkgInfo = pkgInfo
+moveRoot :: InstalledPackageInfo -> InstalledPackageInfo
+moveRoot pkgInfo = pkgInfo
   & _importDirs %~ map chroot
   & _libraryDirs %~ map chroot
   & _includeDirs %~ map chroot
-  & _libraryDynDirs .~ [libSubdir newRoot]
-  & _dataDir .~ newRoot
-  where chroot = flip replaceDirectory newRoot
+  & _libraryDynDirs .~ [libDir]
+  & _dataDir .~ root
+  where 
+    chroot = flip replaceDirectory moduleDir
+    moduleDir = moduleSubdir root
+    libDir = libSubdir root
+    root = [pathSeparator]
 
 minimalize :: InstalledPackageInfo -> InstalledPackageInfo
 minimalize pkgInfo = pkgInfo
@@ -176,5 +183,7 @@ libSubdir :: FilePath -> FilePath
 libSubdir = (</> "lib")
 
 packageConfDSubdir :: FilePath -> FilePath
-packageConfDSubdir = (</> "package.conf.d")
+packageConfDSubdir p = p </> "etc" </> "fae" </> "package.conf.d"
 
+moduleSubdir :: FilePath -> FilePath
+moduleSubdir = (</> "include")
