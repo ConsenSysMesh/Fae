@@ -197,8 +197,10 @@ executable collectPackage
   main-is: CollectPackage.hs
   other-modules:
     Common.Lens
+    PackageInfo
   build-depends:
     base,
+    bytestring,
     Cabal,
     containers,
     directory,
@@ -211,6 +213,9 @@ executable collectPackage
     unix
   default-language: Haskell2010
   default-extensions:
+    FlexibleContexts
+    FlexibleInstances
+    MultiParamTypeClasses
     NamedFieldPuns
     RankNTypes
     RecordWildCards

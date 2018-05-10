@@ -24,6 +24,9 @@ import Distribution.Types.LocalBuildInfo
 import Distribution.Types.ComponentLocalBuildInfo
 import Distribution.Types.UnitId
 
+import GHC.PackageDb hiding (InstalledPackageInfo)
+import PackageInfo
+
 import System.Directory
 import System.Environment
 import System.FilePath
@@ -48,19 +51,21 @@ main = do
   newRoot <- getCurrentDirectory
   projectRoot <- getProjectRoot newRoot
   createDirectoryIfMissing True (libSubdir newRoot)
-  createDirectoryIfMissing True (packageConfDSubdir newRoot)
   createDirectoryIfMissing True (moduleSubdir newRoot)
+  createDirectoryIfMissing True (packageDBSubdir newRoot)
   (ghcVersion, packageInfo, packageIndex) <- getBuildInfo projectRoot
-  flip runReaderT Info{..} $
-    forM_ (packageInfo : allPackages packageIndex) copyPackage
+  let packageInfos = packageInfo : allPackages packageIndex
+  flip runReaderT Info{..} $ forM_ packageInfos copyPackage
+  let newPackageInfos = minimalize . moveRoot <$> packageInfos
+      ghcPackageInfos = convertPackageInfoToCacheFormat <$> newPackageInfos
+      cacheFilename = packageDBSubdir newRoot </> "package.cache"
+  lock <- lockPackageDb cacheFilename
+  writePackageDb cacheFilename ghcPackageInfos newPackageInfos
+  unlockPackageDb lock
 
 copyPackage :: InstalledPackageInfo -> InfoM ()
 copyPackage packageInfo@InstalledPackageInfo{installedUnitId} = do
   Info{..} <- ask
-  let 
-    newSpecPath = 
-      packageConfDSubdir newRoot </> display installedUnitId <.> "conf"
-  writePackageSpec packageInfo newSpecPath
   copyLibraryDirs packageInfo
   copyDynLibs packageInfo
  
@@ -165,9 +170,9 @@ moveRoot :: InstalledPackageInfo -> InstalledPackageInfo
 moveRoot pkgInfo = pkgInfo
   & _importDirs %~ map chroot
   & _libraryDirs %~ map chroot
-  & _includeDirs %~ map chroot
+  & _includeDirs .~ []
   & _libraryDynDirs .~ [libDir]
-  & _dataDir .~ root
+  & _dataDir %~ chroot
   where 
     chroot = flip replaceDirectory moduleDir
     moduleDir = moduleSubdir root
@@ -182,8 +187,9 @@ minimalize pkgInfo = pkgInfo
 libSubdir :: FilePath -> FilePath
 libSubdir = (</> "lib")
 
-packageConfDSubdir :: FilePath -> FilePath
-packageConfDSubdir p = p </> "etc" </> "fae" </> "package.conf.d"
-
 moduleSubdir :: FilePath -> FilePath
 moduleSubdir = (</> "include")
+
+packageDBSubdir :: FilePath -> FilePath
+packageDBSubdir = (</> "lib" </> "ghc-pkgdb")
+
