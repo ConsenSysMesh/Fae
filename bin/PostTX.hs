@@ -1,19 +1,37 @@
+import Common.ProtocolT
+
+import Control.Monad.Trans
+
+import Data.Maybe
+
 import PostTX.Args
+import PostTX.Faeth
+import PostTX.SpecParser
 import PostTX.Submit
-import PostTX.TXMessage
+import PostTX.TXSpec
 import PostTX.View
 
+import System.Directory
 import System.Environment
+import System.FilePath
 
 main :: IO ()
 main = do
+  userHome <- getHomeDirectory
+  faeHome <- fromMaybe (userHome </> "fae") <$> lookupEnv "FAE_HOME"
+  createDirectoryIfMissing True faeHome
+  txDir <- getCurrentDirectory
+  setCurrentDirectory faeHome
+
   args <- getArgs
-  let (txSpecOrTXID, host, fake, lazy) = parseArgs args
-  case txSpecOrTXID of
-    Left txSpec -> do
-      txData <- buildTXData txSpec
-      submit txSpec host fake lazy txData
-    Right txID 
-      | fake -> error "--fake and --view are incompatible options"
-      | otherwise -> view txID host
+  case parseArgs args of
+    PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
+      txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
+      txSpec <- txDataToSpec txData postArgFaeth
+      if useFaeth 
+      then submitFaeth postArgHost faethValue faethTo txSpec
+      else submit postArgTXName postArgHost postArgFake postArgLazy txSpec
+    x@OngoingFaethArgs{..} -> 
+      resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
+    ViewArgs{..} -> view viewArgTXID viewArgHost
 

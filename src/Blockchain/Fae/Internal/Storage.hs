@@ -6,17 +6,18 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module provides the 'FaeStorageT' monad family, which tracks the state of Fae as contracts execute.  All the types here are parametrized over an unconstrained parameter @c@, but only 'AbstractContract' is ever used.  This indirection is necessary to avert an import cycle between this module and "Blockchain.Fae.Internal.Contract".
+This module provides types and associated functions for accessing the storage of transactions and the contracts they create.
 -}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.Storage where
 
+import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Lens
-import Blockchain.Fae.Internal.NFData
 import Blockchain.Fae.Internal.Versions
+
+import Common.Lens
 
 import Control.Monad.IO.Class
 import Control.Monad.State
@@ -38,11 +39,7 @@ import GHC.Generics (Generic)
 -- * Types
 
 -- | 'StorageT' is just an association between transactions and what they did.
-newtype StorageT c =
-  Storage 
-  { 
-    getStorage :: Map TransactionID (TransactionEntryT c)
-  }
+newtype Storage = Storage { getStorage :: Map TransactionID TransactionEntry }
 
 -- | Each transaction can produce outputs in two different ways (cf.
 -- 'ContractID'), has an associated "signer" public key, and a result.
@@ -52,13 +49,13 @@ newtype StorageT c =
 -- putting a global lock on the storage; thunk execution will go straight
 -- to the correct contract's outputs and not require evaluation of any
 -- other contract or transaction.
-data TransactionEntryT c =
+data TransactionEntry =
   TransactionEntry 
   {
-    inputOutputs :: InputOutputsT c,
+    inputOutputs :: InputOutputs,
     inputOrder :: [ShortContractID],
-    outputs :: OutputsT c,
-    signers :: Signers,
+    outputs :: Outputs,
+    txSigners :: Signers,
     result :: Result
   }
 
@@ -71,15 +68,14 @@ data Result = forall a. (Show a) => Result a
 -- | Inputs are identified by 'ShortContractID's so that 'ContractIDs' of
 -- the 'InputOutput' variant can be flat, rather than nested potentially
 -- indefinitely.
-newtype InputOutputsT c = 
-  InputOutputs { getInputOutputs :: Map ShortContractID (InputOutputVersionsT c) }
+type InputOutputs = Map ShortContractID InputOutputVersions
 -- | We save the versions map, with the actual values scrubbed, so that it
 -- can be displayed to learn the actual version IDs.
-data InputOutputVersionsT c =
+data InputOutputVersions =
   InputOutputVersions
   {
     iRealID :: ContractID,
-    iOutputs :: OutputsT c,
+    iOutputs :: Outputs,
     iVersions :: VersionRepMap
   }
   deriving (Generic)
@@ -90,28 +86,19 @@ data InputOutputVersionsT c =
 -- count of outputs needs to be retained.  The
 -- second component of the map entries is the "nonce" of a contract, the
 -- number of times it has been called, used for security.
-data OutputsT c = 
-  OutputsT
+data Outputs = 
+  Outputs
   {
-    outputMap :: IntMap (c, Int),
+    outputMap :: IntMap (AbstractGlobalContract, Int),
     outputCount :: Int
   }
 
--- | Transactions can have many named signatories.
-newtype Signers = Signers { getSigners :: Map String PublicKey }
-  deriving (Serialize, Generic)
--- | The storage monad is just a state monad.  It's a transformer so that
--- we can apply it to 'Interpreter'; logically they are different.
-type FaeStorageT m c = StateT (StorageT c) m
-
 -- * Template Haskell
 
-makeLenses ''Signers
-makeLenses ''StorageT
-makeLenses ''InputOutputsT
-makeLenses ''TransactionEntryT
-makeLenses ''InputOutputVersionsT
-makeLenses ''OutputsT
+makeLenses ''TransactionEntry
+makeLenses ''InputOutputVersions
+makeLenses ''Outputs
+makeLenses ''Storage
 
 {- Instances -}
 
@@ -120,27 +107,23 @@ instance Show Result where
   show (Result x) = show x
 
 -- | For the 'At' instance
-type instance Index (StorageT c) = ContractID
+type instance Index Storage = ContractID
 -- | For the 'At' instance
-type instance IxValue (StorageT c) = c
+type instance IxValue Storage = AbstractGlobalContract
 -- | For the 'At' instance
-instance Ixed (StorageT c)
+instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
 -- indexing of a 'StorageT' so that we can look up contracts by ID, which
 -- requires descending to various levels into the maps.
-instance At (StorageT c) where
+instance At Storage where
   at cID@((_ :# _) :# _) = throw $ InvalidContractID cID
   at (cID :# n) = nonceAt cID . checkNonce cID (Just n)
   at cID = nonceAt cID . checkNonce cID Nothing
 
 -- * Functions
 
--- | Raises the base monad
-hoistFaeStorage :: (Monad m) => FaeStorageT Identity c a -> FaeStorageT m c a
-hoistFaeStorage m = state $ runIdentity . runStateT m
-
 -- | Like 'at', but retaining the nonce
-nonceAt :: ContractID -> Lens' (StorageT c) (Maybe (c, Int))
+nonceAt :: ContractID -> Lens' Storage (Maybe (AbstractGlobalContract, Int))
 nonceAt cID@(TransactionOutput txID i) =
   _getStorage .
   at txID .
@@ -153,7 +136,6 @@ nonceAt cID@(InputOutput txID sID i) =
   at txID .
   defaultLens (throw $ BadTransactionID txID) .
   _inputOutputs .
-  _getInputOutputs .
   at sID .
   defaultLens (throw $ BadInputID txID sID) .
   _iOutputs .
@@ -178,9 +160,9 @@ nonceSetter Nothing (Just y) = Just (y, 0)
 nonceSetter _ _ = Nothing
 
 -- | Just an 'IntMap' constructor, indexing consecutively from 0.
-listToOutputs :: [c] -> OutputsT c
+listToOutputs :: OutputsList -> Outputs
 listToOutputs l = 
-  OutputsT
+  Outputs
   {
     outputMap = oMap, 
     outputCount = IntMap.size oMap
@@ -188,9 +170,9 @@ listToOutputs l =
   where oMap = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
 
 -- | Like the name says.
-emptyOutputs :: OutputsT c
+emptyOutputs :: Outputs
 emptyOutputs =
-  OutputsT
+  Outputs
   {
     outputMap = IntMap.empty,
     outputCount = 0
@@ -206,7 +188,7 @@ emptyOutputs =
 -- short IDs.  If that happens, the later contract call is /definitely/
 -- malicious, and so it's okay to mishandle it.
 combineIOV :: 
-  InputOutputVersionsT c -> InputOutputVersionsT c -> InputOutputVersionsT c
+  InputOutputVersions -> InputOutputVersions -> InputOutputVersions
 combineIOV
   InputOutputVersions{iOutputs = os1, iVersions = VersionMap vs1}
   InputOutputVersions{iOutputs = os2, iVersions = VersionMap vs2, ..}
@@ -221,11 +203,11 @@ combineIOV
 
 -- | Concatenates two output lists, shifting the second one by the full
 -- count of the first one.
-combineO :: OutputsT c -> OutputsT c -> OutputsT c
+combineO :: Outputs -> Outputs -> Outputs
 combineO 
-  OutputsT{outputMap = os1, outputCount = n1} 
-  OutputsT{outputMap = os2, outputCount = n2}
-  = OutputsT
+  Outputs{outputMap = os1, outputCount = n1} 
+  Outputs{outputMap = os2, outputCount = n2}
+  = Outputs
     {
       outputMap = os1 `IntMap.union` os2',
       outputCount = n1 + n2

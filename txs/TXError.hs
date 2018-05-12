@@ -1,2 +1,2 @@
-body :: Transaction () ()
-body () = error "TXError"
+body :: Transaction Void ()
+body _ = error "TXError"

@@ -36,18 +36,24 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Transaction
 
+import Control.DeepSeq
+
 import Control.Monad 
 import Control.Monad.State
+import Control.Monad.Trans
 
+import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 import GHC.Generics
 
-import Language.Haskell.Interpreter as Int 
+import Language.Haskell.Interpreter hiding (set,get)
+import qualified Language.Haskell.Interpreter as Int (set,get)
 import Language.Haskell.Interpreter.Unsafe as Int 
 
+import System.Environment
 import System.FilePath
 
 -- * Types
@@ -67,9 +73,8 @@ data TX =
 -- | Helpful for printing strings without the surrounding quotes.
 newtype UnquotedString = UnquotedString String
 
--- | This builds on 'FaeStorage' because the interpreter has to access the
--- storage as part of 'runTransaction'.
-type FaeInterpret = FaeStorageM Interpreter 
+-- | Monad for interpreting Fae transactions
+type FaeInterpretT m = InterpreterT (FaeStorageT m)
 
 {- Instances -}
 
@@ -77,18 +82,24 @@ type FaeInterpret = FaeStorageM Interpreter
 instance Serialize TX
 -- | Default instance
 instance Digestible TX
+-- | Default instance
+instance NFData TX
 
 -- | Prints a string without the quotes
 instance Show UnquotedString where
   show (UnquotedString s) = s
 
--- | Since the interpreter is actually at the bottom of the stack.
-instance MonadInterpreter FaeInterpret where
-  fromSession f = lift $ fromSession f
-  modifySessionRef f g = lift $ modifySessionRef f g
-  runGhc x = lift $ runGhc x
+-- | -
+instance (Monad m) => MonadState Storage (FaeInterpretT m) where
+  state = lift . state
+  put = lift . put
+  get = lift get
 
 -- * Functions
+
+-- | The transaction ID of the "genesis transaction"
+nullID :: TransactionID
+nullID = ShortContractID $ digest ()
 
 -- | Interprets a transaction, looking it up as a module named after its
 -- transaction ID; the first argument is whether or not the transaction
@@ -97,14 +108,15 @@ instance MonadInterpreter FaeInterpret where
 -- of other transactions.  Now that we dynamically link @faeServer@, the
 -- load-up time for the first transaction is pretty short; subsequent
 -- transactions are faster still.
-interpretTX :: Bool -> TX -> FaeInterpret ()
+interpretTX :: (MonadMask m, MonadIO m) => Bool -> TX -> FaeInterpretT m ()
 interpretTX isReward TX{..} = handle fixGHCErrors $ do
   Int.set [searchPath := thisTXPath]
   loadModules [txSrc]
   setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]
   run <- interpret runString infer
-  hoistFaeStorage $ getFaeStorage $ run inputs txID pubKeys isReward 
+  liftFaeStorage $ run inputs txID pubKeys isReward 
   where
+    liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
     runString = unwords
       [
         "runTransaction",
@@ -126,22 +138,23 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
     qualified varName = txSrc ++ "." ++ varName
 
 -- | Runs the interpreter.
-runFaeInterpret :: FaeInterpret a -> IO a
-runFaeInterpret x = 
+runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
+runFaeInterpret x = do
+  ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
   fmap (either throw id) $
-  runInterpreter $ 
-  flip evalStateT (Storage Map.empty) $ do
-    Int.set [languageExtensions := languageExts]
-    mapM_ Int.unsafeSetGhcOption $
-      "-fpackage-trust" :
--- For some reason, this makes the interpreter hang.  Unfortunate, as it
--- rather weakens the trust situation not to have it.
---      "-distrust-all" :
-      map ("-trust " ++) trustedPackages
-    x
-
+    flip evalStateT (Storage Map.empty) $ 
+      case ghcLibdirM of
+        Nothing -> unsafeRunInterpreterWithArgs args x
+        Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir x
+  
   where
-    languageExts =
+    args = 
+      map ("-X" ++) languageExts ++
+      -- For some reason, this makes the interpreter hang.  Unfortunate, as it
+      -- rather weakens the trust situation not to have it.
+      --      "-distrust-all" :
+      "-fpackage-trust" : map ("-trust " ++) trustedPackages
+    languageExts = map show
       [
         BangPatterns,
         DeriveDataTypeable,

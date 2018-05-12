@@ -5,7 +5,7 @@ name:                fae
 --   *.*.c.* -> *.*.(c + 1).0 : Bugfixes that may change the (incorrect) behavior of existing code
 --                              or minor, compatible new features
 --   *.*.*.d -> *.*.*.(d + 1) : Adding omitted exports, GHC extensions, cosmetic stuff, demos ...
-version:             1.0.1.0
+version:             1.1.0.0
 -- synopsis:
 -- description:
 homepage:            https://github.com/Consensys/Fae
@@ -19,12 +19,8 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
-flag static
-  description: Build postTX statically linked.
-  default: False
-
 library
-  hs-source-dirs:      src
+  hs-source-dirs:      src, common
   exposed-modules:     
     Blockchain.Fae
     Blockchain.Fae.FrontEnd
@@ -34,21 +30,21 @@ library
   other-modules:
     Blockchain.Fae.Internal.Block
     Blockchain.Fae.Internal.Contract
-    Blockchain.Fae.Internal.Coroutine
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.GenericInstances
     Blockchain.Fae.Internal.GetInputValues
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
-    Blockchain.Fae.Internal.Lens
-    Blockchain.Fae.Internal.NFData
+    Blockchain.Fae.Internal.Messages,
     Blockchain.Fae.Internal.PrettyFae
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Storage
+    Blockchain.Fae.Internal.Suspend
     Blockchain.Fae.Internal.Transaction
     Blockchain.Fae.Internal.TX
     Blockchain.Fae.Internal.Versions
+    Common.Lens
   build-depends:       
     base >= 4.10 && < 5,
     base16-bytestring,
@@ -62,7 +58,6 @@ library
     hint,
     lens,
     memory,
-    monad-coroutine,
     mtl,
     pretty,
     template-haskell,
@@ -96,18 +91,23 @@ library
 
 executable faeServer
   buildable: True
-  hs-source-dirs:      bin
+  hs-source-dirs:      bin, common
   main-is:             FaeServer.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   other-modules:
+    Common.Lens
+    Common.ProtocolT
     FaeServer.App
     FaeServer.Concurrency
     FaeServer.Fae
+    FaeServer.Faeth
     FaeServer.Git
     FaeServer.History
     FaeServer.Modules
   build-depends:       
+    aeson,
     base, 
+    base16-bytestring,
     bytestring,
     cereal,
     containers,
@@ -116,64 +116,107 @@ executable faeServer
     fae,
     filepath,
     http-types,
+    lens,
+    lifted-base,
     mtl,
     process,
     stm,
+    template-haskell,
+    text,
     transformers,
     unix,
     wai,
     wai-extra,
-    warp
+    warp,
+    websockets
   default-language:    Haskell2010
   default-extensions:
+    DeriveGeneric
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
     LambdaCase
+    MultiParamTypeClasses
     NamedFieldPuns
     OverloadedStrings
+    RankNTypes
     RecordWildCards
     ScopedTypeVariables
     TypeApplications
 
 executable postTX
   buildable: True
-  hs-source-dirs: bin
+  hs-source-dirs: bin, common
   main-is: PostTX.hs
   other-modules:
+    Common.Lens
+    Common.ProtocolT
     PostTX.Args
     PostTX.EnvVars
+    PostTX.Faeth
     PostTX.Network
+    PostTX.SpecParser
     PostTX.Submit
-    PostTX.TXMessage
+    PostTX.TXSpec
     PostTX.View
-  if flag(static)
-    ld-options: -static
-    ghc-options: -fPIC
   build-depends:
+    aeson,
     base,
+    base16-bytestring,
     bytestring,
+    cereal,
+    containers,
     directory,
     fae,
     filepath,
+    haskeline,
     http-client,
     lens,
+    mtl,
     process,
-    text
+    template-haskell,
+    text,
+    time,
+    websockets
   default-language: Haskell2010
   default-extensions:
+    DeriveGeneric
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
     RankNTypes
     RecordWildCards
+    MultiParamTypeClasses
     NamedFieldPuns
     OverloadedStrings
     TupleSections
 
--- test-suite fae-test
---   type:                exitcode-stdio-1.0
---   hs-source-dirs:      test
---   main-is:             Spec.hs
---   build-depends:       base
---                      , fae
---   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
---   default-language:    Haskell2010
---source-repository head
---  type:     git
---  location: https://github.com/
+executable collectPackage
+  buildable: True
+  hs-source-dirs: tools, common
+  main-is: CollectPackage.hs
+  other-modules:
+    Common.Lens
+    PackageInfo
+  build-depends:
+    base,
+    bytestring,
+    Cabal,
+    containers,
+    directory,
+    filepath,
+    ghc-boot,
+    lens,
+    mtl,
+    process,
+    template-haskell,
+    unix
+  default-language: Haskell2010
+  default-extensions:
+    FlexibleContexts
+    FlexibleInstances
+    MultiParamTypeClasses
+    NamedFieldPuns
+    RankNTypes
+    RecordWildCards
 

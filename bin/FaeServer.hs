@@ -20,22 +20,45 @@
 - transaction input list.
 -}
 
+import Common.ProtocolT
+
 import Control.Concurrent
+import Control.Concurrent.Lifted (fork)
 import Control.Concurrent.STM
 
 import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.Trans
+
+import Data.Maybe
 
 import FaeServer.App
+import FaeServer.Concurrency
 import FaeServer.Fae
+import FaeServer.Faeth
 import FaeServer.Git
 
-import Network.Wai.Handler.Warp hiding (FileInfo)
+import qualified Network.WebSockets as WS
+
+import System.Directory
+import System.Environment
+import System.FilePath
 
 main :: IO ()
 main = do
+  userHome <- getHomeDirectory
+  faeHome <- fromMaybe (userHome </> "fae") <$> lookupEnv "FAE_HOME"
+  createDirectoryIfMissing True faeHome
+  setCurrentDirectory faeHome
   gitInit
-  txQueue <- atomically newTQueue
+
   tID <- myThreadId
-  void $ forkIO $ runFae txQueue tID
-  runSettings faeSettings $ serverApp txQueue
+  txQueue <- atomically newTQueue
+  args <- getArgs
+
+  flip runReaderT txQueue $ do
+    void $ fork $ runFae tID
+    case args of
+      [] -> runFaeServer queueTXExecData 
+      ["--faeth"] -> runFaeth tID
 

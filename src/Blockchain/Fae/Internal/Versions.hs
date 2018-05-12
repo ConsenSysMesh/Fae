@@ -14,7 +14,8 @@ module Blockchain.Fae.Internal.Versions where
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Lens
+
+import Common.Lens
 
 import Control.Applicative
 import Control.Monad

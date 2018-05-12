@@ -3,3 +3,6 @@ build
 *~
 root/.ssh/.gitignore
 .dockerignore
+gcc.*
+*.swp
+HintTest.*

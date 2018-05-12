@@ -1,60 +1,50 @@
 module PostTX.Submit where
 
-import PostTX.EnvVars
-import PostTX.Network
-import PostTX.TXMessage
-
 import Control.Exception
 import Control.Lens hiding ((<.>))
 
-import qualified Data.ByteString.Lazy.Char8 as LC8
+import qualified Data.ByteString.Char8 as C8
+
+import qualified Data.Map as Map
+import Data.Map (Map)
+
+import qualified Data.Serialize as S
+import Data.Serialize (Serialize)
+
 import Data.Maybe
-import Data.Text (Text)
+import qualified Data.Text as T
 
 import Network.HTTP.Client
 import Network.HTTP.Client.MultipartFormData
 
+import PostTX.EnvVars
+import PostTX.Network
+import PostTX.TXSpec
+
 import System.Directory
 import System.FilePath
 
-submit :: String -> String -> Bool -> Bool-> TXData -> IO ()
-submit txName host fake lazy txData@TXData{_bodyM, _others} = do
-  (mainTmpName, mainModule) <- makeTempFile "body" bodyFile
-  (tmpNames, otherModules) <- unzip <$> mapM (makeTempFile "other") _others
-  request <- buildRequest txName host fake lazy txData mainModule otherModules
-  sendReceive request
-    `finally` mapM removeFile (mainTmpName : tmpNames)
-
-  where bodyFile = fromMaybe txName _bodyM
-
-makeTempFile :: Text -> String -> IO (String, Part)
-makeTempFile label mName = do
-  fText <- readFile fName
-  fTextResolved <- fmap unlines $ resolveImportVars $ lines fText
-  tempDir <- getTemporaryDirectory
-  let newName = tempDir </> mName <.> "temp" <.> "hs"
-  writeFile newName fTextResolved
-  let part = (partFileSource label newName){partFilename = Just fName}
-  return (newName, part)
-
-  where fName = mName <.> "hs"
+submit :: String -> String -> Bool -> Bool-> TXSpec -> IO ()
+submit txName host fake lazy txSpec = 
+  buildRequest txName host fake lazy txSpec >>= sendReceive
 
 buildRequest :: 
-  String -> String -> Bool -> Bool -> TXData -> Part -> [Part] -> IO Request
-buildRequest txName host fake lazy TXData{..} mainModule otherModules =
+  String -> String -> Bool -> Bool -> TXSpec -> IO Request
+buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
   flip formDataBody (requestURL host) $
-    mainModule :
-    otherModules ++
-    fmap (uncurry partLBS) 
-      (maybe id (:) parentArg $ lazyArg : fakeArg : rewardArg : 
-      fallbackArgs ++ inputArgs ++ keysArgs)
+    modulePart "message" txName (S.encode txMessage) : 
+    uncurry (modulePart "body") mainModule :
+    moduleParts "other" otherModules ++
+    fmap (uncurry partBS) (maybe id (:) parentArg [lazyArg, fakeArg, rewardArg])
 
   where
     lazyArg = ("lazy", ) $ if lazy then "True" else "False"
     fakeArg = ("fake", ) $ if fake then "True" else "False"
-    rewardArg = ("reward", ) $ if _reward then "True" else "False"
-    parentArg = ("parent", ) . LC8.pack . show <$> _parent
-    fallbackArgs = map (("fallback",) . LC8.pack) _fallback
-    inputArgs = map (("input", ) . LC8.pack . show) _inputs
-    keysArgs = map (\(signer, key) -> ("key", LC8.pack $ signer ++ ":" ++ key)) _keys
+    rewardArg = ("reward", ) $ if isReward then "True" else "False"
+    parentArg = ("parent", ) . C8.pack . show <$> parentM
 
+modulePart :: String -> String -> Module -> Part
+modulePart param name = partFileRequestBody (T.pack param) name . RequestBodyBS 
+
+moduleParts :: String -> Modules -> [Part]
+moduleParts param = Map.foldrWithKey (\name -> (:) . modulePart param name) []

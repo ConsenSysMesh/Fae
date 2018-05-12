@@ -15,7 +15,7 @@
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: nightly-2017-11-24
+resolver: lts-11.3
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -39,14 +39,10 @@ packages:
 - '.'
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps:
-  - cryptonite-0.24
-  - haddock-api-2.18.1
-  - haddock-library-1.4.4
+extra-deps: 
+  - Cabal-2.0.1.0
 
-ghc-options:
-  "$everything": -dynamic-too -optl-pthread
-  cryptonite: -opta-Wa,-mrelax-relocations=no
+ghc-options: {}
 
 # Override default flag values for local packages and extra-deps
 flags: {}

@@ -12,7 +12,9 @@ or other derived values.
 -}
 module Blockchain.Fae.Internal.Reward where
 
+import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.IDs
+
 import GHC.Generics
 
 -- * Types
@@ -25,4 +27,12 @@ data RewardToken = Token deriving (Generic)
 type RewardEscrowID = EscrowID RewardToken RewardValue
 -- | Seems unnecessary to have to write the whole thing.
 type Reward = RewardEscrowID
+
+-- | This function destroys a reward token, validating it in the process.
+-- As the only interface to the `Reward` type, this /must/ be used by any
+-- contract that intends to accept rewards as payment.
+claimReward :: (MonadTX m) => RewardEscrowID -> m ()
+claimReward eID = do
+  Reward <- useEscrow eID Token
+  return ()
 

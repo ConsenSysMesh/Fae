@@ -4,9 +4,28 @@ set -e
 exeName=postTX
 repoName=${exeName,,}
 imgName=teamfae/$repoName
+cp="cp --preserve=all --dereference"
+gai_lib=$( \
+  ldconfig -p | \
+  grep libnss | \
+  awk --field-separator '=>' '$2 ~ /x86_64/ {print $2;}' \
+)
+gai_etc="/etc/nsswitch.conf /etc/gai.conf"
 
-mkdir -p bin/
-stack --local-bin-path $PWD/bin install --flag fae:static :$exeName
+awkexp ()
+{
+  field=$1
+  echo "\$$field ~ /^\// {print \$$field;}"
+}
+
+mkdir -p bin/ lib/ lib64/
+stack --local-bin-path $PWD/bin install :$exeName
+exePath="./bin/$exeName"
+libdeps=$(ldd $exePath | awk "$(awkexp 3)")
+ldlinux=$(ldd $exePath | awk "$(awkexp 1)")
+$cp $gai_lib $libdeps lib/
+$cp $ldlinux lib64/
+$cp $gai_etc etc/
 { docker build -t $imgName . ; s=$?; } || true
-rm -r ./bin
+rm -r ./bin ./lib ./lib64/ ./etc/*.conf
 exit $s

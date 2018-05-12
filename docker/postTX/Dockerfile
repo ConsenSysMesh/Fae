@@ -1,6 +1,6 @@
 FROM scratch
-ADD . /
-ENV TMPDIR /tmp
-WORKDIR $TMPDIR
+ENV FAE_HOME /fae
+WORKDIR $FAE_HOME
 WORKDIR /txs
 ENTRYPOINT ["/bin/postTX"]
+ADD . /
