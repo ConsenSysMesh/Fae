@@ -1,2 +1,74 @@
 #!/bin/bash
-docker build --build-arg GIT_BRANCH=$(git symbolic-ref --short HEAD) --no-cache -t teamfae/faeserver .
+set -e
+
+# Target definition stanza
+exeName=faeServer
+
+# Executables stanza
+echoeval ()
+{
+  echo $@
+  eval $@
+}
+cp="echoeval cp --preserve=all --dereference"
+stack="echoeval stack"
+docker="echoeval docker"
+makedir="echoeval mkdir -p" # mkdir is reserved by the highlighter
+rem="echoeval rm" # rm is reserved by the highlighter
+
+# Error handling
+dirtyFiles=(./bin ./lib ./lib64)
+cleanup ()
+{
+  $rem -rf "${dirtyFiles[@]}" 2>/dev/null
+}
+trap cleanup EXIT
+
+# Stack stanza
+$makedir bin/
+$stack build :$exeName :collectPackage
+$stack --local-bin-path $PWD/bin install :$exeName
+$stack exec collectPackage 
+
+# GHC stanza
+ghcDir=$(stack ghc -- --print-libdir)
+$makedir lib/
+$cp $ghcDir/settings $ghcDir/platformConstants lib/
+
+# Dynamic loading stanza
+awkexp ()
+{
+  field=$1
+  echo "\$$field ~ /^\// {print \$$field;}"
+}
+exePath=bin/$exeName
+ldlinux=$(ldd $exePath | awk "$(awkexp 1)")
+libdeps=$(\
+  LD_LIBRARY_PATH=$PWD/lib ldd $exePath \
+  | awk "$(awkexp 3)" \
+  | grep -v ^$PWD/lib
+  )
+$makedir lib64/
+$cp $ldlinux lib64/
+for lib in $libdeps; do
+  libname=$(basename $lib)
+  newlibname=${libname/%.so.*/.so}
+  $cp $lib lib
+  if [[ $libname != $newlibname ]]
+  then
+    echoeval ln -sf $libname lib/$newlibname
+  fi
+done
+
+# Git stanza
+git=$(which git)
+$cp $git bin/git
+gitdeps=$(\
+  LD_LIBRARY_PATH=$PWD/lib ldd ./bin/git \
+  | awk "$(awkexp 3)" \
+  | grep -v ^$PWD/lib\
+  )
+$cp -r $gitdeps lib/
+
+# Docker coda
+$docker build -t teamfae/faeserver .

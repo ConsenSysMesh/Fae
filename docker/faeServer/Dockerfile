@@ -1,8 +1,10 @@
-FROM ubuntu
-ARG GIT_BRANCH=master
-ENV STACK_ROOT=/usr/lib/stack\
-    FAE_HOME=/var/lib/fae
-ADD . /
-RUN chmod +x /build.sh && /build.sh && rm /build.sh
-ENTRYPOINT ["/usr/bin/faeServer.sh"]
+FROM scratch
+ENV FAE_HOME=/var/lib/fae\
+    GHC_PACKAGE_PATH=/lib/ghc-pkgdb\
+    GHC_LIBDIR=/lib\
+    TMPDIR=/tmp
+WORKDIR $TMPDIR
+WORKDIR $FAE_HOME
+ENTRYPOINT ["/bin/faeServer"]
 EXPOSE 27182
+ADD . /

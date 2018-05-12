@@ -55,14 +55,12 @@ updateHistory txID txCount = do
 
 runFaeInterpretWithHistory :: 
   (MonadMask m, MonadIO m) => FaeInterpretWithHistoryT m () -> m ()
-runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory 
-
-  where
-    emptyTXHistory = 
-      TXHistory
-      {
-        txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 1),
-        bestTXID = nullID,
-        bestTXCount = 1
-      }
+runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory where
+  emptyTXHistory = 
+    TXHistory
+    {
+      txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 1),
+      bestTXID = nullID,
+      bestTXCount = 1
+    }
 

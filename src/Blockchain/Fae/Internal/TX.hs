@@ -40,6 +40,7 @@ import Control.DeepSeq
 
 import Control.Monad 
 import Control.Monad.State
+import Control.Monad.Trans
 
 import Data.Functor.Identity
 import Data.List
@@ -52,6 +53,7 @@ import Language.Haskell.Interpreter hiding (set,get)
 import qualified Language.Haskell.Interpreter as Int (set,get)
 import Language.Haskell.Interpreter.Unsafe as Int 
 
+import System.Environment
 import System.FilePath
 
 -- * Types
@@ -137,21 +139,22 @@ interpretTX isReward TX{..} = handle fixGHCErrors $ do
 
 -- | Runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
-runFaeInterpret x = 
+runFaeInterpret x = do
+  ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
   fmap (either throw id) $
-  flip evalStateT (Storage Map.empty) $ 
-  runInterpreter $ do
-    Int.set [languageExtensions := languageExts]
-    mapM_ unsafeSetGhcOption $
-      "-fpackage-trust" :
--- For some reason, this makes the interpreter hang.  Unfortunate, as it
--- rather weakens the trust situation not to have it.
---      "-distrust-all" :
-      map ("-trust " ++) trustedPackages
-    x
-
+    flip evalStateT (Storage Map.empty) $ 
+      case ghcLibdirM of
+        Nothing -> unsafeRunInterpreterWithArgs args x
+        Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir x
+  
   where
-    languageExts =
+    args = 
+      map ("-X" ++) languageExts ++
+      -- For some reason, this makes the interpreter hang.  Unfortunate, as it
+      -- rather weakens the trust situation not to have it.
+      --      "-distrust-all" :
+      "-fpackage-trust" : map ("-trust " ++) trustedPackages
+    languageExts = map show
       [
         BangPatterns,
         DeriveDataTypeable,
