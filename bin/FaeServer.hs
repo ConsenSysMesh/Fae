@@ -20,15 +20,11 @@
 - transaction input list.
 -}
 
-import Common.ProtocolT
-
-import Control.Concurrent
-import Control.Concurrent.Lifted (fork)
+import Control.Concurrent.Lifted
 import Control.Concurrent.STM
 
 import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.Trans
 
 import Data.Maybe
 
@@ -37,8 +33,6 @@ import FaeServer.Concurrency
 import FaeServer.Fae
 import FaeServer.Faeth
 import FaeServer.Git
-
-import qualified Network.WebSockets as WS
 
 import System.Directory
 import System.Environment
