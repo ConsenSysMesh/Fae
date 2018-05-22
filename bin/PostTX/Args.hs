@@ -20,7 +20,8 @@ data PostTXArgs =
     argFake :: Bool,
     argView :: Bool,
     argLazy :: Bool,
-    argFaeth :: FaethArgs
+    argFaeth :: FaethArgs,
+    argUsage :: Maybe Usage
   }
 
 data FinalizedPostTXArgs =
@@ -42,7 +43,12 @@ data FinalizedPostTXArgs =
   {
     viewArgTXID :: TransactionID,
     viewArgHost :: String
-  }
+  } |
+  UsageArgs Usage
+
+data Usage =
+  UsageFailure String |
+  UsageSuccess
 
 data FaethArgs =
   FaethArgs
@@ -67,10 +73,12 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
-    argFaeth = FaethArgs False Nothing Nothing Nothing Nothing []
+    argFaeth = FaethArgs False Nothing Nothing Nothing Nothing [],
+    argUsage = Nothing
   }
           
 argGetter :: PostTXArgs -> String -> PostTXArgs
+argGetter st "--help" = st & _argUsage .~ Just UsageSuccess 
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
@@ -97,13 +105,16 @@ argGetter st x
     = st 
       & _argFaeth . _useFaeth .~ True
       & _argFaeth . _faethRecipient .~ readMaybe faethRecipArg
-  | "--" `isPrefixOf` x = error $ "Unrecognized option: " ++ x
+  | "--" `isPrefixOf` x
+    = st & _argUsage .~ Just (UsageFailure $ "Unrecognized option: " ++ x)
   | Nothing <- st ^. _argDataM = st & _argDataM ?~ x
   | Nothing <- st ^. _argHostM = st & _argHostM ?~ x
-  | otherwise = error "TX name and host already given"
+  | otherwise = st & _argUsage .~ Just (UsageFailure $ unlines
+      ["Unknown argument: " ++ x, "TX name and host already given"])
 
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
+  | Just u <- argUsage = UsageArgs u
   | argFake && (argView || argLazy || useFaeth)
     = error $
         "--fake is incompatible with --view, --lazy, --faeth*, " ++
@@ -116,7 +127,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       "--faeth-add-signature is incompatible with " ++
       "--faeth-fee and --faeth-recipient"
   | argView, Nothing <- argDataM
-    = error "--view requires a transaction ID"
+    = UsageArgs $ UsageFailure "--view requires a transaction ID"
   | not (null newSigners), Just ethTXIDS <- argDataM =
     OngoingFaethArgs
     {
@@ -146,3 +157,4 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
 
 justHost :: Maybe String -> String
 justHost = fromMaybe "0.0.0.0:27182"
+
