@@ -25,6 +25,7 @@ import Control.Concurrent.STM
 
 import Control.Monad
 import Control.Monad.Reader
+import Control.Monad.Trans
 
 import Data.Maybe
 
@@ -36,6 +37,7 @@ import FaeServer.Git
 
 import System.Directory
 import System.Environment
+import System.Exit
 import System.FilePath
 
 main :: IO ()
@@ -55,4 +57,26 @@ main = do
     case args of
       [] -> runFaeServer queueTXExecData 
       ["--faeth"] -> runFaeth tID
+      ["--help"] -> liftIO $ do
+        usage
+        exitSuccess
+      x -> liftIO $ do
+        putStrLn $ "Unrecognized options: " ++ unwords x
+        usage
+        exitFailure
 
+usage :: IO ()
+usage = do
+  self <- getProgName
+  putStrLn $ unlines
+    [
+      "Usage: (standalone) " ++ self ++ " options",
+      "       (with stack) stack exec " ++ self ++ " -- options",
+      "",
+      "where the available options are:",
+      "  --help      Print this message",
+      "  --faeth     Receive transactions via Ethereum from a Parity client",
+      "",
+      "Recognized environment variables:",
+      "  FAE_HOME    Directory where transaction modules and history are stored"
+    ]

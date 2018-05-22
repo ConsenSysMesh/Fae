@@ -50,6 +50,7 @@ usage = do
     [
       "Usage: (standalone) " ++ self ++ " args",
       "       (with stack) stack exec " ++ self ++ " -- args",
+      "", 
       "where args = (tx name | Fae tx ID | Eth tx ID) [host[:port]] [options]",
       "where the available options are:",
       "  Help",
@@ -82,6 +83,9 @@ usage = do
       "                                  transaction",
       "    --faeth-eth-to address        Set the Ethereum 'to' address for a", 
       "                                  Faeth transaction",
+      "",
+      "Recognized environment variables:",
+      "  FAE_HOME      Directory where keys are stored",
       "",
       "A (tx name) reads the transaction spec file of that name.  Format is:",
       "",
