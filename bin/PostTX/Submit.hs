@@ -24,12 +24,11 @@ import PostTX.TXSpec
 import System.Directory
 import System.FilePath
 
-submit :: String -> String -> Bool -> Bool-> TXSpec -> IO ()
+submit :: String -> String -> Bool -> Bool-> TXSpec String -> IO ()
 submit txName host fake lazy txSpec = 
   buildRequest txName host fake lazy txSpec >>= sendReceive
 
-buildRequest :: 
-  String -> String -> Bool -> Bool -> TXSpec -> IO Request
+buildRequest :: String -> String -> Bool -> Bool -> TXSpec String -> IO Request
 buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
   flip formDataBody (requestURL host) $
     modulePart "message" txName (S.encode txMessage) : 

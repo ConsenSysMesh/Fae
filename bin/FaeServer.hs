@@ -28,6 +28,7 @@ import Control.Monad.Reader
 import Control.Monad.Trans
 
 import Data.Maybe
+import Data.Proxy
 
 import FaeServer.App
 import FaeServer.Concurrency
@@ -55,7 +56,7 @@ main = do
   flip runReaderT txQueue $ do
     void $ fork $ runFae tID
     case args of
-      [] -> runFaeServer queueTXExecData 
+      [] -> runFaeServer (Proxy @String) queueTXExecData 
       ["--faeth"] -> runFaeth tID
       ["--help"] -> liftIO $ do
         usage

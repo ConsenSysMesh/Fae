@@ -1,5 +1,6 @@
 import Common.ProtocolT
 
+import Control.Monad.Reader
 import Control.Monad.Trans
 
 import Data.Maybe
@@ -28,10 +29,13 @@ main = do
   case parseArgs args of
     PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
       txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
-      txSpec <- txDataToSpec txData postArgFaeth
       if useFaeth 
-      then submitFaeth postArgHost faethValue faethTo txSpec
-      else submit postArgTXName postArgHost postArgFake postArgLazy txSpec
+      then do
+        txSpec <- runReaderT (txDataToTXSpec txData) postArgFaeth
+        submitFaeth postArgHost faethValue faethTo txSpec
+      else do
+        txSpec <- txDataToTXSpec txData
+        submit postArgTXName postArgHost postArgFake postArgLazy txSpec
     x@OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost

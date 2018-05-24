@@ -190,6 +190,7 @@ executable postTX
     NamedFieldPuns
     OverloadedStrings
     TupleSections
+    TypeApplications
 
 executable collectPackage
   buildable: True

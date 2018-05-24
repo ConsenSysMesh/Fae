@@ -34,15 +34,15 @@ import GHC.Generics
 -- full module files, but only their "previews", containing sufficient
 -- information for the client to decide if the memory cost of requesting
 -- the module is acceptable, and to request it if so.
-data TXMessage =
+data TXMessage a =
   TXMessage
   {
+    salt :: a, -- ^ Needs to be the first field
     mainModulePreview :: ModulePreview,
     otherModulePreviews :: Map String ModulePreview,
     inputCalls :: Inputs,
     fallbackFunctions :: [String],
-    signatures :: Map String (Either PublicKey Signature),
-    salt :: C8.ByteString
+    signatures :: Map String (Either PublicKey Signature)
   }
   deriving (Generic)
 
@@ -64,9 +64,9 @@ type ModuleMap = Map String Module
 {- Instances -}
 
 -- | -
-instance Serialize TXMessage
+instance (Serialize a) => Serialize (TXMessage a)
 -- | -
-instance Digestible TXMessage
+instance (Serialize a) => Digestible (TXMessage a)
 
 -- | -
 instance Serialize ModulePreview
@@ -81,17 +81,17 @@ makeLenses ''ModulePreview
 -- * Functions
 
 -- | Gets the "base" transaction message without validation
-unsignedTXMessage :: TXMessage -> TXMessage
+unsignedTXMessage :: TXMessage a -> TXMessage a
 unsignedTXMessage = over _signatures $ fmap (either (Left . id) (Left . getSigner))
 
 -- | Adds a single signature, overwriting one that's already there
-signTXMessage :: String -> PrivateKey -> TXMessage -> TXMessage
+signTXMessage :: (Serialize a) => String -> PrivateKey -> TXMessage a -> TXMessage a
 signTXMessage name privKey txm = txm & _signatures . at name ?~ Right sig where
   Signed{sig} = sign (unsignedTXMessage txm) privKey
   
 -- | Validates a message (all signatures present, correct, and the right
 -- identity) and returns the base message
-unsignTXMessage :: TXMessage -> Maybe TXMessage
+unsignTXMessage :: (Serialize a) => TXMessage a -> Maybe (TXMessage a)
 unsignTXMessage txm = do
   signedPubKeys <- mapM getTXSigner $ signatures txm
   guard $ not (Map.null signedPubKeys) && signedPubKeys == actualPubKeys
@@ -106,13 +106,13 @@ unsignTXMessage txm = do
 -- contains complete information identifying the transaction uniquely.  The
 -- hash is taken of the unsigned message, without validating the
 -- signatures.
-getTXID :: TXMessage -> TransactionID
+getTXID :: (Serialize a) => TXMessage a -> TransactionID
 getTXID = ShortContractID . digest . unsignedTXMessage
 
 -- | Extracts the portion of the transaction that is useful for
 -- constructing the transaction call.  Modules must be placed in the
 -- appropriate directory structure by the client.
-txMessageToTX :: TXMessage -> Maybe TX
+txMessageToTX :: (Serialize a) => TXMessage a -> Maybe TX
 txMessageToTX txm = do
   TXMessage{..} <- unsignTXMessage txm
   let 
@@ -127,7 +127,7 @@ txMessageToTX txm = do
 -- | Checks the hashes of the received module files against the ones
 -- promised in the transaction.  This does /not/ validate the modules as
 -- Haskell source code.
-validateModules :: Module -> ModuleMap -> TXMessage -> Bool
+validateModules :: Module -> ModuleMap -> TXMessage a -> Bool
 validateModules mainModule otherModules TXMessage{..} =
   validateModule mainModulePreview mainModule &&
     Map.keys otherModules == Map.keys otherModulePreviews &&

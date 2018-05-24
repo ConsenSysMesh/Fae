@@ -58,6 +58,7 @@ data FaethArgs =
     faethValue :: Maybe Integer,
     faethRecipient :: Maybe EthAddress,
     faethTo :: Maybe EthAddress,
+    faethArgument :: Maybe Hex,
     newSigners :: [(String, String)]
   }
 
@@ -73,7 +74,7 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
-    argFaeth = FaethArgs False Nothing Nothing Nothing Nothing [],
+    argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
     argUsage = Nothing
   }
           
@@ -84,11 +85,15 @@ argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
+  | ("--faeth-eth-argument", '=' : ethArgumentArg) <- break (== '=') x
+    = st
+      & _argFaeth . _useFaeth .~ True
+      & _argFaeth . _faethArgument .~ readMaybe ethArgumentArg
   | ("--faeth-add-signature", '=' : newSignerArg) <- break (== '=') x
     = let (sigName, ':' : keyName) = break (== ':') newSignerArg in
       st
-        & _argFaeth . _useFaeth .~ True
-        & _argFaeth . _newSigners %~ ((sigName, keyName) :)
+      & _argFaeth . _useFaeth .~ True
+      & _argFaeth . _newSigners %~ ((sigName, keyName) :)
   | ("--faeth-eth-value", '=' : faethValueArg ) <- break (== '=') x
     = st
       & _argFaeth . _useFaeth .~ True

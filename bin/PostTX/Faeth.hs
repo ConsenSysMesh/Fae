@@ -25,15 +25,20 @@ instance ToJSON GetFaethTX where
 instance ToRequest GetFaethTX where
   requestMethod _ = "eth_getTransactionByHash"
 
-submitFaeth :: String -> Maybe Integer -> Maybe EthAddress -> TXSpec -> IO ()
+submitFaeth :: String -> Maybe Integer -> Maybe EthAddress -> TXSpec Salt -> IO ()
 submitFaeth host valM faethTo TXSpec{specModules = LoadedModules{..}, ..} = do
   senderEthAccount <- inputAccount
   runProtocolT $ do
     ethTXID <- sendReceiveProtocolT 
       FaethTXData
       {
-        faeTX = txMessage, 
-        mainModule = snd mainModule, 
+        faeTX = 
+          EthArgFaeTX FaeTX
+          {
+            faeTXMessage = txMessage,
+            faeMainModule = snd mainModule, 
+            faeOtherModules = otherModules
+          },
         faethEthValue = HexInteger <$> valM,
         faethEthAddress = fromMaybe (address senderEthAccount) faethTo,
         ..
@@ -52,19 +57,21 @@ resubmitFaeth host ethTXID FaethArgs{..} = do
       addSigners =
         foldr (.) id $
         zipWith addSigner newNames newKeys
+      txID = getTXID $ faeTXMessage $ getEthArgFaeTX $ faeTX faethTXData
     ethTXID <- sendReceiveProtocolT $
       faethTXData
-      & _faeTX %~ addSigners
+      & _faeTX . _getEthArgFaeTX . _faeTXMessage %~ addSigners
       & _senderEthAccount .~ senderEthAccount
       & _faethEthAddress .~ fromMaybe (address senderEthAccount) faethTo
       & _faethEthValue .~ (HexInteger <$> faethValue)
     liftIO . putStrLn $
       "New Ethereum transaction ID: " ++ ethTXID ++
-      "\nfor Fae transaction: " ++ show (getTXID $ faeTX faethTXData)
+      "\nfor Fae transaction: " ++ show txID
 
   where (newNames, newKeyNames) = unzip newSigners
 
-addSigner :: String -> Either PublicKey PrivateKey -> TXMessage -> TXMessage
+addSigner :: 
+  String -> Either PublicKey PrivateKey -> TXMessage Salt -> TXMessage Salt
 addSigner _ (Left _) = id
 addSigner name (Right privKey) = signTXMessage name privKey
 

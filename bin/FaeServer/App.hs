@@ -16,6 +16,8 @@ import Data.Function
 import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
+import Data.Proxy
+import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
 
 import FaeServer.Concurrency
@@ -33,9 +35,10 @@ import Network.Wai.Parse
 import Text.Read (readMaybe)
 
 runFaeServer :: 
+  forall a. (Serialize a) => Proxy a ->
   SendTXExecData (TXQueueT IO) -> TXQueueT IO ()
-runFaeServer sendTXExecData = do
-  app <- serverApp sendTXExecData 
+runFaeServer p sendTXExecData = do
+  app <- serverApp p sendTXExecData 
   liftIO $ runSettings faeSettings app
 
 faeSettings :: Settings
@@ -43,8 +46,10 @@ faeSettings = defaultSettings &
   setPort 27182 &
   setOnExceptionResponse exceptionResponse
 
-serverApp :: SendTXExecData (TXQueueT IO) -> TXQueueT IO Application
-serverApp sendTXExecData = bringOut $ \request respond -> do
+serverApp :: 
+  forall a. (Serialize a) => Proxy a ->
+  SendTXExecData (TXQueueT IO) -> TXQueueT IO Application
+serverApp _ sendTXExecData = bringOut $ \request respond -> do
   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
   let 
     getParams = getParameters params
@@ -61,7 +66,7 @@ serverApp sendTXExecData = bringOut $ \request respond -> do
       | lazy -> error "'lazy and 'view' are incompatible parameters"
       | otherwise -> send $ \callerTID resultVar -> View{..}
     Nothing -> 
-      let (tx, mainFile, modules) = makeFilesMap files
+      let (tx, mainFile, modules) = makeFilesMap (Proxy @a) files
       in  send $ \callerTID resultVar -> TXExecData{..} 
 
   where

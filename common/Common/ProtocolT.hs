@@ -42,7 +42,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
 
-import GHC.Generics
+import GHC.Generics as G
 
 import qualified Network.WebSockets as WS
 
@@ -65,9 +65,7 @@ import Text.Read hiding (lift, get)
 data FaethTXData =
   FaethTXData
   {
-    faeTX :: TXMessage,
-    mainModule :: Module,
-    otherModules :: ModuleMap,
+    faeTX :: EthArgFaeTX,
     senderEthAccount :: EthAccount,
     faethEthAddress :: EthAddress,
     faethEthValue :: Maybe HexInteger
@@ -79,10 +77,13 @@ data FaethTXData =
 data FaeTX = 
   FaeTX 
   {
-    faeTXMessage :: TXMessage,
+    faeTXMessage :: TXMessage Salt, -- ^ Needs to be the first field
     faeMainModule :: Module,
     faeOtherModules :: ModuleMap
   } deriving (Generic)
+
+-- | For defining variant encodings
+newtype EthArgFaeTX = EthArgFaeTX { getEthArgFaeTX :: FaeTX }
 
 -- | Faeth's particular format for the Fae "extra data field" @salt@.  In
 -- addition to the Ethereum value and recipient demanded, it also
@@ -91,9 +92,10 @@ data FaeTX =
 data Salt = 
   Salt
   {
-    faeSalt :: String,
+    ethArgument :: ByteString, -- ^ Needs to be the first field
     ethFee :: Maybe HexInteger,
-    ethRecipient :: Maybe EthAddress
+    ethRecipient :: Maybe EthAddress,
+    faeSalt :: String
   }
   deriving (Generic)
 
@@ -206,11 +208,40 @@ type EthBlockID = Hex
 type EthTXID = Hex
 
 makeLenses ''FaethTXData
+makeLenses ''FaeTX
+makeLenses ''EthArgFaeTX
 
--- | -
+-- | Generic instance
 instance Serialize EthAccount
--- | -
+-- | Generic instance
 instance Serialize FaeTX
+
+-- | Differs from the default encoding of FaeTX in that the Ethereum
+-- argument is shifted from the end to the beginning.  This allows an
+-- Ethereum contract to use the encoding as its argument, so long as it
+-- follows the Ethereum Contract ABI, in which the actual argument is
+-- well-typed and (for ambiguously sized types) length-prefixed.
+--
+-- The argument /length/ stays at the end, so that we can reverse this.
+--
+-- This code depends strongly on the assumption that the Generic encoding
+-- of a product type is just the concatenation of the encodings of its
+-- fields, that a ByteString's encoding is length-prefixed by an 'Int', and
+-- that the encoding of 'Int' has the expected number of bits.
+instance Serialize EthArgFaeTX where
+  put (EthArgFaeTX faeTX) = 
+    let encoding = S.encode faeTX
+        intLength = BS.length $ S.encode (0 :: Int) -- ^ Kind of a hack
+        (argLengthBS, rest) = BS.splitAt intLength encoding
+    in S.putByteString $ rest <> argLengthBS
+
+  get = do
+    encoding <- S.remaining >>= S.getBytes
+    let intLength = BS.length (S.encode (0 :: Int)) -- ^ Kind of a hack
+        encLength = BS.length encoding
+        (rest, argLengthBS) = BS.splitAt (encLength - intLength) encoding
+    faeTX <- either fail return $ S.decode $ argLengthBS <> rest
+    return $ EthArgFaeTX faeTX
 
 -- | -
 instance Serialize Salt
@@ -272,7 +303,7 @@ instance ToJSON FaethTXData where
         [
           "from" .= address,
           "to" .= faethEthAddress,
-          "data" .= FaeTX faeTX mainModule otherModules
+          "data" .= faeTX
         ], 
       toJSON passphrase
     ]
@@ -280,7 +311,7 @@ instance ToJSON FaethTXData where
 -- | -
 instance FromJSON FaethTXData where
   parseJSON = A.withObject "FaethTXData" $ \obj -> do
-    FaeTX{..} <- obj .: "input"
+    faeTX <- obj .: "input"
     faethEthAddress <- obj .: "to"
     faethEthValue <- obj .: "value"
     address <- obj .: "from"
@@ -290,21 +321,17 @@ instance FromJSON FaethTXData where
     return
       FaethTXData
       {
-        faeTX = faeTXMessage,
-        mainModule = faeMainModule,
-        otherModules = faeOtherModules,
         senderEthAccount = EthAccount{..},
         ..
       }
 
 -- | -
-instance ToJSON FaeTX where
+instance ToJSON EthArgFaeTX where
   toJSON = toJSON . Hex . S.encode
 
 -- | -
-instance FromJSON FaeTX where
-  parseJSON x = 
-    either error id . S.decode . getHex <$> parseJSON x
+instance FromJSON EthArgFaeTX where
+  parseJSON x = either error id . S.decode . getHex <$> parseJSON x
 
 -- | -
 instance (ToJSON a) => ToJSON (SendRequest a) where
@@ -453,7 +480,3 @@ sendReceiveProtocolT x = handleAll err $ do
   receiveProtocolT reqID
   where err e = error $ "Ethereum client returned an error: " ++ show e
 
--- | Extracts the salt from a message, converting it from an unformatted
--- byte string.
-faethSalt :: TXMessage -> Salt
-faethSalt = either error id . S.decode . salt 

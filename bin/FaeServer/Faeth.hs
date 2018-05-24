@@ -26,6 +26,7 @@ import qualified Data.Aeson as A
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
+import Data.Proxy
 
 import Data.Aeson.Parser
 import Data.Monoid
@@ -63,7 +64,7 @@ data PartialEthTransaction =
     ethTXTo :: EthAddress,
     ethTXFrom :: EthAddress,
     ethValue :: HexInteger,
-    ethTXData :: FaeTX,
+    ethTXData :: EthArgFaeTX,
     ethTXID :: EthTXID
   }
 
@@ -152,7 +153,7 @@ instance ToRequest EthGetBlockByHash where
 runFaeth :: ThreadId -> TXQueueT IO ()
 runFaeth mainTID = reThrow mainTID $ do
   fork $ runFaethWatcherM faethWatcher 
-  runFaeServer faethSendTXExecData 
+  runFaeServer (Proxy @Salt) faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
 faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}
@@ -200,11 +201,12 @@ processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
       "Insufficient Ether provided: " ++ 
       "needed " ++ show (fromJust feeM) ++ "; got " ++ show ethValue
     _ -> return ()
-  runFaethTX ethTXID ethTXData lastTXID
+  runFaethTX ethTXID (getEthArgFaeTX ethTXData) lastTXID
 
   where
-    recipM = ethRecipient . faethSalt . faeTXMessage $ ethTXData
-    feeM = ethFee . faethSalt . faeTXMessage $ ethTXData
+    theSalt = salt . faeTXMessage . getEthArgFaeTX $ ethTXData
+    recipM = ethRecipient theSalt
+    feeM = ethFee theSalt
     ethTXError e = do
       liftIO . putStrLn $
         "\nError while processing Ethereum transaction " ++ show ethTXID ++
