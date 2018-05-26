@@ -19,8 +19,11 @@ module Common.ProtocolT where
 
 import Blockchain.Fae.FrontEnd
 
+import Codec.Compression.Zlib
+
 import Common.Lens hiding ((.=))
 
+import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans
@@ -33,6 +36,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.List as L
 import Data.Maybe
 import Data.Monoid
@@ -43,6 +47,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Read as T
 
 import GHC.Generics as G
+import GHC.IO.Unsafe
 
 import qualified Network.WebSockets as WS
 
@@ -209,6 +214,7 @@ type EthTXID = Hex
 
 makeLenses ''FaethTXData
 makeLenses ''FaeTX
+makeLenses ''Salt
 makeLenses ''EthArgFaeTX
 
 -- | Generic instance
@@ -231,16 +237,25 @@ instance Serialize FaeTX
 instance Serialize EthArgFaeTX where
   put (EthArgFaeTX faeTX) = 
     let encoding = S.encode faeTX
-        intLength = BS.length $ S.encode (0 :: Int) -- ^ Kind of a hack
-        (argLengthBS, rest) = BS.splitAt intLength encoding
-    in S.putByteString $ rest <> argLengthBS
+        ethArg = faeTX ^. _faeTXMessage . _salt . _ethArgument
+        dataBS = S.encode ethArg
+        compressStrict = LBS.toStrict . compress . LBS.fromStrict
+        compressed = maybe (error "FaeTX doesn't start with ethArgument!") 
+          compressStrict $ BS.stripPrefix dataBS encoding
+        ethArgPrefix = fromMaybe (error "ethArgument doesn't end with the data!") $
+          BS.stripSuffix ethArg dataBS
+    in S.putByteString $ ethArg <> compressed <> ethArgPrefix
 
   get = do
     encoding <- S.remaining >>= S.getBytes
     let intLength = BS.length (S.encode (0 :: Int)) -- ^ Kind of a hack
         encLength = BS.length encoding
         (rest, argLengthBS) = BS.splitAt (encLength - intLength) encoding
-    faeTX <- either fail return $ S.decode $ argLengthBS <> rest
+        argLength = either error id $ S.decode argLengthBS
+        (dataBS, compressed) = BS.splitAt argLength rest
+        decompressStrict = LBS.toStrict . decompress . LBS.fromStrict
+        decompressed = decompressStrict compressed
+    faeTX <- either fail return $ S.decode $ argLengthBS <> dataBS <> decompressed
     return $ EthArgFaeTX faeTX
 
 -- | -

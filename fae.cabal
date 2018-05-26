@@ -128,7 +128,8 @@ executable faeServer
     wai,
     wai-extra,
     warp,
-    websockets
+    websockets,
+    zlib
   default-language:    Haskell2010
   default-extensions:
     DeriveGeneric
@@ -166,6 +167,7 @@ executable postTX
     bytestring,
     cereal,
     containers,
+    deepseq,
     directory,
     fae,
     filepath,
@@ -177,7 +179,8 @@ executable postTX
     template-haskell,
     text,
     time,
-    websockets
+    websockets,
+    zlib
   default-language: Haskell2010
   default-extensions:
     DeriveGeneric
