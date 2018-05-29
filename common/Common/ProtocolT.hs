@@ -222,18 +222,17 @@ instance Serialize EthAccount
 -- | Generic instance
 instance Serialize FaeTX
 
--- | Differs from the default encoding of FaeTX in that the Ethereum
--- argument is shifted from the end to the beginning.  This allows an
--- Ethereum contract to use the encoding as its argument, so long as it
--- follows the Ethereum Contract ABI, in which the actual argument is
--- well-typed and (for ambiguously sized types) length-prefixed.
---
--- The argument /length/ stays at the end, so that we can reverse this.
+-- | Differs from the default encoding of FaeTX in that the length of the
+-- Ethereum argument is shifted from the beginning to the end, exposing the
+-- argument itself.  This allows an Ethereum contract to use the encoding
+-- as its argument, so long as it follows the Ethereum Contract ABI, in
+-- which the actual argument is well-typed and (for ambiguously sized
+-- types) length-prefixed.  The length suffix can be re-relocated for
+-- decoding.
 --
 -- This code depends strongly on the assumption that the Generic encoding
 -- of a product type is just the concatenation of the encodings of its
--- fields, that a ByteString's encoding is length-prefixed by an 'Int', and
--- that the encoding of 'Int' has the expected number of bits.
+-- fields, and that a ByteString's encoding is length-prefixed by an 'Int'.
 instance Serialize EthArgFaeTX where
   put (EthArgFaeTX faeTX) = 
     let encoding = S.encode faeTX
