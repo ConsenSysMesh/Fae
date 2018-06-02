@@ -11,7 +11,6 @@ This undiscriminatingly re-exports all the internal modules for ease of import.
 -}
 module Blockchain.Fae.Internal 
   (
-    module Blockchain.Fae.Internal.Block,
     module Blockchain.Fae.Internal.Contract,
     module Blockchain.Fae.Internal.Crypto,
     module Blockchain.Fae.Internal.Exceptions,
@@ -25,7 +24,6 @@ module Blockchain.Fae.Internal
     module Blockchain.Fae.Internal.Versions
   ) where
 
-import Blockchain.Fae.Internal.Block
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions

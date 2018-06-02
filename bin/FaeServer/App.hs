@@ -66,7 +66,7 @@ serverApp _ sendTXExecData = bringOut $ \request respond -> do
       | lazy -> error "'lazy and 'view' are incompatible parameters"
       | otherwise -> send $ \callerTID resultVar -> View{..}
     Nothing -> 
-      let (tx, mainFile, modules) = makeFilesMap (Proxy @a) files
+      let (tx, mainFile, modules) = makeFilesMap (Proxy @a) files reward
       in  send $ \callerTID resultVar -> TXExecData{..} 
 
   where

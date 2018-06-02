@@ -28,7 +28,6 @@ library
     Blockchain.Fae.Contracts
     Blockchain.Fae.Currency
   other-modules:
-    Blockchain.Fae.Internal.Block
     Blockchain.Fae.Internal.Contract
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
@@ -98,6 +97,7 @@ executable faeServer
     Common.Lens
     Common.ProtocolT
     FaeServer.App
+    FaeServer.Args
     FaeServer.Concurrency
     FaeServer.Fae
     FaeServer.Faeth

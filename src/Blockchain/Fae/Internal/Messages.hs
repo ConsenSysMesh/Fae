@@ -112,8 +112,8 @@ getTXID = ShortContractID . digest . unsignedTXMessage
 -- | Extracts the portion of the transaction that is useful for
 -- constructing the transaction call.  Modules must be placed in the
 -- appropriate directory structure by the client.
-txMessageToTX :: (Serialize a) => TXMessage a -> Maybe TX
-txMessageToTX txm = do
+txMessageToTX :: (Serialize a) => Bool -> TXMessage a -> Maybe TX
+txMessageToTX isReward txm = do
   TXMessage{..} <- unsignTXMessage txm
   let 
     txID = getTXID txm

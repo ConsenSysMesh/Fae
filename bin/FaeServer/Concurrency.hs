@@ -29,7 +29,6 @@ data TXExecData =
     parentM :: Maybe TransactionID,
     lazy :: Bool,
     fake :: Bool,
-    reward :: Bool,
     tx :: TX,
     resultVar :: TMVar String,
     callerTID :: ThreadId

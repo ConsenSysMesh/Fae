@@ -24,11 +24,12 @@ import System.FilePath
 makeFilesMap :: 
   forall a. (Serialize a) => Proxy a ->
   [(C8.ByteString, FileInfo LC8.ByteString)] ->
+  Bool ->
   (TX, Module, ModuleMap)
-makeFilesMap _ files = (tx, mainFile, modules) where
+makeFilesMap _ files reward = (tx, mainFile, modules) where
   tx@TX{..} = 
     maybe (error "Invalid transaction message") force $
-    txMessageToTX @a $
+    txMessageToTX @a reward $
     either (error "Couldn't decode transaction message") id $ 
     decode $
     fromMaybe (error "Missing transaction message") $ 

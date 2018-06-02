@@ -224,7 +224,6 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
         parentM = Just lastTXID,
         lazy = True,
         fake = False,
-        reward = False, -- When can this be True?
         ..
       }
     liftIO $ putStrLn txResult
@@ -232,7 +231,7 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
 
   where
     tx = maybe (error "Invalid transaction message") id $ 
-      txMessageToTX txMessage
+      txMessageToTX False txMessage -- ^ When can this be True?
     thisTXID = txID tx
     mainFile = addHeader thisTXID mainFile0
     modules = Map.mapWithKey (fixHeader thisTXID) modules0

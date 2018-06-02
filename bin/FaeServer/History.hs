@@ -33,7 +33,7 @@ recallHistory ::
 recallHistory parentM = do
   TXHistory{..} <- get
   let parent = fromMaybe bestTXID parentM
-  let err = error $ "No transaction in history with ID: " ++ show parent
+      err = error $ "No transaction in history with ID: " ++ show parent
   -- Weird construct forces this lookup before git runs
   (s, n) <- return $ Map.findWithDefault err parent txStorageAndCounts
   liftIO $ gitReset parent
@@ -41,16 +41,15 @@ recallHistory parentM = do
   return n
 
 updateHistory :: 
-  (MonadIO m) => TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
+  (Monad m) => TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
 updateHistory txID txCount = do
   TXHistory{..} <- get
   s <- lift get
   let newCount = txCount + 1
-  let txStorageAndCounts' = Map.insert txID (s, newCount) txStorageAndCounts
-  let (bestTXID', bestTXCount')
+      txStorageAndCounts' = Map.insert txID (s, newCount) txStorageAndCounts
+      (bestTXID', bestTXCount')
         | txCount == bestTXCount = (txID, newCount)
         | otherwise = (bestTXID, bestTXCount)
-  liftIO $ gitCommit txID
   put $ TXHistory txStorageAndCounts' bestTXID' bestTXCount'
 
 runFaeInterpretWithHistory :: 

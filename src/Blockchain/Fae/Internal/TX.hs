@@ -63,6 +63,7 @@ import System.FilePath
 data TX =
   TX
   {
+    isReward :: Bool,
     txID :: TransactionID,
     inputs :: Inputs,
     pubKeys :: Signers,
@@ -108,8 +109,8 @@ nullID = ShortContractID $ digest ()
 -- of other transactions.  Now that we dynamically link @faeServer@, the
 -- load-up time for the first transaction is pretty short; subsequent
 -- transactions are faster still.
-interpretTX :: (MonadMask m, MonadIO m) => Bool -> TX -> FaeInterpretT m ()
-interpretTX isReward TX{..} = handle fixGHCErrors $ do
+interpretTX :: (MonadMask m, MonadIO m) => TX -> FaeInterpretT m ()
+interpretTX TX{..} = handle fixGHCErrors $ do
   Int.set [searchPath := thisTXPath]
   loadModules [txSrc]
   setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]

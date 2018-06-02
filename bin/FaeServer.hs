@@ -27,10 +27,12 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.Trans
 
+import Data.List
 import Data.Maybe
 import Data.Proxy
 
 import FaeServer.App
+import FaeServer.Args
 import FaeServer.Concurrency
 import FaeServer.Fae
 import FaeServer.Faeth
@@ -47,22 +49,24 @@ main = do
   faeHome <- fromMaybe (userHome </> "fae") <$> lookupEnv "FAE_HOME"
   createDirectoryIfMissing True faeHome
   setCurrentDirectory faeHome
-  gitInit
+  setEnv "GIT_DIR" "git"
 
   tID <- myThreadId
   txQueue <- atomically newTQueue
-  args <- getArgs
+  args <- parseArgs <$> getArgs
 
-  flip runReaderT txQueue $ do
-    void $ fork $ runFae tID
-    case args of
-      [] -> runFaeServer (Proxy @String) queueTXExecData 
-      ["--faeth"] -> runFaeth tID
-      ["--help"] -> liftIO $ do
+  flip runReaderT txQueue $ case args of
+    ArgsServer{..} -> do
+      void $ fork $ runFae tID flags
+      case serverMode of
+        FaeMode -> runFaeServer (Proxy @String) queueTXExecData 
+        FaethMode -> runFaeth tID
+    (ArgsUsage xs) -> liftIO $ case xs of
+      [] -> do
         usage
         exitSuccess
-      x -> liftIO $ do
-        putStrLn $ "Unrecognized options: " ++ unwords x
+      xs -> do
+        putStrLn $ "Unrecognized option(s): " ++ intercalate ", " xs
         usage
         exitFailure
 
@@ -75,8 +79,14 @@ usage = do
       "       (with stack) stack exec " ++ self ++ " -- options",
       "",
       "where the available options are:",
-      "  --help      Print this message",
-      "  --faeth     Receive transactions via Ethereum from a Parity client",
+      "  --help            Print this message",
+      "  --faeth           Receive transactions via Ethereum from a Parity client",
+      "  --faeth-mode      Synonym for --faeth",
+      "  --normal-mode     Operate as standalone Fae",
+      "  --new-session     Deletes previous transaction history",
+      "  --resume-session  Reloads previous transaction history,",
+      "",
+      "Later options shadow earlier ones when they have the same domain.",
       "",
       "Recognized environment variables:",
       "  FAE_HOME    Directory where transaction modules and history are stored"

@@ -17,8 +17,6 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.TX,
     -- * Running transactions without interpreting
     module Blockchain.Fae.Internal.Transaction,
-    -- * Running a block of transactions
-    module Blockchain.Fae.Internal.Block,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
     showTransaction,
@@ -30,7 +28,6 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.IDs.Types
   ) where
 
-import Blockchain.Fae.Internal.Block
 import Blockchain.Fae.Internal.Crypto hiding
   (
     Serialize, PassFail, PartialSerialize,
