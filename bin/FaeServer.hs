@@ -30,6 +30,8 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.Trans
 
+import Control.Exception (throw)
+
 import Data.Maybe
 
 import FaeServer.App
@@ -61,4 +63,4 @@ main = do
     case args of
       [] -> runFaeServer queueTXExecData 
       ["--faeth"] -> runFaeth tID
-
+      a -> error $ "Unrecognized arg(s) " ++ (concat a) ++ " passed to faeServer"
