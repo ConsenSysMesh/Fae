@@ -9,6 +9,10 @@ Stability: experimental
 A class for pretty-printing Fae storage.  This has to be done in
 a 'FaeStorage' monad, so the class can't just be 'Pretty'.
 -}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.PrettyFae where
 
 import Blockchain.Fae.Internal.Exceptions
@@ -16,18 +20,22 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
 
-import Common.Lens
+import Common.Lens hiding ((.=))
 
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State
 
+import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
+import Data.Aeson hiding (Result)
 import Data.List
 import Data.Void
+
+import GHC.Generics
 
 import Text.PrettyPrint.Annotated
 
@@ -43,6 +51,31 @@ data InputOf = InputOf TransactionID ShortContractID Int InputOutputVersions
 data InputsOf = InputsOf TransactionID [ShortContractID] InputOutputs
 -- | Transaction entry decorated with transaction.
 data EntryOf = EntryOf TransactionID TransactionEntry
+
+-- | Useful for Fae clients communicating with faeServer
+data TXSummary = TXSummary {
+  txID :: TransactionID,
+ -- txOutSummary :: OutputOf
+ -- txInputs :: InputsOf,
+  txResult :: Result
+ -- txSigners :: Signers
+}
+
+instance ToJSON Result where 
+  toJSON = toJSON . show
+
+instance ToJSON ShortContractID where 
+  toJSON = toJSON . show
+
+instance ToJSON TXSummary where 
+  toJSON TXSummary{..} = object [
+      "txID" .= txID,
+    --  "txOutSummary"  .= txOutSummary]
+    --  "txInputs" .= txInputs,
+     "txResult" .= txResult]
+    --  "txSigners" .= txSigners ]
+
+makeLenses ''TXSummary
 
 -- | Helpful shorthand; we don't use annotations.
 type VDoc = Doc Void
@@ -69,7 +102,6 @@ instance PrettyFae OutputOf where
         makeOutputCIDs (InputOutput txID scID) outputs
       makeOutputCIDs makeCID Outputs{..} = 
         IntMap.mapWithKey (\i _ -> makeCID i) outputMap
-
 -- | -
 instance PrettyFae VersionRepMap where
   prettyFae vers = do
@@ -166,3 +198,19 @@ showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
   safeHead [] = []
   safeHead (x : _) = x
 
+-- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
+collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m String
+collectTransaction txID = do
+  TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
+  let outs = OutputOfTransaction txID outputs
+  let txOutSummary =  outputsToList $ outputCIDs outs
+  let txResult = result
+  return $ C.unpack $ encode TXSummary {..}
+  where
+    outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
+    outputCIDs (OutputOfTransaction txID outputs) = 
+      makeOutputCIDs (TransactionOutput txID) outputs
+    outputCIDs (OutputOfContract txID scID outputs) =
+      makeOutputCIDs (InputOutput txID scID) outputs
+    makeOutputCIDs makeCID Outputs{..} = 
+      IntMap.mapWithKey (\i _ -> makeCID i) outputMap

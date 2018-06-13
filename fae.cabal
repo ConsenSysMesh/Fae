@@ -44,7 +44,8 @@ library
     Blockchain.Fae.Internal.TX
     Blockchain.Fae.Internal.Versions
     Common.Lens
-  build-depends:       
+  build-depends:    
+    aeson,   
     base >= 4.10 && < 5,
     base16-bytestring,
     bytestring,
