@@ -17,7 +17,6 @@ module Blockchain.Fae.Currency
     -- * Basic numeric currency
     -- | This is a nearly featureless currency that most likely suffers
     -- from the effects of inflation, since its reward function creates one
-    -- coin at a time.  Not suitable for complex economic situations.
     Coin, reward
   )
 where
@@ -32,15 +31,13 @@ import Control.Monad.State
 import Data.Function
 import Data.Maybe
 import Data.Ord
+import Data.Serialize
 import Data.Typeable
 
 import Numeric.Natural
 
 -- | Interface for a currency type.
-class 
-  (Versionable coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
-  Currency coin where
-
+class (Versionable coin, Integral (Valuation coin)) => Currency coin where
   data Valuation coin
 
   -- | Like the name says.  Sometimes useful; should satisfy
@@ -135,37 +132,33 @@ class
 
 {- The basic example -}
 
--- | This opaque type is the value of our sample currency.
-newtype CoinVal = CoinVal Natural deriving (Generic)
+-- | Convenience type so that type signatures can say they accept the
+-- semantically-meaningful 'Coin' rather than some escrow ID.
+type Coin = EscrowID CoinName
+-- | Only for this module; it's not exported so it doesn't matter in
+-- regular usage.
+data CoinName = MintCoin Natural deriving (Generic)
 
--- @Spend@ exists so that we can get close the escrow and get its
--- contents.  @UnsafePeek@ skips the closing part, and is therefore
--- economically dangerous, since it breaks conservation of value.  We must
--- use it carefully.
---
--- We need @UnsafePeek@ to be unsafe so that we can validate the coin: only
--- a geniune coin can have a Coin value, since we don't export the
--- constructor.  But we don't want to have to spend a coin to validate it.
---
--- In general, we use refutable, partial patterns when @close@ing an escrow
--- so that the pattern matching errors turn into exceptions in the
--- contract.
--- 
--- | The opaque token for using this currency.  Only the 'Currency'
--- functions are given access to its constructors, since otherwise,
--- a malicious user could create their own coins.
-data Token = Spend | UnsafePeek deriving (Generic)
+-- | The coin has two modes: report ('False') and withdraw ('True').
+-- Obviously this entire function is unsafe for users of 'Coin', because it
+-- allows them to create a new coin of any value.  It is, however, okay for
+-- them to have the type signature of the escrow function itself, because
+-- simply having an escrow of that signature is not enough to have
+-- a 'Coin'; the 'CoinName' is also required, and that is hidden.
+coinContract :: CoinName -> Contract Bool Natural
+coinContract name@(MintCoin n) False = release n >>= coinContract name
+coinContract (MintCoin n) True = spend n
 
--- | This is the actual currency; no user ever looks inside directly.
-type Coin = EscrowID Token CoinVal
-
--- | This internal function is obviously not to be called by users.
+-- | Helpful shortcut
 mint :: (MonadTX m) => Natural -> m Coin
-mint n = newEscrow [] f where
-  f :: Contract Token CoinVal
-  f UnsafePeek = release coin >>= f
-  f Spend = spend coin
-  coin = CoinVal n
+mint = newEscrow [] . MintCoin
+
+instance Serialize CoinName
+
+instance ContractName CoinName where
+  type ArgType CoinName = Bool
+  type ValType CoinName = Natural
+  theContract = coinContract
 
 instance Currency Coin where
   newtype Valuation Coin = CoinValuation Natural
@@ -173,13 +166,11 @@ instance Currency Coin where
 
   zero = mint 0
 
-  value eID = do
-    CoinVal n <- useEscrow eID UnsafePeek
-    return $ CoinValuation n
+  value eID = CoinValuation <$> useEscrow eID False
 
   add eID1 eID2 = do
-    CoinVal n1 <- useEscrow eID1 Spend
-    CoinVal n2 <- useEscrow eID2 Spend
+    n1 <- useEscrow eID1 True
+    n2 <- useEscrow eID2 True
     mint $ n1 + n2
 
   change eID nV@(CoinValuation n) = do
@@ -187,7 +178,7 @@ instance Currency Coin where
     case ord of
       EQ -> return $ pure (eID, empty)
       GT -> do
-        CoinVal m <- useEscrow eID Spend
+        m <- useEscrow eID True
         amtID <- mint n
         remID <- mint $ m - n
         return $ pure (amtID, pure remID)
@@ -196,9 +187,9 @@ instance Currency Coin where
 instance Show (Valuation Coin) where
   show (CoinValuation n) = show n
 
--- | A contract to claim system rewards in exchange for 'Coin' values.  The
--- one-to-one exchange rate is of course an example and probably not
--- actually desirable.
+-- | A contract to redeem system rewards for 'Coin' values.  The one-to-one
+-- exchange rate is of course an example and probably not actually
+-- desirable.
 --
 -- Note that there is no 'Currency' instance for rewards: thus, rewards are
 -- a unary counting value and can only be collected individually; in
@@ -209,5 +200,5 @@ instance Show (Valuation Coin) where
 reward :: (MonadTX m) => RewardEscrowID -> m Coin
 reward eID = do
   claimReward eID 
-  mint 1 
+  mint 1
 

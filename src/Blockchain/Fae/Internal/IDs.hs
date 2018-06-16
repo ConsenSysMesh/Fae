@@ -48,10 +48,8 @@ data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 
 -- | A map of escrow IDs that preserves input and output types, regardless
 -- of what they are.
-type EscrowIDMap f =
-  forall argType valType. 
-  (HasEscrowIDs argType, HasEscrowIDs valType) =>
-  EscrowID argType valType -> f (EscrowID argType valType)
+type EscrowIDMap f = 
+  forall name. (Typeable name) => EscrowID name -> f (EscrowID name)
 
 -- | The type of a traversal by an 'EscrowIDMap', used in 'HasEscrowIDs'.
 -- Note that because the kind of traversal map that is allowed is subject
@@ -90,10 +88,7 @@ instance HasEscrowIDs BearsValue where
 -- | Escrow IDs, of course, contain themselves.  A tricky special case is
 -- that the transactional variants contain escrows in their argument or
 -- value as well.
-instance 
-  (HasEscrowIDs argType, HasEscrowIDs valType) =>
-  HasEscrowIDs (EscrowID argType valType) where
-
+instance (Typeable name) => HasEscrowIDs (EscrowID name) where
   -- Not point-free; we need to specialize the forall.
   traverseEscrowIDs f eID = f eID
 
@@ -164,7 +159,7 @@ bearer = BearsValue
 -- | Like 'fromDynamic'.
 unBearer :: forall a. (HasEscrowIDs a) => BearsValue -> Maybe a
 unBearer (BearsValue x)
-  | Just HRefl <- typeOf x `eqTypeRep` (typeRep :: TypeRep a) = Just x
+  | Just HRefl <- typeOf x `eqTypeRep` typeRep @a = Just x
   | otherwise = Nothing
 
 -- | Like 'fromDyn'.

@@ -91,7 +91,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
 
     withReward inputsL
       | isReward = do
-          eID <- getFae $ newEscrow [] $ \Token -> spend Reward
+          eID <- getFae $ newEscrow [] RewardName
           return $ bearer eID : inputsL
       | otherwise = return inputsL
  

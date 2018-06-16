@@ -70,12 +70,7 @@ instance GetInputValues Natural
 -- | Instance for non-Generic type
 instance GetInputValues PublicKey
 -- | Don't want the Generic instance
-instance 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) => 
-  GetInputValues (EscrowID argType valType)
+instance (Typeable name) => GetInputValues (EscrowID name)
 
 -- | Takes no values, but absorbs the entire list.  Useful for transactions
 -- that don't use their input contracts.

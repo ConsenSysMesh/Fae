@@ -2,7 +2,7 @@ module PostTX.View where
 
 import PostTX.Network
 
-import Blockchain.Fae (TransactionID)
+import Blockchain.Fae.FrontEnd (TransactionID)
 
 import qualified Data.ByteString.Lazy.Char8 as LC8
 

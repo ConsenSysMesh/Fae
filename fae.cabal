@@ -38,6 +38,7 @@ library
     Blockchain.Fae.Internal.Messages,
     Blockchain.Fae.Internal.PrettyFae
     Blockchain.Fae.Internal.Reward
+    Blockchain.Fae.Internal.Serialization
     Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Suspend
     Blockchain.Fae.Internal.Transaction

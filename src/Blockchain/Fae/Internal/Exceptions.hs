@@ -16,9 +16,11 @@ module Blockchain.Fae.Internal.Exceptions
     T.Typeable
   ) where
 
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.IDs.Types
 import qualified Control.Exception as Ex
 import Control.Monad.Catch hiding (displayException)
+import Data.ByteString (ByteString)
 import Data.Typeable as T
 
 import System.IO.Unsafe
@@ -63,7 +65,12 @@ data ContractException =
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
   BadEscrowID EntryID |
-  MissingSigner String
+  BadEscrowName EntryID TypeRep TypeRep |
+  MissingSigner String |
+  NotStartState EntryID VersionID |
+  HoldsEscrows EntryID |
+  CantImport ByteString TypeRep |
+  BadEGeneric
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
@@ -114,7 +121,19 @@ instance Show ContractException where
   show (BadValType bad good) =
     "Expected value type: " ++ show good ++ "; got: " ++ show bad
   show (BadEscrowID eID) = "No escrow found in this contract with ID: " ++ show eID
+  show (BadEscrowName entID bad good) =
+    "Wrong contract name for escrow " ++ show entID ++ 
+    "; got " ++ show bad ++ "; expected " ++ show good
   show (MissingSigner name) = "No signer named " ++ show name
+  show (NotStartState entID vID) = 
+    "Escrow " ++ show entID ++ 
+    " with version " ++ show vID ++ 
+    " is not in its starting state"
+  show (HoldsEscrows entID) =
+    "Escrow " ++ show entID ++ " has a nonempty endowment"
+  show (CantImport bs ty) =
+    "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
+  show BadEGeneric = "Bad EGeneric structure"
 
 -- | -
 instance Show TransactionException where

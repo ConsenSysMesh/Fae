@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.Args where
 
-import Blockchain.Fae (TransactionID)
+import Blockchain.Fae.FrontEnd (TransactionID)
 
 import Common.Lens hiding (view)
 import Common.ProtocolT

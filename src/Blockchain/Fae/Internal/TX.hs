@@ -177,9 +177,10 @@ runFaeInterpret x = do
     trustedPackages =
       [
         "array",
-        "base",
-        -- not binary,
+        "base", 
+        "binary", -- Because why not, if we also have 'cereal'.
         "bytestring",
+        "cereal", -- Because we use 'Serialize' in 'ContractName'
         "containers",
         "fae",
         "filepath",

@@ -258,7 +258,7 @@ instance IsString EdPublicKey where
 
 -- | Public keys 'show' as hex strings.
 instance Show EdPublicKey where
-  show = C8.unpack . B16.encode . Ser.encode
+  show = printHex
 
 -- | Digests 'show' as hex strings.
 instance Show Digest where
@@ -344,3 +344,6 @@ public (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey))
   | Ed.toPublic secKey == edPublicKey = Just pubKey
   | otherwise = Nothing
 
+-- | Useful function inexplicably missing from every library
+printHex :: (Serialize a) => a -> String
+printHex = C8.unpack . B16.encode . Ser.encode

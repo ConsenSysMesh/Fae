@@ -61,9 +61,9 @@ module Blockchain.Fae
     -- the literal arguments passed to the contracts with the given IDs.
     -- These are then 'read' into Haskell types, to prevent malicious
     -- authors from inserting nonterminating code into the contract calls.
-    Transaction, TransactionM, TransactionID, PublicKey, FaeTX, MonadTX,
+    Transaction, TransactionM, PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
-    Contract, ContractM, ContractID(..), Fae, MonadContract,
+    Contract, ContractM, ContractName(..), Fae, MonadContract,
     WithEscrows, EscrowID, BearsValue, RewardEscrowID, Reward,
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,

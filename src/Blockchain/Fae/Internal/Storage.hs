@@ -38,7 +38,7 @@ import GHC.Generics (Generic)
 
 -- * Types
 
--- | 'StorageT' is just an association between transactions and what they did.
+-- | 'Storage' is just an association between transactions and what they did.
 newtype Storage = Storage { getStorage :: Map TransactionID TransactionEntry }
 
 -- | Each transaction can produce outputs in two different ways (cf.

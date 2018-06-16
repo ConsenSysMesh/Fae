@@ -17,6 +17,8 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.TX,
     -- * Running transactions without interpreting
     module Blockchain.Fae.Internal.Transaction,
+    -- * Serializing valuables
+    module Blockchain.Fae.Internal.Serialization,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
     showTransaction,
@@ -46,6 +48,7 @@ import Blockchain.Fae.Internal.Messages hiding
     unsignedTXMessage, unsignTXMessage
   )
 import Blockchain.Fae.Internal.PrettyFae (showTransaction)
+import Blockchain.Fae.Internal.Serialization (exportValue, importValue)
 import Blockchain.Fae.Internal.Storage hiding 
   (
     hoistFaeStorage, nonceAt, checkNonce, nonceSetter,

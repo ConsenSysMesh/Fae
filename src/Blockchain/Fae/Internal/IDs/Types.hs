@@ -68,14 +68,14 @@ newtype VersionID = VersionID Digest
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
 -- immutable.  Each escrow ID is valid only within a contract or other
--- escrow that actually holds the escrow, and the type parameters must
--- correspond to the escrow's actual argument and value types.  Escrow IDs
--- may only be constructed by the 'newEscrow' function; in contract calls,
--- they can also be referenced by version (see "Versions").  However, they
--- should appear type-correct in contract signatures to formally verify
--- that the contract receives and returns a particular kind of opaque
--- value, e.g. a currency.
-newtype EscrowID argType valType = EscrowID { entID :: EntryID }
+-- escrow that actually holds the escrow, which must have been created with
+-- a "name" type matching the phantom type parameter.  Escrow IDs may only
+-- be constructed by the 'newEscrow' function; in contract calls, they can
+-- also be referenced by version (see "Versions").  However, they should
+-- appear type-correct in contract signatures to formally verify that the
+-- contract receives and returns a particular kind of opaque value, e.g.
+-- a currency.
+newtype EscrowID name = EscrowID { entID :: EntryID }
   deriving (NFData)
 
 -- Instances
