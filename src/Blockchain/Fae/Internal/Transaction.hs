@@ -25,11 +25,13 @@ import Control.DeepSeq
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Writer
+import Control.Monad.Writer hiding ((<>))
 
 import Data.Bifunctor
 import Data.Foldable
 import Data.Functor.Identity
+import Data.Monoid hiding ((<>))
+import Data.Semigroup
 
 import qualified Data.Map as Map
 
@@ -64,7 +66,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     {
       inputOutputs = Map.fromList defaultIOs,
       inputOrder = inputOrder,
-      outputs = emptyOutputs,
+      outputs = mempty,
       txSigners,
       result = Result (undefined :: a)
     }
@@ -79,7 +81,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     defaultIOs = flip map inputIDs $ \cID ->
       (
         shorten cID, 
-        InputOutputVersions (withoutNonce cID) emptyOutputs emptyVersionMap
+        InputResults (withoutNonce cID) (bearer ()) emptyVersionMap mempty 
       )
     inputOrder = map fst defaultIOs
     
@@ -130,28 +132,42 @@ callTX g x f = do
 runInputContracts :: Inputs -> TXStorageM [BearsValue]
 runInputContracts = fmap fst .
   foldl' (>>=) (return ([], emptyVersionMap')) .
-  map (uncurry runInputContract) 
+  map (uncurry nextInput) 
 
--- | Runs a single input contract as a monadic state update, adding the
--- result to the ongoing list and updating the map of all defined versions.
-runInputContract ::
+-- | If the contract function is available, run it as a monadic state
+-- update, adding the result to the ongoing list and updating the map of
+-- all defined versions.  If instead we have an imported value, just use
+-- that.  Otherwise, this input is exceptional (and so, probably, is the
+-- transaction result).
+nextInput ::
   ContractID -> String ->
   ([BearsValue], VersionMap') -> TXStorageM ([BearsValue], VersionMap')
-runInputContract cID arg (results, vers) = do
-  ~(result, ioV, vers', gAbsM) <- do
-    fAbs <- use $ at cID . defaultLens (throw $ BadInput cID)
-    lift $ runContract cID vers fAbs arg
+nextInput cID arg (results, vers) = do
+  valE <- use $ at cID . defaultLens (throw $ BadInput cID)
 
-  -- We don't update the contract if it didn't return cleanly
-  let successful = unsafeIsDefined result
-  when successful $ at cID .= gAbsM
+  (iR, vers') <- case valE of
+    Right fAbs -> do 
+      ~(iR, vers', gAbsM) <- lift $ runContract cID vers fAbs arg
+
+      -- We don't update the contract if it didn't return cleanly
+      let successful = unsafeIsDefined iR
+      when successful $ at cID .= (Right <$> gAbsM)
+
+      return (iR, vers')
+
+    Left (iResult, vMap) -> do
+      at cID .= Nothing -- Just to make sure
+      let (iVersions, vers') = makeOV cID vMap vers
+          iRealID = cID
+          iOutputsM = Nothing
+      return (InputResults{..}, vers')
 
   txID <- view _thisTXID
-  -- Important here that 'ioV', the new versions, are the /first/
-  -- argument to 'combineIOV'; see the comments for that function.
-  _getStorage . at txID %= 
-    fmap (_inputOutputs . at (shorten cID) %~ Just . maybe ioV (combineIOV ioV))
-  return (results |> result, vers')
+  -- Important here that 'iR', the new results, are the /first/
+  -- argument to '(<>)'; see the comments for that instance.
+  _getStorage . at txID %=
+    fmap (_inputOutputs . at (shorten cID) %~ (Just iR <>))
+  return (results |> iResult iR, vers')
 
 -- | Executes the contract function, returning the result, the structured
 -- outputs, the new map of all currently defined versions, and the
@@ -161,26 +177,27 @@ runContract ::
   VersionMap' ->
   AbstractGlobalContract -> 
   String ->
-  FaeTXM 
-    (BearsValue, InputOutputVersions, VersionMap', Maybe AbstractGlobalContract)
+  FaeTXM (InputResults, VersionMap', Maybe AbstractGlobalContract)
 runContract cID vers fAbs arg = do
   ~(~(~(result, vMap), gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
   let 
     iRealID = withoutNonce cID
-    iOutputs = listToOutputs outputsL
-    -- Only nonce-protected contract calls are allowed to return
-    -- versioned values.
-    ~(iVersions, vers')
-      | hasNonce cID = 
-          (
-            VersionMap $ bearerType <$> getVersionMap vMap, 
-            addContractVersions cID vMap vers
-          )
-      | otherwise = (emptyVersionMap, vers)
-  let 
-    -- The actual result of the contract includes both 'result' and also
-    -- the outputs and continuation function, so we link their fates.
-    result' = gAbsM `deepseq` outputsL `seq` result
-    iov = result' `seq` InputOutputVersions{..} 
-  return (result', iov, vers', gAbsM)
+    iOutputsM = Just $ listToOutputs outputsL
+    ~(iVersions, vers') = makeOV cID vMap vers
+  -- The actual result of the contract includes both 'result' and also
+  -- the outputs and continuation function, so we link their fates.
+  let iResult = gAbsM `deepseq` outputsL `seq` result
+  return (InputResults{..}, vers', gAbsM)
+
+-- | Adds the new version map to the ongoing total, but only if the
+-- contract ID has a nonce.  This restriction is part of the guarantee that
+-- using a versioned value produces exactly the expected result.
+makeOV :: ContractID -> VersionMap -> VersionMap' -> (VersionRepMap, VersionMap')
+makeOV cID vMap vers
+  | hasNonce cID = 
+      (
+        VersionMap $ bearerType <$> getVersionMap vMap, 
+        addContractVersions cID vMap vers
+      )
+  | otherwise = (emptyVersionMap, vers)
 

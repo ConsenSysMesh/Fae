@@ -28,6 +28,8 @@ import Data.IntMap (IntMap)
 import Data.List
 import Data.Map (Map)
 import Data.Maybe
+import Data.Monoid hiding ((<>))
+import Data.Semigroup
 import Data.Serialize hiding (Result)
 import Data.Typeable
 
@@ -38,8 +40,17 @@ import GHC.Generics (Generic)
 
 -- * Types
 
--- | 'Storage' is just an association between transactions and what they did.
-newtype Storage = Storage { getStorage :: Map TransactionID TransactionEntry }
+-- | 'Storage' records the complete effects of running each transaction.
+-- It also holds any contract return values that have been imported; no
+-- attempt is made to validate them against the actual return values, and
+-- it is expected that users come to some agreement on their correctness
+-- before sharing them.
+data Storage = 
+  Storage 
+  { 
+    getStorage :: Map TransactionID TransactionEntry ,
+    importedValues :: Map ContractID (BearsValue, VersionMap)
+  }
 
 -- | Each transaction can produce outputs in two different ways (cf.
 -- 'ContractID'), has an associated "signer" public key, and a result.
@@ -68,17 +79,18 @@ data Result = forall a. (Show a) => Result a
 -- | Inputs are identified by 'ShortContractID's so that 'ContractIDs' of
 -- the 'InputOutput' variant can be flat, rather than nested potentially
 -- indefinitely.
-type InputOutputs = Map ShortContractID InputOutputVersions
+type InputOutputs = Map ShortContractID InputResults
 -- | We save the versions map, with the actual values scrubbed, so that it
 -- can be displayed to learn the actual version IDs.
-data InputOutputVersions =
-  InputOutputVersions
+data InputResults =
+  InputResults
   {
     iRealID :: ContractID,
-    iOutputs :: Outputs,
-    iVersions :: VersionRepMap
-  }
-  deriving (Generic)
+    iResult :: !BearsValue,
+    iVersions :: VersionRepMap,
+    iOutputsM :: Maybe Outputs
+
+  } deriving (Generic)
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
 -- contracts, so it's not enough to just store them in a sequence.  In case
@@ -96,11 +108,56 @@ data Outputs =
 -- * Template Haskell
 
 makeLenses ''TransactionEntry
-makeLenses ''InputOutputVersions
+makeLenses ''InputResults
 makeLenses ''Outputs
 makeLenses ''Storage
 
 {- Instances -}
+
+-- | Concatenates two output lists, shifting the second one by the full
+-- count of the first one.
+instance Semigroup Outputs where
+  (<>) Outputs{outputMap = os1, outputCount = n1} 
+       Outputs{outputMap = os2, outputCount = n2}
+     = Outputs
+       {
+         outputMap = os1 <> os2',
+         -- Verbose, but uses (<>) to emphasize the fact that we are
+         -- building a 'Semigroup' instance.
+         outputCount = getSum $ Sum n1 <> Sum n2
+       }
+     where os2' = IntMap.mapKeys (+ n1) os2
+
+-- | -
+instance Monoid Outputs where
+  mempty = 
+    Outputs
+    {
+      outputMap = IntMap.empty,
+      outputCount = 0
+    }
+  mappend = (<>)
+
+-- | Unions the outputs and the versions of the two arguments.  The failure
+-- mode is when the arguments have a different 'iRealID', in which case we
+-- choose the second one for the result.  This is because in "Transaction",
+-- the second argument is the old entry, and we want to prevent people from
+-- screwing up contract calls by way of subsequent calls.  This is
+-- extraordinarily unlikely anyway, the way that the module works currently,
+-- since to do so would require manufacturing a hash collision for the
+-- short IDs.  If that happens, the later contract call is /definitely/
+-- malicious, and so it's okay to mishandle it.
+instance Semigroup InputResults where
+  (<>) InputResults{iOutputsM = osM1, iVersions = VersionMap vs1}
+       InputResults{iOutputsM = osM2, iVersions = VersionMap vs2, ..}
+     = InputResults
+       {
+         -- 'combineO' shifts the second argument, which needs to be the new
+         -- map.      
+         iOutputsM = osM2 <> osM1, 
+         iVersions = VersionMap $ vs1 <> vs2,
+         ..
+       }
 
 -- | For convenience, so we don't have to pattern-match elsewhere.
 instance Show Result where
@@ -109,7 +166,8 @@ instance Show Result where
 -- | For the 'At' instance
 type instance Index Storage = ContractID
 -- | For the 'At' instance
-type instance IxValue Storage = AbstractGlobalContract
+type instance IxValue Storage = 
+  Either (BearsValue, VersionMap) AbstractGlobalContract
 -- | For the 'At' instance
 instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
@@ -117,10 +175,25 @@ instance Ixed Storage
 -- requires descending to various levels into the maps.
 instance At Storage where
   at cID@((_ :# _) :# _) = throw $ InvalidContractID cID
-  at (cID :# n) = nonceAt cID . checkNonce cID (Just n)
-  at cID = nonceAt cID . checkNonce cID Nothing
+  at (cID :# n) = valueWithNonce cID (Just n)
+  at cID = valueWithNonce cID Nothing
 
 -- * Functions
+
+-- | Just combines 'nonceAt,' 'checkNonce', and 'elseImportedValue'.
+valueWithNonce :: 
+  ContractID -> Maybe Int -> Lens' Storage (Maybe (IxValue Storage))
+valueWithNonce cID nM = lens getter setter where
+  getter st = st ^. checkNonceAt cID nM . elseImportedValue st cID
+  setter st Nothing = st
+    & nonceAt cID .~ Nothing
+    & _importedValues . at cID .~ Nothing
+  setter st (Just (Right x)) = st & checkNonceAt cID nM ?~ x
+  setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
+
+checkNonceAt :: 
+  ContractID -> Maybe Int -> Lens' Storage (Maybe AbstractGlobalContract)
+checkNonceAt cID nM = nonceAt cID . checkNonce cID nM
 
 -- | Like 'at', but retaining the nonce
 nonceAt :: ContractID -> Lens' Storage (Maybe (AbstractGlobalContract, Int))
@@ -138,14 +211,14 @@ nonceAt cID@(InputOutput txID sID i) =
   _inputOutputs .
   at sID .
   defaultLens (throw $ BadInputID txID sID) .
-  _iOutputs .
+  _iOutputsM .
+  defaultLens (throw $ BadInputID txID sID) .
   _outputMap .
   at i
 nonceAt cID = throw $ InvalidNonceAt cID
 
 -- | Enforces nonce-correctness when it is required
-checkNonce :: 
-  ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
+checkNonce :: ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
 checkNonce _ Nothing = lens (fmap fst) nonceSetter
 checkNonce cID (Just n) = lens (fmap $ \(x, m) -> f m x) checkNonceSetter where
   checkNonceSetter xM@(Just (_, m)) yM = f m $ nonceSetter xM yM
@@ -159,6 +232,15 @@ nonceSetter (Just (x, m)) (Just y) = Just (y, m + 1)
 nonceSetter Nothing (Just y) = Just (y, 0)
 nonceSetter _ _ = Nothing
 
+-- | If no contract was found at this ID, try to get an imported return
+-- value for it.
+elseImportedValue :: 
+  Storage -> ContractID -> 
+  Getter (Maybe AbstractGlobalContract) (Maybe (IxValue Storage))
+elseImportedValue st cID = to f where
+  f Nothing = st ^. _importedValues . at cID . to (fmap Left)
+  f x = Right <$> x
+
 -- | Just an 'IntMap' constructor, indexing consecutively from 0.
 listToOutputs :: OutputsList -> Outputs
 listToOutputs l = 
@@ -168,49 +250,4 @@ listToOutputs l =
     outputCount = IntMap.size oMap
   }
   where oMap = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
-
--- | Like the name says.
-emptyOutputs :: Outputs
-emptyOutputs =
-  Outputs
-  {
-    outputMap = IntMap.empty,
-    outputCount = 0
-  }
-
--- | Unions the outputs and the versions of the two arguments.  The failure
--- mode is when the arguments have a different 'iRealID', in which case we
--- choose the second one for the result.  This is because in "Transaction",
--- the second argument is the old entry, and we want to prevent people from
--- screwing up contract calls by way of subsequent calls.  This is
--- extraordinarily unlikely anyway, the way that the module works currently,
--- since to do so would require manufacturing a hash collision for the
--- short IDs.  If that happens, the later contract call is /definitely/
--- malicious, and so it's okay to mishandle it.
-combineIOV :: 
-  InputOutputVersions -> InputOutputVersions -> InputOutputVersions
-combineIOV
-  InputOutputVersions{iOutputs = os1, iVersions = VersionMap vs1}
-  InputOutputVersions{iOutputs = os2, iVersions = VersionMap vs2, ..}
-  = InputOutputVersions
-    {
-      -- 'combineO' shifts the second argument, which needs to be the new
-      -- map.      
-      iOutputs = combineO os2 os1, 
-      iVersions = VersionMap $ vs1 `Map.union` vs2,
-      ..
-    }
-
--- | Concatenates two output lists, shifting the second one by the full
--- count of the first one.
-combineO :: Outputs -> Outputs -> Outputs
-combineO 
-  Outputs{outputMap = os1, outputCount = n1} 
-  Outputs{outputMap = os2, outputCount = n2}
-  = Outputs
-    {
-      outputMap = os1 `IntMap.union` os2',
-      outputCount = n1 + n2
-    }
-  where os2' = IntMap.mapKeys (+ n1) os2
 

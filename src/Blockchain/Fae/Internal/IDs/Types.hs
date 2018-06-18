@@ -39,7 +39,7 @@ data ContractID =
   -- times they have been called.  This infix constructor is for
   -- convenience.  
   ContractID :# Int
-  deriving (Read, Show, Generic)
+  deriving (Read, Show, Generic, Eq, Ord)
 
 -- | The hash of a 'ContractID', useful for abbreviating what would
 -- otherwise be unboundedly long chains of contracts that are outputs of

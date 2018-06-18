@@ -35,10 +35,10 @@ import Text.PrettyPrint.Annotated
 -- a proto-ContractID.
 data OutputOf = 
   OutputOfTransaction TransactionID Outputs |
-  OutputOfContract TransactionID ShortContractID Outputs
+  OutputOfContract TransactionID ShortContractID (Maybe Outputs)
 
 -- | Single input entry decorated with the nonce and transaction.
-data InputOf = InputOf TransactionID ShortContractID Int InputOutputVersions
+data InputOf = InputOf TransactionID ShortContractID Int InputResults
 -- | Inputs map decorated with call order and transaction.
 data InputsOf = InputsOf TransactionID [ShortContractID] InputOutputs
 -- | Transaction entry decorated with transaction.
@@ -65,8 +65,10 @@ instance PrettyFae OutputOf where
       outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
       outputCIDs (OutputOfTransaction txID outputs) = 
         makeOutputCIDs (TransactionOutput txID) outputs
-      outputCIDs (OutputOfContract txID scID outputs) =
+      outputCIDs (OutputOfContract txID scID (Just outputs)) =
         makeOutputCIDs (InputOutput txID scID) outputs
+      outputCIDs (OutputOfContract txID scID Nothing) =
+        throw $ ContractOmitted txID scID
       makeOutputCIDs makeCID Outputs{..} = 
         IntMap.mapWithKey (\i _ -> makeCID i) outputMap
 
@@ -79,8 +81,8 @@ instance PrettyFae VersionRepMap where
 
 -- | -
 instance PrettyFae InputOf where
-  prettyFae (InputOf txID scID n ~InputOutputVersions{..}) = do
-    outputsD <- prettyFae (OutputOfContract txID scID iOutputs)
+  prettyFae (InputOf txID scID n ~InputResults{..}) = do
+    outputsD <- prettyFae (OutputOfContract txID scID iOutputsM)
     versionsD <- prettyFae iVersions
     let nonceD = prettyPair ("nonce", n)
     inputBody <- displayException $ vcat
@@ -98,7 +100,7 @@ instance PrettyFae InputsOf where
     fmap vcat $ forM (nub inputSCIDs) $ \scID -> do
       let 
         input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
-        ~InputOutputVersions{..} = input
+        ~InputResults{..} = input
       storage <- get
       let n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
       prettyFae $ InputOf txID scID n input

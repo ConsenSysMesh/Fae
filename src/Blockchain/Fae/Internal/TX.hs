@@ -143,7 +143,7 @@ runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
   fmap (either throw id) $
-    flip evalStateT (Storage Map.empty) $ 
+    flip evalStateT (Storage Map.empty Map.empty) $ 
       case ghcLibdirM of
         Nothing -> unsafeRunInterpreterWithArgs args x
         Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir x
