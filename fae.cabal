@@ -44,8 +44,7 @@ library
     Blockchain.Fae.Internal.TX
     Blockchain.Fae.Internal.Versions
     Common.Lens
-  build-depends:    
-    aeson,   
+  build-depends:       
     base >= 4.10 && < 5,
     base16-bytestring,
     bytestring,
@@ -95,6 +94,7 @@ executable faeServer
   main-is:             FaeServer.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   other-modules:
+    Common.JSON
     Common.Lens
     Common.ProtocolT
     FaeServer.App
@@ -151,6 +151,7 @@ executable postTX
   hs-source-dirs: bin, common
   main-is: PostTX.hs
   other-modules:
+    Common.JSON
     Common.Lens
     Common.ProtocolT
     PostTX.Args
@@ -224,4 +225,3 @@ executable collectPackage
     NamedFieldPuns
     RankNTypes
     RecordWildCards
-

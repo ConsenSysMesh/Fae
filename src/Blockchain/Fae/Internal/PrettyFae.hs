@@ -13,7 +13,12 @@ a 'FaeStorage' monad, so the class can't just be 'Pretty'.
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Blockchain.Fae.Internal.PrettyFae where
+module Blockchain.Fae.Internal.PrettyFae (
+    collectTransaction,
+    showTransaction,
+    TXSummary(..),
+    TXInputSummary(..),
+) where
 
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
@@ -33,7 +38,7 @@ import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
-import Data.Aeson hiding (Result)
+
 import Data.List
 import Data.Void
 
@@ -54,11 +59,23 @@ data InputsOf = InputsOf TransactionID [ShortContractID] InputOutputs
 -- | Transaction entry decorated with transaction.
 data EntryOf = EntryOf TransactionID TransactionEntry
 
-instance ToJSON Result where 
-  toJSON x = genericToJSON defaultOptions $ show x
+-- | Useful for Fae clients communicating with faeServer
+data TXSummary = TXSummary {
+  transactionID :: TransactionID,
+  txResult :: String,
+  txOutputs:: [ShortContractID],
+  txInputSummary :: [TXInputSummary],
+  signers :: [String]
+} deriving (Show, Generic)
 
-instance ToJSON ShortContractID where 
-  toJSON x = genericToJSON defaultOptions $ show x
+data TXInputSummary = TXInputSummary {
+  txInputTXID :: TransactionID,
+  txInputNonce :: Int,
+  txInputOutputs :: [ShortContractID],
+  txInputVersion :: String
+} deriving (Show, Generic)
+
+makeLenses ''TXSummary
 
 -- | Helpful shorthand; we don't use annotations.
 type VDoc = Doc Void
@@ -185,9 +202,10 @@ showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
   TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  let Signers signers = txSigners
+  let Signers signers' = txSigners
   let 
-      txSigners = show <$> Map.toList signers
+      transactionID = txID
+      signers = show <$> Map.toList signers'
       txInputSCIDs = nub inputOrder
       txResult = show result 
       txOutputs =  snd <$> getTXOutputs (OutputOfTransaction txID outputs)
@@ -198,16 +216,16 @@ getInputSummary :: (MonadState Storage m, MonadCatch m, MonadIO m) => Transactio
 getInputSummary txID inputSCIDs inputMap = do
     storage <- get
     forM (nub inputSCIDs) $ \scID -> do
-        let 
-          input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
-          ~InputOutputVersions{..} = input
-          txInputVersion = show $ Map.toList $ getVersionMap iVersions
-          inputOutputSCIDs = snd <$> (getTXOutputs (OutputOfContract txID scID iOutputs))
-          n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
-        return TXInputSummary { txInputTXID = txID, txInputNonce = n, txInputOutputs = inputOutputSCIDs, txInputVersion=txInputVersion}
-  
-getTXOutputs outs = do 
-  (outputsToList $ outputCIDs outs)
+      let 
+        input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
+        ~InputOutputVersions{..} = input
+        txInputVersion = show $ Map.toList $ getVersionMap iVersions
+        inputOutputSCIDs = snd <$> (getTXOutputs (OutputOfContract txID scID iOutputs))
+        n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
+      return TXInputSummary { txInputTXID = txID, txInputNonce = n, txInputOutputs = inputOutputSCIDs, txInputVersion=txInputVersion}
+
+getTXOutputs :: OutputOf -> [(String, ShortContractID)]
+getTXOutputs outs = outputsToList $ outputCIDs outs
   where
     outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
     outputCIDs (OutputOfTransaction txID outputs) = 
@@ -216,21 +234,3 @@ getTXOutputs outs = do
       makeOutputCIDs (InputOutput txID scID) outputs
     makeOutputCIDs makeCID Outputs{..} = 
       IntMap.mapWithKey (\i _ -> makeCID i) outputMap
-
--- | Useful for Fae clients communicating with faeServer
-data TXSummary = TXSummary {
-  txID :: TransactionID,
-  txResult :: String,
-  txOutputs:: [ShortContractID],
-  txInputSummary :: [TXInputSummary],
-  txSigners :: [String]
-} deriving (Show, Generic, ToJSON)
-
-data TXInputSummary = TXInputSummary {
-  txInputTXID :: TransactionID,
-  txInputNonce :: Int,
-  txInputOutputs :: [ShortContractID],
-  txInputVersion :: String
-} deriving (Show, Generic, ToJSON)
-
-makeLenses ''TXSummary
