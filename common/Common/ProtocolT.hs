@@ -459,6 +459,7 @@ runProtocolT x = do
 -- | Conditionally configure hostname
 getHost :: String -> String
 
+
 getHost h
     | h == "darwin" = "127.0.0.1"   -- | MacOS case
     | otherwise = "localhost"       -- | Linux case
