@@ -13,6 +13,10 @@ import Control.Monad.State
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 
+import qualified Data.Aeson as A
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as L
+import qualified Data.Text.Lazy.Encoding as E
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.Serialize (Serialize)
@@ -46,6 +50,11 @@ runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
     txExecData <- readTXExecData
     reThrowExit mainTID (callerTID txExecData) $ runTXExecData txExecData
 
+getTXSummaryJSON :: (MonadIO m, MonadMask m) => TransactionID -> FaeInterpretWithHistoryT m [Char]
+getTXSummaryJSON txID = do 
+  txSummary <- lift $ collectTransaction txID
+  return $ T.unpack $ L.toStrict $ E.decodeUtf8 $ A.encode txSummary
+  
 runTXExecData :: 
   (MonadIO m, MonadMask m) => 
   TXExecData -> FaeInterpretWithHistoryT m ()
@@ -57,7 +66,7 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
   txResult <-
     if lazy
     then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
-    else lift $ showTransaction txID
+    else getTXSummaryJSON txID
   if fake
   then liftIO gitClean
   else do

@@ -27,6 +27,8 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State
 
+import qualified Data.Text.Lazy.Encoding as T
+
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -52,30 +54,11 @@ data InputsOf = InputsOf TransactionID [ShortContractID] InputOutputs
 -- | Transaction entry decorated with transaction.
 data EntryOf = EntryOf TransactionID TransactionEntry
 
--- | Useful for Fae clients communicating with faeServer
-data TXSummary = TXSummary {
-  txID :: TransactionID,
- -- txOutSummary :: OutputOf
- -- txInputs :: InputsOf,
-  txResult :: Result
- -- txSigners :: Signers
-}
-
 instance ToJSON Result where 
-  toJSON = toJSON . show
+  toJSON x = genericToJSON defaultOptions $ show x
 
 instance ToJSON ShortContractID where 
-  toJSON = toJSON . show
-
-instance ToJSON TXSummary where 
-  toJSON TXSummary{..} = object [
-      "txID" .= txID,
-    --  "txOutSummary"  .= txOutSummary]
-    --  "txInputs" .= txInputs,
-     "txResult" .= txResult]
-    --  "txSigners" .= txSigners ]
-
-makeLenses ''TXSummary
+  toJSON x = genericToJSON defaultOptions $ show x
 
 -- | Helpful shorthand; we don't use annotations.
 type VDoc = Doc Void
@@ -199,13 +182,32 @@ showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
   safeHead (x : _) = x
 
 -- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
-collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m String
+collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
   TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  let outs = OutputOfTransaction txID outputs
-  let txOutSummary =  outputsToList $ outputCIDs outs
-  let txResult = result
-  return $ C.unpack $ encode TXSummary {..}
+  let Signers signers = txSigners
+  let 
+      txSigners = show <$> Map.toList signers
+      txInputSCIDs = nub inputOrder
+      txResult = show result 
+      txOutputs =  snd <$> getTXOutputs (OutputOfTransaction txID outputs)
+  txInputSummary <- getInputSummary txID  txInputSCIDs inputOutputs
+  return $ TXSummary{..}
+
+getInputSummary :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> [ShortContractID] -> Map.Map ShortContractID InputOutputVersions -> m [TXInputSummary]
+getInputSummary txID inputSCIDs inputMap = do
+    storage <- get
+    forM (nub inputSCIDs) $ \scID -> do
+        let 
+          input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
+          ~InputOutputVersions{..} = input
+          txInputVersion = show $ Map.toList $ getVersionMap iVersions
+          inputOutputSCIDs = snd <$> (getTXOutputs (OutputOfContract txID scID iOutputs))
+          n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
+        return TXInputSummary { txInputTXID = txID, txInputNonce = n, txInputOutputs = inputOutputSCIDs, txInputVersion=txInputVersion}
+  
+getTXOutputs outs = do 
+  (outputsToList $ outputCIDs outs)
   where
     outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
     outputCIDs (OutputOfTransaction txID outputs) = 
@@ -214,3 +216,21 @@ collectTransaction txID = do
       makeOutputCIDs (InputOutput txID scID) outputs
     makeOutputCIDs makeCID Outputs{..} = 
       IntMap.mapWithKey (\i _ -> makeCID i) outputMap
+
+-- | Useful for Fae clients communicating with faeServer
+data TXSummary = TXSummary {
+  txID :: TransactionID,
+  txResult :: String,
+  txOutputs:: [ShortContractID],
+  txInputSummary :: [TXInputSummary],
+  txSigners :: [String]
+} deriving (Show, Generic, ToJSON)
+
+data TXInputSummary = TXInputSummary {
+  txInputTXID :: TransactionID,
+  txInputNonce :: Int,
+  txInputOutputs :: [ShortContractID],
+  txInputVersion :: String
+} deriving (Show, Generic, ToJSON)
+
+makeLenses ''TXSummary
