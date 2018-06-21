@@ -117,6 +117,11 @@ instance HasEscrowIDs Natural where
 instance HasEscrowIDs PublicKey where
   traverseEscrowIDs = defaultTraverseEscrowIDs
 
+-- | Special case of the 'Generic' instance that is necessary in 'Contract'
+-- and needs to be here to break an import cycle.
+instance (HasEscrowIDs a) => HasEscrowIDs [a] where
+  traverseEscrowIDs f = mapM $ traverseEscrowIDs f
+
 -- Boring Generic boilerplate
 
 -- | Empty types have no escrow IDs to apply the traversal function to.
@@ -157,13 +162,13 @@ bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue 
 
 -- | Like 'fromDynamic'.
-unBearer :: forall a. (HasEscrowIDs a) => BearsValue -> Maybe a
+unBearer :: forall a. (Typeable a) => BearsValue -> Maybe a
 unBearer (BearsValue x)
   | Just HRefl <- typeOf x `eqTypeRep` typeRep @a = Just x
   | otherwise = Nothing
 
 -- | Like 'fromDyn'.
-unBear :: forall a. (HasEscrowIDs a) => BearsValue -> a -> a
+unBear :: (Typeable a) => BearsValue -> a -> a
 unBear (BearsValue x) x0 
   | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
   | otherwise = x0

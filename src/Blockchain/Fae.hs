@@ -63,8 +63,9 @@ module Blockchain.Fae
     -- authors from inserting nonterminating code into the contract calls.
     Transaction, TransactionM, PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
-    Contract, ContractM, ContractName(..), Fae, MonadContract,
-    WithEscrows, EscrowID, BearsValue, RewardEscrowID, Reward,
+    Contract, ContractM, ContractName(..), Exportable, EGeneric, 
+    Fae, MonadContract, WithEscrows, EscrowID, BearsValue, 
+    RewardEscrowID, Reward,
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
     lookupSigner, signer, signers, claimReward, bearer, 
@@ -76,6 +77,7 @@ module Blockchain.Fae
     Versioned(Versioned, getVersioned),
     -- * Opaque classes
     GetInputValues, HasEscrowIDs, Versionable, 
+    ContractArg, ContractVal, TransactionArg, TransactionVal,
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
     Generic, Identity(..), Void
@@ -89,6 +91,7 @@ import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
+import Blockchain.Fae.Internal.Serialization
 import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
 
@@ -104,6 +107,7 @@ import Control.Monad.Writer.Class
 import Data.Dynamic
 import Data.Functor.Identity
 import Data.Maybe
+import Data.Serialize (Serialize)
 import Data.Sequence (Seq)
 
 import Data.Map (Map)
@@ -116,6 +120,16 @@ import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 
 -- * Types
+
+-- | Constraint collection synonym
+type ContractVal a = 
+  (HasEscrowIDs a, Versionable a, EGeneric a, Serialize (ERep a))
+-- | Constraint collection synonym
+type ContractArg a = (HasEscrowIDs a, Versionable a, Read a)
+-- | Constraint collection synonym
+type TransactionArg a = (HasEscrowIDs a, GetInputValues a)
+-- | Constraint collection synonym
+type TransactionVal a = (Typeable a, Show a)
 
 -- | A contract transformer to apply effects to 'Fae'
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =

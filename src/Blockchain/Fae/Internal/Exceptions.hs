@@ -70,8 +70,7 @@ data ContractException =
   MissingSigner String |
   NotStartState EntryID VersionID |
   HoldsEscrows EntryID |
-  CantImport ByteString TypeRep |
-  BadEGeneric
+  CantImport ByteString TypeRep
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
@@ -138,7 +137,6 @@ instance Show ContractException where
     "Escrow " ++ show entID ++ " has a nonempty endowment"
   show (CantImport bs ty) =
     "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
-  show BadEGeneric = "Bad EGeneric structure"
 
 -- | -
 instance Show TransactionException where

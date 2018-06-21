@@ -13,6 +13,7 @@ or other derived values.
 module Blockchain.Fae.Internal.Reward where
 
 import Blockchain.Fae.Internal.Contract
+import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs
 
 import Data.Serialize (Serialize)

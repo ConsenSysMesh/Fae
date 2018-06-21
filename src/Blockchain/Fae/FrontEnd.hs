@@ -17,11 +17,9 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.TX,
     -- * Running transactions without interpreting
     module Blockchain.Fae.Internal.Transaction,
-    -- * Serializing valuables
-    module Blockchain.Fae.Internal.Serialization,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
-    showTransaction,
+    showTransaction, exportValue, importValue,
     -- * Cryptography types and functions
     module Blockchain.Fae.Internal.Crypto,
     -- * Fae exceptions
@@ -30,6 +28,7 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.IDs.Types
   ) where
 
+import Blockchain.Fae.Internal.Contract (exportValue, importValue)
 import Blockchain.Fae.Internal.Crypto hiding
   (
     Serialize, PassFail, PartialSerialize,
@@ -37,6 +36,7 @@ import Blockchain.Fae.Internal.Crypto hiding
     getPartialSerialize, readsPrecSer
   )
 import Blockchain.Fae.Internal.Exceptions hiding (unsafeIsDefined)
+import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs hiding
   (
     GHasEscrowIDs,
@@ -48,7 +48,6 @@ import Blockchain.Fae.Internal.Messages hiding
     unsignedTXMessage, unsignTXMessage
   )
 import Blockchain.Fae.Internal.PrettyFae (showTransaction)
-import Blockchain.Fae.Internal.Serialization (exportValue, importValue)
 import Blockchain.Fae.Internal.Storage hiding 
   (
     hoistFaeStorage, nonceAt, checkNonce, nonceSetter,

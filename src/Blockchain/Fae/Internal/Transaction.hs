@@ -81,7 +81,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     defaultIOs = flip map inputIDs $ \cID ->
       (
         shorten cID, 
-        InputResults (withoutNonce cID) (bearer ()) emptyVersionMap mempty 
+        InputResults (withoutNonce cID) (ReturnValue ()) emptyVersionMap mempty 
       )
     inputOrder = map fst defaultIOs
     
@@ -94,7 +94,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     withReward inputsL
       | isReward = do
           eID <- getFae $ newEscrow [] RewardName
-          return $ bearer eID : inputsL
+          return $ ReturnValue eID : inputsL
       | otherwise = return inputsL
  
 -- | Actually perform the transaction.
@@ -129,7 +129,7 @@ callTX g x f = do
 
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
-runInputContracts :: Inputs -> TXStorageM [BearsValue]
+runInputContracts :: Inputs -> TXStorageM [ReturnValue]
 runInputContracts = fmap fst .
   foldl' (>>=) (return ([], emptyVersionMap')) .
   map (uncurry nextInput) 
@@ -141,7 +141,7 @@ runInputContracts = fmap fst .
 -- transaction result).
 nextInput ::
   ContractID -> String ->
-  ([BearsValue], VersionMap') -> TXStorageM ([BearsValue], VersionMap')
+  ([ReturnValue], VersionMap') -> TXStorageM ([ReturnValue], VersionMap')
 nextInput cID arg (results, vers) = do
   valE <- use $ at cID . defaultLens (throw $ BadInput cID)
 

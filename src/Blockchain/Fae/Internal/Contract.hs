@@ -15,7 +15,6 @@ module Blockchain.Fae.Internal.Contract where
 
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
-import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Suspend
 import Blockchain.Fae.Internal.Versions
@@ -28,6 +27,7 @@ import Control.Monad.State
 import Control.Monad.Writer
 
 import Data.Bifunctor
+import Data.ByteString (ByteString)
 import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Map (Map)
@@ -45,6 +45,9 @@ import Type.Reflection
 
 -- * Types
 -- ** Contract data
+
+data ReturnValue =
+  forall a. (HasEscrowIDs a, Exportable a) => ReturnValue a
 
 -- | Something like a closure for the initial state of a new contract
 -- (currently only escrows).  The actual contract function can be
@@ -136,7 +139,7 @@ type AbstractLocalContract = ContractF BearsValue BearsValue
 -- | The form of a contract function intended to be called from
 -- a transaction.
 type AbstractGlobalContract = 
-  ContractF (String, VersionMap') (BearsValue, VersionMap)
+  ContractF (String, VersionMap') (ReturnValue, VersionMap)
 
 -- ** User-visible
 
@@ -164,6 +167,10 @@ type Transaction a b = a -> FaeTX b
 
 -- * Fae typeclasses
 
+class Exportable a where
+  exportValue :: a -> FaeTXM ByteString
+  importValue :: ByteString -> FaeTXM (Maybe a)
+
 -- | Instances of 'ContractName' are always defined by contract authors,
 -- who will inevitably have to define 'theContract' to point to a global
 -- function.  Since it's global, it is still present when we deserialize,
@@ -172,8 +179,8 @@ type Transaction a b = a -> FaeTX b
 class 
   (
     Typeable a, Serialize a, 
-    HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a),
-    Typeable (ArgType a), Typeable (ValType a)
+    HasEscrowIDs (ArgType a), 
+    HasEscrowIDs (ValType a)
   ) => ContractName a where
 
   type ArgType a
@@ -268,7 +275,7 @@ newContract ::
   (
     Versionable argType, Versionable valType,
     HasEscrowIDs argType, HasEscrowIDs valType,
-    Read argType, MonadTX m
+    Read argType, Exportable valType, MonadTX m
   ) => 
   [BearsValue] -> Contract argType valType -> m ()
 newContract values f = liftTX $ Fae $ do
@@ -333,7 +340,7 @@ localContract = ContractF .
 -- abstract one suitable for being called as a transaction input.
 globalContract :: 
   (
-    Read argType, 
+    Read argType, Exportable valType,
     Versionable argType, Versionable valType,
     HasEscrowIDs argType, HasEscrowIDs valType
   ) =>
@@ -374,15 +381,15 @@ acceptGlobal (argS, vers) = takeEscrows x where
 -- | Prepares a value-bearing result together with its table of versioned
 -- values.
 returnGlobal :: 
-  (HasEscrowIDs valType, Versionable valType) =>
-  WithEscrows valType -> FaeTXM (BearsValue, VersionMap)
+  (HasEscrowIDs valType, Versionable valType, Exportable valType) =>
+  WithEscrows valType -> FaeTXM (ReturnValue, VersionMap)
 returnGlobal yE = do
   y <- putEscrows yE
   escrowMap <- use _escrowMap
   let
     vLookup entID = 
       maybe (throw $ BadEscrowID entID) escrowVersion $ Map.lookup entID escrowMap
-  return (bearer y, versionMap vLookup y)
+  return (ReturnValue y, versionMap vLookup y)
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
@@ -471,4 +478,17 @@ nameContract entID (AnyNamedContract c)
 contractNameRep :: 
   forall name. (Typeable name) => NamedContract name -> SomeTypeRep
 contractNameRep _ = someTypeRep $ Proxy @name
+
+-- ** 'ReturnValue' manipulation
+
+-- | Like 'unBear'.
+getReturnValue :: (Typeable a) => ReturnValue -> a -> a
+getReturnValue (ReturnValue x) x0 
+  | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
+  | otherwise = x0
+
+-- | Like 'bearerType'.
+returnValueType :: ReturnValue -> SomeTypeRep
+returnValueType (ReturnValue x) = someTypeRep (Just x)
+
 

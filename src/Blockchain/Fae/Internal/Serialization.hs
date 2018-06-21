@@ -1,6 +1,7 @@
 {-# LANGUAGE UndecidableInstances, PolyKinds #-}
 module Blockchain.Fae.Internal.Serialization where
 
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Exceptions
@@ -16,73 +17,94 @@ import Data.Proxy
 
 import qualified Data.Map as Map
 
-import Data.Serialize (Serialize)
+import Data.Serialize (Serialize, GSerializePut, GSerializeGet)
 import qualified Data.Serialize as S
-import qualified Data.Serialize.Put as S
-import qualified Data.Serialize.Get as S
 
 import GHC.Generics
 
-type family ERep (a :: * -> *) :: * -> * where
-  -- This is awful, but safe, because the last parameter of (E)Rep is ignored.
-  ERep (K1 i c) = K1 i (Either (EEnt c) (ERep (Rep c) ()))
-  ERep (f :+: g) = ERep f :+: ERep g
-  ERep (f :*: g) = ERep f :*: ERep g
-  ERep (M1 i t f) = M1 i t (ERep f)
-  ERep U1 = U1
-  ERep V1 = V1
+import Numeric.Natural
 
-data family EEnt c 
+class EGeneric a where
+  eFrom :: a -> FaeTXM (ERep a)
+  default eFrom :: (ERep a ~ a) => a -> FaeTXM (ERep a)
+  eFrom = return
 
-data instance EEnt (EscrowID name) = 
-  EEnt
-  {
-    eEntID :: EscrowID name,
-    eEntry :: EscrowEntry
-  }
+  eTo   :: ERep a -> FaeTXM a
+  default eTo :: (ERep a ~ a) => ERep a -> FaeTXM a
+  eTo = return
 
-class EGeneric f where
-  eFrom :: f p -> FaeTXM (ERep f p)
-  eTo   :: ERep f p -> FaeTXM (f p)
+class EGeneric1 f where
+  eFrom1 :: f p -> FaeTXM (ERep1 f p)
+  default eFrom1 :: (ERep1 f ~ f) => f p -> FaeTXM (ERep1 f p)
+  eFrom1 = return
 
-instance {-# OVERLAPPING #-} 
-  (Typeable name) => EGeneric (K1 i (EscrowID name)) where
+  eTo1   :: ERep1 f p -> FaeTXM (f p)
+  default eTo1   :: (ERep1 f ~ f) => ERep1 f p -> FaeTXM (f p)
+  eTo1 = return
 
-  eFrom (K1 eID) = K1 . Left . EEnt eID <$> peekEscrow eID
-  eTo (K1 (Left (EEnt eID@EscrowID{..} entry))) = K1 <$> do
+type family ERep c :: * where
+  ERep (EscrowID name) = EEnt name
+  ERep Char = Char
+  ERep Word = Word
+  ERep Int = Int
+  ERep Integer = Integer
+  ERep Float = Float
+  ERep Double = Double
+  ERep Natural = Natural
+  ERep PublicKey = PublicKey
+  ERep Digest = Digest
+  ERep c = SERep1 (Rep c)
+
+type family ERep1 a :: * -> * where
+  ERep1 (f :+: g) = ERep1 f :+: ERep1 g
+  ERep1 (f :*: g) = ERep1 f :*: ERep1 g
+  ERep1 (M1 i t f) = M1 i t (ERep1 f)
+  ERep1 (K1 i c) = K1 i (ERep c)
+  ERep1 U1 = U1
+  ERep1 V1 = V1
+
+data EEnt name = EEnt (EscrowID name) EscrowEntry
+newtype SERep1 f = SERep1 (ERep1 f ())
+
+instance (Typeable name) => EGeneric (EscrowID name) where
+  eFrom eID = EEnt eID <$> peekEscrow eID
+  eTo (EEnt eID@EscrowID{..} entry) = do
     _escrowMap . at entID %= Just . fromMaybe entry
     return eID
-  eTo _ = throw BadEGeneric
 
-instance (Generic c, EGeneric (Rep c)) => EGeneric (K1 i c) where
-  eFrom = fmap (K1 . Right) . eFrom . from . unK1
-  eTo (K1 (Right x)) = K1 . to <$> eTo x
-  eTo _ = throw BadEGeneric
+instance EGeneric Char
+instance EGeneric Word
+instance EGeneric Int
+instance EGeneric Integer
+instance EGeneric Float
+instance EGeneric Double
+instance EGeneric Natural
+instance EGeneric PublicKey
+instance EGeneric Digest
 
-instance (EGeneric f, EGeneric g) => EGeneric (f :+: g) where
-  eFrom (L1 x) = L1 <$> eFrom x
-  eFrom (R1 x) = R1 <$> eFrom x
+instance (EGeneric1 f, EGeneric1 g) => EGeneric1 (f :+: g) where
+  eFrom1 (L1 x) = L1 <$> eFrom1 x
+  eFrom1 (R1 x) = R1 <$> eFrom1 x
 
-  eTo (L1 x) = L1 <$> eTo x
-  eTo (R1 x) = R1 <$> eTo x
+  eTo1 (L1 x) = L1 <$> eTo1 x
+  eTo1 (R1 x) = R1 <$> eTo1 x
  
-instance (EGeneric f, EGeneric g) => EGeneric (f :*: g) where
-  eFrom (x :*: y) = (:*:) <$> eFrom x <*> eFrom y
-  eTo (x :*: y) = (:*:) <$> eTo x <*> eTo y
+instance (EGeneric1 f, EGeneric1 g) => EGeneric1 (f :*: g) where
+  eFrom1 (x :*: y) = (:*:) <$> eFrom1 x <*> eFrom1 y
+  eTo1 (x :*: y) = (:*:) <$> eTo1 x <*> eTo1 y
 
-instance (EGeneric f) => EGeneric (M1 i t f) where
-  eFrom = fmap M1 . eFrom . unM1
-  eTo = fmap M1 . eTo . unM1
+instance (EGeneric1 f) => EGeneric1 (M1 i t f) where
+  eFrom1 = fmap M1 . eFrom1 . unM1
+  eTo1 = fmap M1 . eTo1 . unM1
 
-instance EGeneric U1 where
-  eFrom = return
-  eTo = return
+instance (EGeneric c) => EGeneric1 (K1 i c) where
+  eFrom1 (K1 x) = K1 <$> eFrom x
+  eTo1 (K1 x) = K1 <$> eTo x
 
-instance EGeneric V1 where
-  eFrom = return
-  eTo = return
+instance EGeneric1 U1
+instance EGeneric1 V1
 
-instance (ContractName name) => Serialize (EEnt (EscrowID name)) where
+instance (ContractName name) => Serialize (EEnt name) where
   put (EEnt EscrowID{entID} EscrowEntry{..}) = 
     case escrowNameOrFunction of
       Left c -> do
@@ -97,16 +119,8 @@ instance (ContractName name) => Serialize (EEnt (EscrowID name)) where
         escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
     return $ EEnt EscrowID{..} EscrowEntry{..}
 
-exportValue :: 
-  -- Again, awful but safe
-  (Generic a, EGeneric (Rep a), Serialize (ERep (Rep a) ())) => 
-  a -> FaeTXM ByteString
-exportValue = fmap S.encode . eFrom . from @_ @()
+instance 
+  (GSerializePut (ERep1 f), GSerializeGet (ERep1 f)) => Serialize (SERep1 f) where
 
-importValue :: 
-  -- Again, awful but safe
-  (Generic a, EGeneric (Rep a), Serialize (ERep (Rep a) ())) =>
-  ByteString -> FaeTXM (Maybe a)
-importValue = 
-  either (const $ return Nothing) (fmap (Just . to @_ @()) . eTo) . S.decode 
-
+  put (SERep1 x) = S.gPut x
+  get = SERep1 <$> S.gGet

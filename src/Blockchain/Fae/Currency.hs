@@ -37,7 +37,10 @@ import Data.Typeable
 import Numeric.Natural
 
 -- | Interface for a currency type.
-class (Versionable coin, Integral (Valuation coin)) => Currency coin where
+class 
+  (Versionable coin, ContractVal coin, Integral (Valuation coin)) => 
+  Currency coin where
+
   data Valuation coin
 
   -- | Like the name says.  Sometimes useful; should satisfy

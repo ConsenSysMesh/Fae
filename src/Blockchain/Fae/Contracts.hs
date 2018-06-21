@@ -85,14 +85,7 @@ instance Exception TwoPartyException
 -- 'Right'.
 --
 -- Once both items are returned, the contract is deleted.
-twoPartySwap ::
-  (
-    HasEscrowIDs a, HasEscrowIDs b, 
-    Versionable a, Versionable b,
-    Typeable a, Typeable b,
-    MonadTX m
-  ) =>
-  a -> b -> m ()
+twoPartySwap :: (ContractVal a, ContractVal b, MonadTX m) => a -> b -> m ()
 twoPartySwap x y = do
   partyA <- signer "partyA"
   partyB <- signer "partyB"
@@ -103,7 +96,7 @@ data Stages = Stage1 | Stage2
 
 -- | Both parts have two stages, so this contract has four iterations.
 twoPartySwapC :: 
-  (HasEscrowIDs a, HasEscrowIDs b, Versionable a, Versionable b) =>
+  (ContractVal a, ContractVal b) =>
   PublicKey -> PublicKey -> 
   a -> b ->
   Contract (Maybe Bool) (Maybe (Either (Versioned a) (Versioned b)))
@@ -197,10 +190,7 @@ instance Exception VendorError
 -- as a 'Left' value.
 sell :: 
   forall a coin m.
-  (
-    HasEscrowIDs a, Typeable a, Versionable a, 
-    Currency coin, MonadTX m
-  ) =>
+  (ContractVal a, Currency coin, MonadTX m) =>
   a -> Valuation coin -> PublicKey -> m ()
 sell x price seller = newContract [bearer x] sellC where
   sellC :: 
@@ -227,12 +217,7 @@ sell x price seller = newContract [bearer x] sellC where
 -- a validation function.
 redeem ::
   forall a b m m'.
-  (
-    HasEscrowIDs a, HasEscrowIDs b, 
-    Versionable a, Versionable b, 
-    Typeable a, Typeable b, 
-    Read b, MonadTX m
-  ) =>
+  (ContractVal a, ContractVal b, ContractArg b, MonadTX m) =>
   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
 redeem x valid seller = newContract [bearer x] redeemC where
   redeemC :: Contract b (Either b a)
@@ -269,10 +254,7 @@ instance Exception PossessionError
 -- public key of the recipient.  A new contract is created that takes no
 -- arguments (that is, takes @()@) and checks that "self" is the owner, in
 -- which case it returns the value.
-signOver ::
-  forall a m.
-  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
-  a -> PublicKey -> m ()
+signOver :: forall a m. (ContractVal a, MonadTX m) => a -> PublicKey -> m ()
 signOver x owner = newContract [bearer x] signOverC where
   signOverC :: Contract () a
   signOverC _ = do
@@ -281,9 +263,7 @@ signOver x owner = newContract [bearer x] signOverC where
     spend x
 
 -- | Sign over a value to a named owner.
-deposit ::
-  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
-  a -> String -> m ()
+deposit :: (ContractVal a, MonadTX m) => a -> String -> m ()
 deposit x name = do
   owner <- signer name
   signOver x owner

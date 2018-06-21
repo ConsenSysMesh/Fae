@@ -49,7 +49,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry ,
-    importedValues :: Map ContractID (BearsValue, VersionMap)
+    importedValues :: Map ContractID (ReturnValue, VersionMap)
   }
 
 -- | Each transaction can produce outputs in two different ways (cf.
@@ -86,7 +86,7 @@ data InputResults =
   InputResults
   {
     iRealID :: ContractID,
-    iResult :: !BearsValue,
+    iResult :: !ReturnValue,
     iVersions :: VersionRepMap,
     iOutputsM :: Maybe Outputs
 
@@ -167,7 +167,7 @@ instance Show Result where
 type instance Index Storage = ContractID
 -- | For the 'At' instance
 type instance IxValue Storage = 
-  Either (BearsValue, VersionMap) AbstractGlobalContract
+  Either (ReturnValue, VersionMap) AbstractGlobalContract
 -- | For the 'At' instance
 instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
