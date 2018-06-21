@@ -11,7 +11,7 @@ the server (@faeServer@) and the client (@postTX@) when communicating with
 an Ethereum client via JSON-RPC.  Primary among these is the
 request/response/error framework of 'SendRequest', 'ReceiveResponse', and
 'Error', together with 'sendProtocolT', 'receiveProtocolT',
-'receiveRequest', and 'sendReceiveProtocolT'.  The communication abstraction of the 'ProtocolT' monad is also defined with its initializer 'runProtocolT'.  Finally, the basic Faeth transaction types are defined here.
+'receiveRequest', and 'sendReceiveProtocolT'.  The communication abstraction of the 'ProtocolT' monad is also defined with its initializer 'runProtocolT'.  Finally, the basic Faeth transaction types are defined here. 
 
 -}
 {-# LANGUAGE TemplateHaskell #-}
@@ -59,7 +59,6 @@ import qualified Text.ParserCombinators.ReadPrec as R
 
 import System.Directory
 import System.FilePath
-import System.Info
 
 import Text.Read hiding (lift, get)
 
@@ -80,8 +79,8 @@ data FaethTXData =
 -- | A package containing the full information of a Fae transaction, for
 -- encoding and decoding in the @input@ field of the host Ethereum
 -- transaction.
-data FaeTX =
-  FaeTX
+data FaeTX = 
+  FaeTX 
   {
     faeTXMessage :: TXMessage Salt, -- ^ Needs to be the first field
     faeMainModule :: Module,
@@ -95,7 +94,7 @@ newtype EthArgFaeTX = EthArgFaeTX { getEthArgFaeTX :: FaeTX }
 -- addition to the Ethereum value and recipient demanded, it also
 -- reintroduces an unformatted field so that clients can still put
 -- distinguishing information to ensure unique transaction IDs.
-data Salt =
+data Salt = 
   Salt
   {
     ethArgument :: ByteString, -- ^ Needs to be the first field
@@ -138,7 +137,7 @@ data ReceiveRequest a =
     receiveReqMethod :: String,
     receiveReqParams :: a
   }
-
+  
 -- | The format for a response from the server.
 data Response a =
   Response
@@ -164,21 +163,21 @@ newtype Hex = Hex { getHex :: ByteString } deriving (Eq, Ord, Serialize)
 -- | Like 'Hex', but for integers, which are parsed from (big-endian) hex
 -- strings.
 newtype HexInteger = HexInteger { getHexInteger :: Integer }
-  deriving (Serialize, Eq, Ord, Num, Real, Enum, Integral)
+  deriving (Serialize, Eq, Ord, Num, Real, Enum, Integral) 
 
 -- | 'ProtocolT' is a monad transformer exposing all the information
 -- necessary to run a functioning JSON-RPC client over websockets.  This
 -- consists of an open websocket connection and an updating integer, equal
 -- to the number of messages that have been sent over this connection (for
 -- producing correct request IDs, not that we really care).
-newtype ProtocolT m a =
+newtype ProtocolT m a = 
   ProtocolT
   {
     getProtocolT :: StateT Int (ReaderT WS.Connection m) a
   }
-  deriving
+  deriving 
   (
-    Functor, Applicative, Monad,
+    Functor, Applicative, Monad, 
     MonadIO, MonadThrow, MonadCatch,
     MonadReader WS.Connection,
     MonadState Int
@@ -235,12 +234,12 @@ instance Serialize FaeTX
 -- of a product type is just the concatenation of the encodings of its
 -- fields, and that a ByteString's encoding is length-prefixed by an 'Int'.
 instance Serialize EthArgFaeTX where
-  put (EthArgFaeTX faeTX) =
+  put (EthArgFaeTX faeTX) = 
     let encoding = S.encode faeTX
         ethArg = faeTX ^. _faeTXMessage . _salt . _ethArgument
         dataBS = S.encode ethArg
         compressStrict = LBS.toStrict . compress . LBS.fromStrict
-        compressed = maybe (error "FaeTX doesn't start with ethArgument!")
+        compressed = maybe (error "FaeTX doesn't start with ethArgument!") 
           compressStrict $ BS.stripPrefix dataBS encoding
         ethArgPrefix = fromMaybe (error "ethArgument doesn't end with the data!") $
           BS.stripSuffix ethArg dataBS
@@ -319,7 +318,7 @@ instance ToJSON FaethTXData where
           "from" .= address,
           "to" .= faethEthAddress,
           "data" .= faeTX
-        ],
+        ], 
       toJSON passphrase
     ]
 
@@ -331,7 +330,7 @@ instance FromJSON FaethTXData where
     faethEthValue <- obj .: "value"
     address <- obj .: "from"
     let
-      passphrase =
+      passphrase = 
         error $ "Unknown passphrase for Ethereum account: " ++ show address
     return
       FaethTXData
@@ -360,7 +359,7 @@ instance (ToJSON a) => ToJSON (SendRequest a) where
 
 -- | -
 instance (FromJSON a) => FromJSON (ReceiveRequest a) where
-  parseJSON = A.withObject "Request" $ \obj ->
+  parseJSON = A.withObject "Request" $ \obj -> 
     ReceiveRequest
     <$> obj .: "method"
     <*> obj .: "params"
@@ -389,7 +388,7 @@ instance ToRequest FaethTXData where
   requestMethod = const "personal_sendTransaction"
 
 -- | -
-instance {-# OVERLAPPING #-}
+instance {-# OVERLAPPING #-} 
   (MonadIO m, MonadCatch m) => MonadProtocol (ProtocolT m) where
 
   liftProtocolT pio =
@@ -437,15 +436,14 @@ liftWS f = liftProtocolT ask >>= liftIO . f
 -- | Opens a websocket connection with whatever handshake that protocol
 -- uses (handled by @websockets@, not by us) and initializes the ID counter
 -- to 0.  The host is currently hard-coded.
-runProtocolT ::
-  (MonadIO m, Commutes IO (Reader WS.Connection) m) =>
+runProtocolT :: 
+  (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
   ProtocolT m () -> m ()
 runProtocolT x = do
   liftIO $ putStrLn $
-    "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n" ++
-    "       OS detected: " ++ System.Info.os ++ "\n"
-  xWS <-
-    commute $
+    "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"
+  xWS <- 
+    commute $ 
     reader $
     runReaderT $
     flip evalStateT 0 $
@@ -453,16 +451,8 @@ runProtocolT x = do
   liftIO $ WS.runClient host port "" $ runReader xWS
 
   where
-    host = getHost System.Info.os
+    host = "localhost"
     port = 8546
-
--- | Conditionally configure hostname
-getHost :: String -> String
-
-
-getHost h
-    | h == "darwin" = "127.0.0.1"   -- | MacOS case
-    | otherwise = "localhost"       -- | Linux case
 
 -- | Sends a JSON-RPC message over a websocket.
 sendProtocolT :: (ToJSON a, ToRequest a, MonadProtocol m) => a -> m Int
@@ -480,27 +470,26 @@ receiveProtocolT reqID = do
   return $
     if respReqID == reqID
     then either throw id respData
-    else error $
-      "Expected response with ID " ++ show reqID ++
+    else error $ 
+      "Expected response with ID " ++ show reqID ++ 
       "; got " ++ show respReqID
 
 -- | Receives a JSON-RPC request over a websocket (i.e. for a subscription
 -- update).
-receiveRequest ::
+receiveRequest :: 
   (FromJSON a, ToRequest a, MonadProtocol m) => String -> m a
 receiveRequest method = do
   ReceiveRequest{..} <- either error id . A.eitherDecode <$> liftWS WS.receiveData
-  unless (receiveReqMethod == requestMethod receiveReqParams) $ error $
-    "Expected request with method " ++ receiveReqMethod ++
+  unless (receiveReqMethod == requestMethod receiveReqParams) $ error $ 
+    "Expected request with method " ++ receiveReqMethod ++ 
     "; got " ++ requestMethod receiveReqParams
   return receiveReqParams
 
 -- | A convenient all-in-one communication than handles the ID wrangling
 -- and abstracts away the error as an exception.
-sendReceiveProtocolT ::
+sendReceiveProtocolT :: 
   (ToJSON a, ToRequest a, FromJSON b, MonadProtocol m) => a -> m b
 sendReceiveProtocolT x = handleAll err $ do
   reqID <- sendProtocolT x
   receiveProtocolT reqID
   where err e = error $ "Ethereum client returned an error: " ++ show e
-
