@@ -19,7 +19,7 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.Transaction,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
-    module Blockchain.Fae.Internal.PrettyFae,
+    module Blockchain.Fae.Internal.TXSummary,
   --  collectTransaction,
    -- showTransaction,
  --  TXSummary,
@@ -49,7 +49,7 @@ import Blockchain.Fae.Internal.Messages hiding
   (
     unsignedTXMessage, unsignTXMessage
   )
-import Blockchain.Fae.Internal.PrettyFae 
+import Blockchain.Fae.Internal.TXSummary
 import Blockchain.Fae.Internal.Storage hiding 
   (
     hoistFaeStorage, nonceAt, checkNonce, nonceSetter,
