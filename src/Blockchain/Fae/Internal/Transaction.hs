@@ -81,7 +81,14 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     defaultIOs = flip map inputIDs $ \cID ->
       (
         shorten cID, 
-        InputResults (withoutNonce cID) (ReturnValue ()) emptyVersionMap mempty 
+        InputResults
+        {
+          iRealID = withoutNonce cID,
+          iResult = ReturnValue (),
+          iExportedResult = mempty,
+          iVersions = emptyVersionMap,
+          iOutputsM = mempty
+        }
       )
     inputOrder = map fst defaultIOs
     
@@ -160,6 +167,7 @@ nextInput cID arg (results, vers) = do
       let (iVersions, vers') = makeOV cID vMap vers
           iRealID = cID
           iOutputsM = Nothing
+      iExportedResult <- lift $ exportReturnValue iResult
       return (InputResults{..}, vers')
 
   txID <- view _thisTXID
@@ -187,6 +195,7 @@ runContract cID vers fAbs arg = do
   -- The actual result of the contract includes both 'result' and also
   -- the outputs and continuation function, so we link their fates.
   let iResult = gAbsM `deepseq` outputsL `seq` result
+  iExportedResult <- exportReturnValue iResult
   return (InputResults{..}, vers', gAbsM)
 
 -- | Adds the new version map to the ongoing total, but only if the

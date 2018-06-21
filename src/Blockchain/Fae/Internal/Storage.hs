@@ -22,6 +22,7 @@ import Common.Lens
 import Control.Monad.IO.Class
 import Control.Monad.State
 
+import Data.ByteString (ByteString)
 import Data.Dynamic
 import Data.Functor.Identity
 import Data.IntMap (IntMap)
@@ -87,9 +88,9 @@ data InputResults =
   {
     iRealID :: ContractID,
     iResult :: !ReturnValue,
+    iExportedResult :: ByteString,
     iVersions :: VersionRepMap,
     iOutputsM :: Maybe Outputs
-
   } deriving (Generic)
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining

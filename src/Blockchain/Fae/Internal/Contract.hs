@@ -167,6 +167,8 @@ type Transaction a b = a -> FaeTX b
 
 -- * Fae typeclasses
 
+-- | Instances of this class can be serialized, at least with the
+-- assistance of some Fae contextual data (namely, the escrow storage).
 class Exportable a where
   exportValue :: a -> FaeTXM ByteString
   importValue :: ByteString -> FaeTXM (Maybe a)
@@ -491,4 +493,6 @@ getReturnValue (ReturnValue x) x0
 returnValueType :: ReturnValue -> SomeTypeRep
 returnValueType (ReturnValue x) = someTypeRep (Just x)
 
-
+-- | Taking advantage of the existential type
+exportReturnValue :: ReturnValue -> FaeTXM ByteString
+exportReturnValue (ReturnValue x) = exportValue x
