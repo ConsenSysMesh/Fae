@@ -208,7 +208,7 @@ collectTransaction txID = do
       signers = show <$> Map.toList signers'
       txInputSCIDs = nub inputOrder
       txResult = show result 
-      txOutputs =  snd <$> getTXOutputs (OutputOfTransaction txID outputs)
+      txOutputs = snd <$> getTXOutputs (OutputOfTransaction txID outputs)
   txInputSummary <- getInputSummary txID  txInputSCIDs inputOutputs
   return $ TXSummary{..}
 
