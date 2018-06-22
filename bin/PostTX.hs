@@ -35,10 +35,10 @@ main = do
         submitFaeth postArgHost faethValue faethTo txSpec
       else do
         txSpec <- txDataToTXSpec txData
-        submit postArgTXName postArgHost postArgFake postArgLazy txSpec
+        submit postArgTXName postArgHost postArgFake postArgLazy postArgJSON txSpec
     x@OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
-    ViewArgs{..} -> view viewArgTXID viewArgHost
+    ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess

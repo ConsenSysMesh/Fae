@@ -18,6 +18,7 @@ module Blockchain.Fae.Internal.TXSummary (
     showTransaction,
     TXSummary(..),
     TXInputSummary(..),
+    TransactionID
 ) where
 
 import Blockchain.Fae.Internal.Exceptions
@@ -37,7 +38,6 @@ import qualified Data.Text.Lazy.Encoding as T
 import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
-
 
 import Data.List
 import Data.Void
@@ -61,7 +61,7 @@ data EntryOf = EntryOf TransactionID TransactionEntry
 
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
-  transactionID :: TransactionID,
+  transactionID :: ShortContractID,
   txResult :: String,
   txOutputs:: [ShortContractID],
   txInputSummary :: [TXInputSummary],
@@ -69,7 +69,7 @@ data TXSummary = TXSummary {
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
-  txInputTXID :: TransactionID,
+  txInputTXID :: ShortContractID,
   txInputNonce :: Int,
   txInputOutputs :: [ShortContractID],
   txInputVersion :: String

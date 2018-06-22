@@ -24,9 +24,9 @@ import PostTX.TXSpec
 import System.Directory
 import System.FilePath
 
-submit :: String -> String -> Bool -> Bool-> TXSpec String -> IO ()
-submit txName host fake lazy txSpec = 
-  buildRequest txName host fake lazy txSpec >>= sendReceive
+submit :: String -> String -> Bool -> Bool -> Bool -> TXSpec String -> IO ()
+submit txName host fake lazy isJson txSpec = 
+  buildRequest txName host fake lazy txSpec >>= sendReceive isJson
 
 buildRequest :: String -> String -> Bool -> Bool -> TXSpec String -> IO Request
 buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
