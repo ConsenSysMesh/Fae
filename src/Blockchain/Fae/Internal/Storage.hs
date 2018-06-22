@@ -50,7 +50,7 @@ import Type.Reflection
 data Storage = 
   Storage 
   { 
-    getStorage :: Map TransactionID TransactionEntry ,
+    getStorage :: Map TransactionID TransactionEntry,
     importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap)
   }
 
@@ -264,8 +264,8 @@ addImportedValue ::
     Versionable a, HasEscrowIDs a, Exportable a,
     MonadState Storage m
   ) => 
-  ContractID -> TypeRep a -> ByteString -> m ()
-addImportedValue cID rep bs = do
+  TypeRep a -> ContractID -> ByteString -> m ()
+addImportedValue rep cID bs = do
   let (importedValueM, Escrows{..}) = withTypeable rep $
         runState (importValue @a bs) (Escrows Map.empty nullDigest)
       importedValue = fromMaybe (throw $ CantImport bs $ SomeTypeRep rep) 

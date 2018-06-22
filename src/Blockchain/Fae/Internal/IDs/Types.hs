@@ -115,3 +115,9 @@ makeLenses ''Signers
 nullID :: TransactionID
 nullID = ShortContractID nullDigest
 
+parentTX :: ContractID -> TransactionID
+parentTX (TransactionOutput txID _) = txID
+parentTX (InputOutput txID _ _) = txID
+parentTX (cID :# _) = parentTX cID
+
+

@@ -42,6 +42,7 @@ import Control.Monad
 import Control.Monad.State
 import Control.Monad.Trans
 
+import Data.ByteString (ByteString)
 import Data.Functor.Identity
 import Data.List
 import Data.Map (Map)
@@ -113,7 +114,6 @@ interpretTX TX{..} = handle fixGHCErrors $ do
   run <- interpret runString infer
   liftFaeStorage $ run inputs txID pubKeys isReward 
   where
-    liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
     runString = unwords
       [
         "runTransaction",
@@ -133,6 +133,32 @@ interpretTX TX{..} = handle fixGHCErrors $ do
         "Blockchain" </> "Fae" </> "Transactions" </> txModName </> "private"
       ]
     qualified varName = txSrc ++ "." ++ varName
+
+-- | This has to be interpreted because, even though all the information is
+-- known /to the sender/ of the value to be imported, it can only be
+-- transmitted textually, and therefore has to be re-parsed into a valid
+-- type.  We assume that the type is present in the top module of the
+-- transaction that (in the sender) created the contract.  The module must
+-- be present for the caller of this function, but the transaction need not
+-- have been run.
+interpretImportedValue :: 
+  (MonadMask m, MonadIO m) => 
+  ContractID -> String -> ByteString -> FaeInterpretT m ()
+interpretImportedValue cID typeS valBS = do
+  loadModules [txSrc]
+  setImports [txSrc, "Type.Reflection", "Blockchain.Fae.Internal"]
+  addVal <- interpret runString infer
+  liftFaeStorage $ addVal cID valBS
+  where
+    txSrc = "Blockchain.Fae.Transactions." ++ "TX" ++ show (parentTX cID)
+    runString = unwords
+      [
+        "addImportedValue",
+        "(typeRep @(" ++ typeS ++ "))"
+      ]
+
+liftFaeStorage :: (Monad m) => FaeStorage a -> FaeInterpretT m a
+liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
 
 -- | runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
@@ -174,9 +200,9 @@ runFaeInterpret x = do
       [
         "array",
         "base", 
---        "binary", 
+        -- "binary", 
         "bytestring",
---        "cereal",
+        -- "cereal",
         "containers",
         "fae",
         "filepath",
