@@ -347,3 +347,8 @@ public (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey))
 -- | Useful function inexplicably missing from every library
 printHex :: (Serialize a) => a -> String
 printHex = C8.unpack . B16.encode . Ser.encode
+
+-- | The default for various things
+nullDigest :: Digest
+nullDigest = digest ()
+

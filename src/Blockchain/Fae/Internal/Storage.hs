@@ -32,12 +32,13 @@ import Data.Maybe
 import Data.Monoid hiding ((<>))
 import Data.Semigroup
 import Data.Serialize hiding (Result)
-import Data.Typeable
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
 import GHC.Generics (Generic)
+
+import Type.Reflection
 
 -- * Types
 
@@ -50,7 +51,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry ,
-    importedValues :: Map ContractID (ReturnValue, VersionMap)
+    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap)
   }
 
 -- | Each transaction can produce outputs in two different ways (cf.
@@ -102,7 +103,7 @@ data InputResults =
 data Outputs = 
   Outputs
   {
-    outputMap :: IntMap (AbstractGlobalContract, Int),
+    outputMap :: IntMap ((AbstractGlobalContract, Int), SomeTypeRep),
     outputCount :: Int
   }
 
@@ -168,7 +169,7 @@ instance Show Result where
 type instance Index Storage = ContractID
 -- | For the 'At' instance
 type instance IxValue Storage = 
-  Either (ReturnValue, VersionMap) AbstractGlobalContract
+  Either (WithEscrows ReturnValue, VersionMap) AbstractGlobalContract
 -- | For the 'At' instance
 instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
@@ -204,7 +205,8 @@ nonceAt cID@(TransactionOutput txID i) =
   defaultLens (throw $ BadTransactionID txID) .
   _outputs .
   _outputMap .
-  at i
+  at i .
+  lens (fmap fst) (liftM2 $ flip $ set _1)
 nonceAt cID@(InputOutput txID sID i) = 
   _getStorage .
   at txID .
@@ -215,7 +217,8 @@ nonceAt cID@(InputOutput txID sID i) =
   _iOutputsM .
   defaultLens (throw $ BadInputID txID sID) .
   _outputMap .
-  at i
+  at i .
+  lens (fmap fst) (liftM2 $ flip $ set _1)
 nonceAt cID = throw $ InvalidNonceAt cID
 
 -- | Enforces nonce-correctness when it is required
@@ -239,7 +242,7 @@ elseImportedValue ::
   Storage -> ContractID -> 
   Getter (Maybe AbstractGlobalContract) (Maybe (IxValue Storage))
 elseImportedValue st cID = to f where
-  f Nothing = st ^. _importedValues . at cID . to (fmap Left)
+  f Nothing = Left <$> st ^. _importedValues . at cID
   f x = Right <$> x
 
 -- | Just an 'IntMap' constructor, indexing consecutively from 0.
@@ -250,5 +253,24 @@ listToOutputs l =
     outputMap = oMap, 
     outputCount = IntMap.size oMap
   }
-  where oMap = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
+  where oMap = IntMap.fromList $ zip [0 ..] $ zipWith f l (repeat 0) 
+        f (rep, func) n = ((func, n), rep)
+
+-- | Deserializes an exported value as the correct type and puts it in
+-- imported value storage for the future.
+addImportedValue :: 
+  forall a m.
+  (
+    Versionable a, HasEscrowIDs a, Exportable a,
+    MonadState Storage m
+  ) => 
+  ContractID -> TypeRep a -> ByteString -> m ()
+addImportedValue cID rep bs = do
+  let (importedValueM, Escrows{..}) = withTypeable rep $
+        runState (importValue @a bs) (Escrows Map.empty nullDigest)
+      importedValue = fromMaybe (throw $ CantImport bs $ SomeTypeRep rep) 
+        importedValueM
+      vMap = versionMap (lookupWithEscrows escrowMap) importedValue
+  _importedValues . at cID ?= 
+    (WithEscrows escrowMap (ReturnValue importedValue), vMap)
 

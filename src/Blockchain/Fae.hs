@@ -123,7 +123,7 @@ import Numeric.Natural (Natural)
 
 -- | Constraint collection synonym
 type ContractVal a = 
-  (HasEscrowIDs a, Versionable a, EGeneric a, Serialize (ERep a))
+  (HasEscrowIDs a, Versionable a, EGeneric a, ESerialize a)
 -- | Constraint collection synonym
 type ContractArg a = (HasEscrowIDs a, Versionable a, Read a)
 -- | Constraint collection synonym

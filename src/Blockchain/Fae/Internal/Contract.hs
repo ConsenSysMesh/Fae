@@ -47,7 +47,7 @@ import Type.Reflection
 -- ** Contract data
 
 data ReturnValue =
-  forall a. (HasEscrowIDs a, Exportable a) => ReturnValue a
+  forall a. (Versionable a, HasEscrowIDs a, Exportable a) => ReturnValue a
 
 -- | Something like a closure for the initial state of a new contract
 -- (currently only escrows).  The actual contract function can be
@@ -65,8 +65,7 @@ data NamedContract name =
   deriving (Generic)
 -- | The union of contract entry types for all possible names.
 data AnyNamedContract = 
-  forall name. (ContractName name, Serialize name) => 
-  AnyNamedContract (NamedContract name)
+  forall name. (ContractName name) => AnyNamedContract (NamedContract name)
 -- | Each escrow has a continually updated version that we need to track;
 -- this holds both for the escrow map of a contract and the escrows
 -- accompanying a returned value.
@@ -108,7 +107,7 @@ data TXData =
 -- ** Internal contract monads
 
 -- | Useful alias for a rather long term.
-type OutputsList = [AbstractGlobalContract]
+type OutputsList = [(SomeTypeRep, AbstractGlobalContract)]
 -- | Monad modifier; several of ours use escrows.
 type EscrowsT = StateT Escrows
 -- | The internal operational monad for Fae contracts.
@@ -170,8 +169,8 @@ type Transaction a b = a -> FaeTX b
 -- | Instances of this class can be serialized, at least with the
 -- assistance of some Fae contextual data (namely, the escrow storage).
 class Exportable a where
-  exportValue :: a -> FaeTXM ByteString
-  importValue :: ByteString -> FaeTXM (Maybe a)
+  exportValue :: (MonadState Escrows m) => a -> m ByteString
+  importValue :: (MonadState Escrows m) => ByteString -> m (Maybe a)
 
 -- | Instances of 'ContractName' are always defined by contract authors,
 -- who will inevitably have to define 'theContract' to point to a global
@@ -180,9 +179,9 @@ class Exportable a where
 -- instances.
 class 
   (
-    Typeable a, Serialize a, 
-    HasEscrowIDs (ArgType a), 
-    HasEscrowIDs (ValType a)
+    Typeable a,
+    Versionable (ArgType a), Versionable (ValType a),
+    HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)
   ) => ContractName a where
 
   type ArgType a
@@ -274,16 +273,16 @@ release = liftContract . Fae . (takeEscrows >=> lift . suspend >=> putEscrows)
 
 -- | Emits a new output contract endowed with a given list of valuables.
 newContract :: 
+  forall name m.
   (
-    Versionable argType, Versionable valType,
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Read argType, Exportable valType, MonadTX m
+    ContractName name, Read (ArgType name), Exportable (ValType name), 
+    MonadTX m
   ) => 
-  [BearsValue] -> Contract argType valType -> m ()
-newContract values f = liftTX $ Fae $ do
+  [BearsValue] -> name -> m ()
+newContract values x = liftTX $ Fae $ do
   escrowMap <- getEscrowMap values
-  contractF <- globalContract <$> hideEscrows escrowMap f
-  tell [contractF]
+  contractF <- globalContract <$> hideEscrows escrowMap (theContract x)
+  tell [(someTypeRep $ Proxy @name, contractF)]
 
 -- | Creates a new escrow endowed with a given list of valuables.
 newEscrow :: 
@@ -388,10 +387,7 @@ returnGlobal ::
 returnGlobal yE = do
   y <- putEscrows yE
   escrowMap <- use _escrowMap
-  let
-    vLookup entID = 
-      maybe (throw $ BadEscrowID entID) escrowVersion $ Map.lookup entID escrowMap
-  return (ReturnValue y, versionMap vLookup y)
+  return (ReturnValue y, versionMap (lookupWithEscrows escrowMap) y)
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
@@ -467,6 +463,12 @@ peekEscrow (EscrowID entID) = do
   return $ case escrowNameOrFunction of
     Left c -> nameContract @name entID c `seq` x
     _ -> x
+
+lookupWithEscrows :: EscrowMap -> EntryID -> VersionID
+lookupWithEscrows escrowMap entID =
+  maybe (throw $ BadEscrowID entID) escrowVersion $ Map.lookup entID escrowMap
+
+-- * 'ContractName' manipulation
 
 -- | Extracts the true type, if that is what is expected.
 nameContract :: 

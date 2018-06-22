@@ -109,3 +109,9 @@ instance Show VersionID where
 
 makeLenses ''Signers
 
+-- * Functions
+
+-- | The transaction ID of the "genesis transaction"
+nullID :: TransactionID
+nullID = ShortContractID nullDigest
+

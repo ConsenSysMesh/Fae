@@ -21,7 +21,7 @@ import Control.Monad.State
 import Data.Maybe
 import Data.Typeable
 
-import Data.Serialize (Serialize)
+import Data.Serialize (Serialize, GSerializePut, GSerializeGet)
 import qualified Data.Serialize as S
 
 import GHC.Generics
@@ -61,6 +61,13 @@ instance {-# OVERLAPPABLE #-}
 instance {-# OVERLAPPABLE #-}
   (Generic a, EGeneric1 (Rep a), ERep a ~ SERep1 (Rep a)) => EGeneric a where
 
-  eFrom = fmap SERep1 . eFrom1 @_ @() . from where
-  eTo (SERep1 x) = to <$> eTo1 @_ @() x
+  eFrom = fmap SERep1 . eFrom1 @_ @_ @() . from where
+  eTo (SERep1 x) = to <$> eTo1 @_ @_ @() x
+
+-- | This shrinks the signature of the constraint, allowing it to be used
+-- /without/ @UndecidableInstances@ elsewhere.
+class (Serialize (ERep a)) => ESerialize a where
+
+-- | /So/ undecidable
+instance {-# OVERLAPPABLE #-} (Serialize (ERep a)) => ESerialize a
 

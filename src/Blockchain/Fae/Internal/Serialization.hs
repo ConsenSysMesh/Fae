@@ -10,6 +10,7 @@ import Common.Lens hiding (from, to)
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.State.Class
 
 import Data.ByteString
 import Data.Maybe
@@ -25,21 +26,21 @@ import GHC.Generics
 import Numeric.Natural
 
 class EGeneric a where
-  eFrom :: a -> FaeTXM (ERep a)
-  default eFrom :: (ERep a ~ a) => a -> FaeTXM (ERep a)
+  eFrom :: (MonadState Escrows m) => a -> m (ERep a)
+  default eFrom :: (MonadState Escrows m, ERep a ~ a) => a -> m (ERep a)
   eFrom = return
 
-  eTo   :: ERep a -> FaeTXM a
-  default eTo :: (ERep a ~ a) => ERep a -> FaeTXM a
+  eTo   :: (MonadState Escrows m) => ERep a -> m a
+  default eTo :: (MonadState Escrows m, ERep a ~ a) => ERep a -> m a
   eTo = return
 
 class EGeneric1 f where
-  eFrom1 :: f p -> FaeTXM (ERep1 f p)
-  default eFrom1 :: (ERep1 f ~ f) => f p -> FaeTXM (ERep1 f p)
+  eFrom1 :: (MonadState Escrows m) => f p -> m (ERep1 f p)
+  default eFrom1 :: (MonadState Escrows m, ERep1 f ~ f) => f p -> m (ERep1 f p)
   eFrom1 = return
 
-  eTo1   :: ERep1 f p -> FaeTXM (f p)
-  default eTo1   :: (ERep1 f ~ f) => ERep1 f p -> FaeTXM (f p)
+  eTo1   :: (MonadState Escrows m) => ERep1 f p -> m (f p)
+  default eTo1   :: (MonadState Escrows m, ERep1 f ~ f) => ERep1 f p -> m (f p)
   eTo1 = return
 
 type family ERep c :: * where
@@ -104,7 +105,7 @@ instance (EGeneric c) => EGeneric1 (K1 i c) where
 instance EGeneric1 U1
 instance EGeneric1 V1
 
-instance (ContractName name) => Serialize (EEnt name) where
+instance (ContractName name, Serialize name) => Serialize (EEnt name) where
   put (EEnt EscrowID{entID} EscrowEntry{..}) = 
     case escrowNameOrFunction of
       Left c -> do

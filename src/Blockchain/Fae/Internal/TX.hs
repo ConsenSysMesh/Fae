@@ -98,10 +98,6 @@ instance (Monad m) => MonadState Storage (FaeInterpretT m) where
 
 -- * Functions
 
--- | The transaction ID of the "genesis transaction"
-nullID :: TransactionID
-nullID = ShortContractID $ digest ()
-
 -- | Interprets a transaction, looking it up as a module named after its
 -- transaction ID; the first argument is whether or not the transaction
 -- gets a reward.  We set up the module search path carefully so that this
@@ -138,7 +134,7 @@ interpretTX TX{..} = handle fixGHCErrors $ do
       ]
     qualified varName = txSrc ++ "." ++ varName
 
--- | Runs the interpreter.
+-- | runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
@@ -178,9 +174,9 @@ runFaeInterpret x = do
       [
         "array",
         "base", 
-        "binary", -- Because why not, if we also have 'cereal'.
+--        "binary", 
         "bytestring",
-        "cereal", -- Because we use 'Serialize' in 'ContractName'
+--        "cereal",
         "containers",
         "fae",
         "filepath",

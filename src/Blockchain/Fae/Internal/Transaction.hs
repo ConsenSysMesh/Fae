@@ -150,7 +150,7 @@ nextInput ::
   ContractID -> String ->
   ([ReturnValue], VersionMap') -> TXStorageM ([ReturnValue], VersionMap')
 nextInput cID arg (results, vers) = do
-  valE <- use $ at cID . defaultLens (throw $ BadInput cID)
+  valE <- use $ at cID . defaultLens (throw $ BadContractID cID)
 
   (iR, vers') <- case valE of
     Right fAbs -> do 
@@ -162,9 +162,11 @@ nextInput cID arg (results, vers) = do
 
       return (iR, vers')
 
-    Left (iResult, vMap) -> do
+    Left (x, vMap) -> do
+      iResult <- lift $ putEscrows x
       at cID .= Nothing -- Just to make sure
-      let (iVersions, vers') = makeOV cID vMap vers
+      let 
+          (iVersions, vers') = makeOV cID vMap vers
           iRealID = cID
           iOutputsM = Nothing
       iExportedResult <- lift $ exportReturnValue iResult

@@ -325,3 +325,4 @@ mkVersionID = VersionID . digest
 addContractVersions :: ContractID -> VersionMap -> VersionMap' -> VersionMap'
 addContractVersions cID vMap (VersionMap' vers) =
   VersionMap' $ Map.insert (shorten cID) vMap vers
+
