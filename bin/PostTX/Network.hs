@@ -1,14 +1,3 @@
-{- |
-Module: PostTX.Network
-Description: PostTX Request and Response Handling
-Copyright: (c) Ryan Reich, 2017-2018
-License: MIT
-Maintainer: ryan.reich@gmail.com
-Stability: experimental
-
-This module exports functions for making requests from the client (@postTX@ to
-server (@faeServer@) and handling the corresponding responses.
--}
 module PostTX.Network where
 
 import Blockchain.Fae.FrontEnd (collectTransaction, showTransaction, TXSummary)
