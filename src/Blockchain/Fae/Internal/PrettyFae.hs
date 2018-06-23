@@ -102,7 +102,8 @@ instance PrettyFae InputsOf where
         input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
         ~InputResults{..} = input
       storage <- get
-      let n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
+      let n = snd $ storage ^. 
+              nonceAt (withoutNonce iRealID) . defaultLens (undefined, -1)
       prettyFae $ InputOf txID scID n input
 
 -- | -

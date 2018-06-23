@@ -191,7 +191,11 @@ runContract ::
 runContract cID vers fAbs arg = do
   ~(~(~(result, vMap), gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
   let 
-    iRealID = withoutNonce cID
+    -- We store this with the nonce (if given) so that if (and when) it is
+    -- exported, the correct id-with-nonce can be retrieved.  Once the
+    -- contract is called again, its current nonce is no longer the correct
+    -- one for this result.
+    iRealID = cID
     iOutputsM = Just $ listToOutputs outputsL
     ~(iVersions, vers') = makeOV cID vMap vers
   -- The actual result of the contract includes both 'result' and also

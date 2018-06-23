@@ -59,7 +59,9 @@ main = do
     ArgsServer{..} -> do
       void $ fork $ runFae tID flags
       case serverMode of
-        FaeMode -> runFaeServer (Proxy @String) queueTXExecData 
+        FaeMode -> do
+          void $ fork $ runServer 27183 importExportApp queueTXExecData
+          runServer 27182 (serverApp $ Proxy @String) queueTXExecData
         FaethMode -> runFaeth tID
     (ArgsUsage xs) -> liftIO $ case xs of
       [] -> do

@@ -39,7 +39,7 @@ runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
     createDirectoryIfMissing True "txcache"
   else forM_TXCache $ \tx@TX{..} parentM -> do
     txCount <- innerRun tx parentM gitReset
-    updateHistory txID txCount
+    updateHistory (Just txID) txCount
     liftIO $ putStrLn $ 
       "Replayed transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
   forever $ do
@@ -61,7 +61,7 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
   if fake
   then liftIO gitClean
   else do
-    updateHistory txID txCount
+    updateHistory (Just txID) (txCount + 1)
     extendTXCache tx parentM
     liftIO $ gitCommit txID
   ioAtomically $ putTMVar resultVar txResult
@@ -70,6 +70,17 @@ runTXExecData View{..} = do
   void $ recallHistory parentM
   txResult <- lift $ showTransaction viewTXID
   ioAtomically $ putTMVar resultVar txResult
+
+runTXExecData ExportValue{..} = do
+  void $ recallHistory parentM
+  exportResult <- lift $ getExportedValue calledInTX shortCID
+  ioAtomically $ putTMVar exportResultVar exportResult
+
+runTXExecData ImportValue{..} = do
+  parentCount <- recallHistory parentM
+  lift $ interpretImportedValue importedCID valueType valuePackage
+  updateHistory parentM parentCount
+  ioAtomically $ putTMVar signalVar ()
 
 innerRun :: 
   (MonadIO m, MonadMask m) =>

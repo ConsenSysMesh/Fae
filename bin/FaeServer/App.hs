@@ -34,22 +34,24 @@ import Network.Wai.Parse
 
 import Text.Read (readMaybe)
 
-runFaeServer :: 
-  forall a. (Serialize a) => Proxy a ->
-  SendTXExecData (TXQueueT IO) -> TXQueueT IO ()
-runFaeServer p sendTXExecData = do
-  app <- serverApp p sendTXExecData 
-  liftIO $ runSettings faeSettings app
+type ApplicationT m = 
+  Request -> (Response -> IO ResponseReceived) -> m ResponseReceived
+type TXExecApplicationT m = SendTXExecData m -> ApplicationT m
+type TXExecApplication = TXExecApplicationT (TXQueueT IO)
 
-faeSettings :: Settings
-faeSettings = defaultSettings &
-  setPort 27182 &
+runServer :: 
+  Int -> TXExecApplication -> SendTXExecData (TXQueueT IO) -> TXQueueT IO ()
+runServer port makeApp sendTXExecData = do
+  app <- bringOut $ makeApp sendTXExecData 
+  liftIO $ runSettings (faeSettings port) app
+
+faeSettings :: Int -> Settings
+faeSettings port = defaultSettings &
+  setPort port &
   setOnExceptionResponse exceptionResponse
 
-serverApp :: 
-  forall a. (Serialize a) => Proxy a ->
-  SendTXExecData (TXQueueT IO) -> TXQueueT IO Application
-serverApp _ sendTXExecData = bringOut $ \request respond -> do
+serverApp :: forall a. (Serialize a) => Proxy a -> TXExecApplication
+serverApp _ sendTXExecData = \request respond -> do
   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
   let 
     getParams = getParameters params
@@ -69,15 +71,35 @@ serverApp _ sendTXExecData = bringOut $ \request respond -> do
       let (tx, mainFile, modules) = makeFilesMap (Proxy @a) files reward
       in  send $ \callerTID resultVar -> TXExecData{..} 
 
-  where
-    bringOut txqApp =
-      ReaderT $ \txq -> return $ \req resp -> runReaderT (txqApp req resp) txq
+importExportApp :: TXExecApplication
+importExportApp sendTXExecData = \request respond -> do
+  (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
+  let
+    send = waitResponse respond sendTXExecData
+    getParams = getParameters params
+    importDataM = getLast Nothing Just $ getParams "import"
+    exportDataM = getLast Nothing Just $ getParams "export"
+    parentM = getLast Nothing Just $ getParams "parent"
+  case (importDataM, exportDataM) of
+    (Just (importedCID, valueType), Nothing) ->
+      let valuePackage = fromMaybe (error $ "Missing 'valuePackage' file") $
+            getFile files "valuePackage"
+      in send $ \callerTID signalVar -> ImportValue{..}
+    (Nothing, Just (calledInTX, shortCID)) ->
+      send $ \callerTID exportResultVar -> ExportValue{..}
+    (Nothing, Nothing) -> 
+        error "Must specify either 'import' or 'export' parameter"
+    _ -> error "Can't specify both 'import' and 'export' parameters"
+
+bringOut :: ApplicationT (ReaderT r IO) -> ReaderT r IO Application
+bringOut txqApp =
+  ReaderT $ \txq -> return $ \req resp -> runReaderT (txqApp req resp) txq
 
 waitResponse :: 
   (TXQueueM m) =>
   (Response -> IO ResponseReceived) -> 
   SendTXExecData m -> 
-  (ThreadId -> TMVar String -> TXExecData) -> 
+  (ThreadId -> TMVar a -> TXExecData) -> 
   m ResponseReceived
 waitResponse respond sendTXExecData constr = do
   callerTID <- liftIO myThreadId

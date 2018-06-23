@@ -154,7 +154,7 @@ interpretImportedValue cID typeS valBS = do
     runString = unwords
       [
         "addImportedValue",
-        "(typeRep @(" ++ typeS ++ "))"
+        "(typeRep @(ValType (" ++ typeS ++ ")))"
       ]
 
 liftFaeStorage :: (Monad m) => FaeStorage a -> FaeInterpretT m a

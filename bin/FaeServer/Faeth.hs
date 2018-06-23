@@ -153,7 +153,7 @@ instance ToRequest EthGetBlockByHash where
 runFaeth :: ThreadId -> TXQueueT IO ()
 runFaeth mainTID = reThrow mainTID $ do
   fork $ runFaethWatcherM faethWatcher 
-  runFaeServer (Proxy @Salt) faethSendTXExecData 
+  runServer 27182 (serverApp $ Proxy @Salt) faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
 faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}

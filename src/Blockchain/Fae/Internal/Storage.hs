@@ -199,27 +199,36 @@ checkNonceAt cID nM = nonceAt cID . checkNonce cID nM
 
 -- | Like 'at', but retaining the nonce
 nonceAt :: ContractID -> Lens' Storage (Maybe (AbstractGlobalContract, Int))
-nonceAt cID@(TransactionOutput txID i) =
-  _getStorage .
-  at txID .
-  defaultLens (throw $ BadTransactionID txID) .
+nonceAt cID = allAt cID . mLens _1
+
+-- | Like 'at', but retaining both the nonce and the type representation.
+allAt :: 
+  ContractID -> Lens' Storage (Maybe ((AbstractGlobalContract, Int), SomeTypeRep))
+allAt cID@(TransactionOutput txID i) =
+  txLens txID .
   _outputs .
   _outputMap .
-  at i .
-  lens (fmap fst) (liftM2 $ flip $ set _1)
-nonceAt cID@(InputOutput txID sID i) = 
-  _getStorage .
-  at txID .
-  defaultLens (throw $ BadTransactionID txID) .
-  _inputOutputs .
-  at sID .
-  defaultLens (throw $ BadInputID txID sID) .
+  at i
+allAt cID@(InputOutput txID sID i) = 
+  txInputLens txID sID .
   _iOutputsM .
-  defaultLens (throw $ BadInputID txID sID) .
+  defaultLens (throw $ ContractOmitted txID sID) .
   _outputMap .
-  at i .
-  lens (fmap fst) (liftM2 $ flip $ set _1)
-nonceAt cID = throw $ InvalidNonceAt cID
+  at i
+allAt cID = throw $ InvalidNonceAt cID
+
+-- | Common activity: looking up an input call's results
+txInputLens :: TransactionID -> ShortContractID -> Lens' Storage InputResults
+txInputLens txID scID = txLens txID . _inputOutputs . at scID . 
+  defaultLens (throw $ BadInputID txID scID)
+
+-- | Common activity: looking up a transaction by ID
+txLens :: TransactionID -> Lens' Storage TransactionEntry
+txLens txID = _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
+
+-- | For focusing on values 'at' an index (which may be absent).
+mLens :: (Monad m) => Lens' a s -> Lens' (m a) (m s)
+mLens l = lens (fmap $ view l) (liftM2 $ flip $ set l)
 
 -- | Enforces nonce-correctness when it is required
 checkNonce :: ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
@@ -266,6 +275,7 @@ addImportedValue ::
   ) => 
   TypeRep a -> ContractID -> ByteString -> m ()
 addImportedValue rep cID bs = do
+  unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
   let (importedValueM, Escrows{..}) = withTypeable rep $
         runState (importValue @a bs) (Escrows Map.empty nullDigest)
       importedValue = fromMaybe (throw $ CantImport bs $ SomeTypeRep rep) 
@@ -273,4 +283,13 @@ addImportedValue rep cID bs = do
       vMap = versionMap (lookupWithEscrows escrowMap) importedValue
   _importedValues . at cID ?= 
     (WithEscrows escrowMap (ReturnValue importedValue), vMap)
+
+getExportedValue :: 
+  (MonadState Storage m) =>
+  TransactionID -> ShortContractID -> m (ContractID, String, ByteString)
+getExportedValue txID scID = do
+  InputResults{..} <- use $ txInputLens txID scID
+  (_, nameType) <- 
+    use $ allAt iRealID . defaultLens (throw $ BadContractID iRealID)
+  return (iRealID, show nameType, iExportedResult)
 

@@ -41,14 +41,14 @@ recallHistory parentM = do
   return n
 
 updateHistory :: 
-  (Monad m) => TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
-updateHistory txID txCount = do
+  (Monad m) => Maybe TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
+updateHistory txIDM newCount = do
   TXHistory{..} <- get
   s <- lift get
-  let newCount = txCount + 1
+  let txID = fromMaybe bestTXID txIDM
       txStorageAndCounts' = Map.insert txID (s, newCount) txStorageAndCounts
       (bestTXID', bestTXCount')
-        | txCount == bestTXCount = (txID, newCount)
+        | newCount > bestTXCount = (txID, newCount)
         | otherwise = (bestTXID, bestTXCount)
   put $ TXHistory txStorageAndCounts' bestTXID' bestTXCount'
 

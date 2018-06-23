@@ -21,11 +21,11 @@ import Network.Wai.Parse
 import System.Directory
 import System.FilePath
 
+type RequestFiles = [(C8.ByteString, FileInfo LC8.ByteString)]
+
 makeFilesMap :: 
-  forall a. (Serialize a) => Proxy a ->
-  [(C8.ByteString, FileInfo LC8.ByteString)] ->
-  Bool ->
-  (TX, Module, ModuleMap)
+  forall a. (Serialize a) => 
+  Proxy a -> RequestFiles -> Bool -> (TX, Module, ModuleMap)
 makeFilesMap _ files reward = (tx, mainFile, modules) where
   tx@TX{..} = 
     maybe (error "Invalid transaction message") force $
@@ -33,16 +33,21 @@ makeFilesMap _ files reward = (tx, mainFile, modules) where
     either (error "Couldn't decode transaction message") id $ 
     decode $
     fromMaybe (error "Missing transaction message") $ 
-    getFile "message"
-  mainFile = maybe (error "Missing main module") (addHeader txID) $ getFile "body"
-  modules = Map.mapWithKey (fixHeader txID) $ Map.fromList $ getFiles "other"
+    getFile files "message"
+  mainFile = maybe (error "Missing main module") (addHeader txID) $ 
+    getFile files "body"
+  modules = Map.mapWithKey (fixHeader txID) $ Map.fromList $ 
+    getFiles files "other"
 
-  getFile = last . (Nothing :) . map (Just . snd) . getFiles 
-  getFiles name =
-    [
-      (C8.unpack fileName, LC8.toStrict fileContent) 
-        | (name', FileInfo{..}) <- files, name' == name
-    ]
+getFile :: RequestFiles -> C8.ByteString -> Maybe C8.ByteString
+getFile files = last . (Nothing :) . map (Just . snd) . getFiles files 
+
+getFiles :: RequestFiles -> C8.ByteString -> [(String, C8.ByteString)]
+getFiles files name =
+  [
+    (C8.unpack fileName, LC8.toStrict fileContent) 
+      | (name', FileInfo{..}) <- files, name' == name
+  ]
 
 writeModules :: 
   Module -> ModuleMap -> TransactionID -> IO ()

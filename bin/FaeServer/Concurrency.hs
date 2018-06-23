@@ -13,6 +13,7 @@ import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Writer
 
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 
 import Data.Map (Map)
@@ -38,6 +39,23 @@ data TXExecData =
     viewTXID :: TransactionID,
     parentM :: Maybe TransactionID,
     resultVar :: TMVar String,
+    callerTID :: ThreadId
+  } |
+  ExportValue
+  {
+    parentM :: Maybe TransactionID,
+    calledInTX :: TransactionID,
+    shortCID :: ShortContractID,
+    exportResultVar :: TMVar (ContractID, String, ByteString),
+    callerTID :: ThreadId
+  } |
+  ImportValue
+  {
+    parentM :: Maybe TransactionID,
+    importedCID :: ContractID,
+    valueType :: String,
+    valuePackage :: ByteString,
+    signalVar :: TMVar (),
     callerTID :: ThreadId
   }
 

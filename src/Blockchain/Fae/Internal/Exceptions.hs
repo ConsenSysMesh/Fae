@@ -59,7 +59,9 @@ data StorageException =
   InvalidNonceAt ContractID |
   ContractIDCollision ContractID ContractID ShortContractID |
   MismatchedContractIDs ContractID ContractID |
-  ContractOmitted TransactionID ShortContractID
+  ContractOmitted TransactionID ShortContractID |
+  CantImport ByteString TypeRep |
+  ImportWithoutNonce ContractID
 
 -- | Exceptions for contract-related errors.
 data ContractException =
@@ -70,8 +72,7 @@ data ContractException =
   BadEscrowName EntryID TypeRep TypeRep |
   MissingSigner String |
   NotStartState EntryID VersionID |
-  HoldsEscrows EntryID |
-  CantImport ByteString TypeRep
+  HoldsEscrows EntryID
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
@@ -117,6 +118,10 @@ instance Show StorageException where
     "Contract call " ++ show scID ++ 
     " in transaction " ++ show txID ++ 
     " was replaced with an imported return value."
+  show (CantImport bs ty) =
+    "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
+  show (ImportWithoutNonce cID) =
+    "Rejecting imported value for " ++ show cID ++ " that lacks a nonce value."
 
 -- | -
 instance Show ContractException where
@@ -137,8 +142,6 @@ instance Show ContractException where
     " is not in its starting state"
   show (HoldsEscrows entID) =
     "Escrow " ++ show entID ++ " has a nonempty endowment"
-  show (CantImport bs ty) =
-    "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
 
 -- | -
 instance Show TransactionException where
