@@ -89,6 +89,8 @@ usage = do
       "  --resume-session  Reloads previous transaction history,",
       "",
       "Later options shadow earlier ones when they have the same domain.",
+      "The Fae server listens on port 27182 and accepts import/export data on 27183.",
+      "The Faeth server, in addition, connects to Parity at 'localhost:8546'.",
       "",
       "Recognized environment variables:",
       "  FAE_HOME    Directory where transaction modules and history are stored"
