@@ -5,19 +5,14 @@ import Control.Lens hiding ((<.>))
 
 import qualified Data.ByteString.Char8 as C8
 
-import qualified Data.Map as Map
-import Data.Map (Map)
-
 import qualified Data.Serialize as S
 import Data.Serialize (Serialize)
 
 import Data.Maybe
-import qualified Data.Text as T
 
 import Network.HTTP.Client
 import Network.HTTP.Client.MultipartFormData
 
-import PostTX.EnvVars
 import PostTX.Network
 import PostTX.TXSpec
 
@@ -26,7 +21,7 @@ import System.FilePath
 
 submit :: String -> String -> Bool -> Bool-> TXSpec String -> IO ()
 submit txName host fake lazy txSpec = 
-  buildRequest txName host fake lazy txSpec >>= sendReceive
+  buildRequest txName host fake lazy txSpec >>= sendReceiveString >>= putStrLn
 
 buildRequest :: String -> String -> Bool -> Bool -> TXSpec String -> IO Request
 buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
@@ -42,8 +37,3 @@ buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
     rewardArg = ("reward", ) $ if isReward then "True" else "False"
     parentArg = ("parent", ) . C8.pack . show <$> parentM
 
-modulePart :: String -> String -> Module -> Part
-modulePart param name = partFileRequestBody (T.pack param) name . RequestBodyBS 
-
-moduleParts :: String -> Modules -> [Part]
-moduleParts param = Map.foldrWithKey (\name -> (:) . modulePart param name) []

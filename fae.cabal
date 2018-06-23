@@ -156,6 +156,7 @@ executable postTX
     PostTX.Args
     PostTX.EnvVars
     PostTX.Faeth
+    PostTX.ImportExport
     PostTX.Network
     PostTX.SpecParser
     PostTX.Submit

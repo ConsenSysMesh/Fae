@@ -215,15 +215,16 @@ processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
 
 runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
 runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
-  resultVar <- ioAtomically newEmptyTMVar
+  tmVar <- ioAtomically newEmptyTMVar
   callerTID <- view _1
   handleAll (execError thisTXID) $ do
-    txResult <- waitRunTXExecData queueTXExecData
+    txResult <- waitRunTXExecData queueTXExecData resultVar
       TXExecData
       {
         parentM = Just lastTXID,
         lazy = True,
         fake = False,
+        resultVar = tmVar,
         ..
       }
     liftIO $ putStrLn txResult

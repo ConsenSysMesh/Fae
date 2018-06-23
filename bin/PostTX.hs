@@ -7,6 +7,7 @@ import Data.Maybe
 
 import PostTX.Args
 import PostTX.Faeth
+import PostTX.ImportExport
 import PostTX.SpecParser
 import PostTX.Submit
 import PostTX.TXSpec
@@ -36,9 +37,11 @@ main = do
       else do
         txSpec <- txDataToTXSpec txData
         submit postArgTXName postArgHost postArgFake postArgLazy txSpec
-    x@OngoingFaethArgs{..} -> 
+    OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost
+    ImportExportArgs{..} -> 
+      importExport exportTXID exportSCID exportHost importHost
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess
@@ -55,40 +58,45 @@ usage = do
       "Usage: (standalone) " ++ self ++ " args",
       "       (with stack) stack exec " ++ self ++ " -- args",
       "", 
-      "where args = (tx name | Fae tx ID | Eth tx ID) [host[:port]] [options]",
+      "where args = data [host[:port]] [options]",
       "where the available options are:",
       "  Help",
       "  --help        Print this usage",
       "",
       "  Regular Fae operation:",
-      "    with a (tx name)",
+      "    with data = (tx name)",
       "    --fake      Don't add the transaction to the history; only run it once",
       "    --lazy      Don't print transaction results; leave them unevaluated",
       "",
-      "    with a (Fae tx ID)",
+      "    with data = (Fae tx ID)",
       "    --view      Display the results of a previously submitted transaction",
       "",
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",
       "                Also implied by any of the following options",
       "",
-      "    with a (tx name)",
-      "    --faeth-fee number            Set the required ether fee to run this", 
+      "    with data = (tx name)",
+      "    --faeth-fee=number            Set the required ether fee to run this", 
       "                                  Faeth transaction in Fae",
-      "    --faeth-recipient address     Set the required Ethereum 'to' address",
+      "    --faeth-recipient=address     Set the required Ethereum 'to' address",
       "                                  to run this Faeth transaction in Fae",
       "",
-      "    with a (Eth tx ID)",
-      "    --faeth-add-signature name    Sign the Fae portion of an existing", 
+      "    with data = (Eth tx ID)",
+      "    --faeth-add-signature=name    Sign the Fae portion of an existing", 
       "                                  Faeth transaction as the given identity",
       "",
       "    with either",
-      "    --faeth-eth-value number      Set the ether value sent with a Faeth", 
+      "    --faeth-eth-value=number      Set the ether value sent with a Faeth", 
       "                                  transaction",
-      "    --faeth-eth-to address        Set the Ethereum 'to' address for a", 
+      "    --faeth-eth-to=address        Set the Ethereum 'to' address for a", 
       "                                  Faeth transaction",
       "    --faeth-eth-argument          Set the input that the Ethereum contract",
       "                                  will see, i.e. the contract argument",
+      "",
+      "  Import/Export operation:" ++
+      "    with data = (Fae tx ID):(Fae short contract ID)",
+      "    --import-host=host[:port]     Set host to send import data",
+      "    --export-host=host[:port]     Set host to request export data",
       "",
       "Recognized environment variables:",
       "  FAE_HOME      Directory where keys are stored",

@@ -12,4 +12,4 @@ view :: TransactionID -> String -> IO ()
 view txID host = do
   request <- flip formDataBody (requestURL host) $ 
     [partLBS "view" $ LC8.pack $ show txID]
-  sendReceive request
+  sendReceiveString request >>= putStrLn

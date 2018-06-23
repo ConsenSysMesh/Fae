@@ -93,10 +93,12 @@ instance (TXQueueM m) => TXQueueM (ProtocolT m) where
 type SendTXExecData m = TXExecData -> m ()
 
 -- | Blocks on the result variable after sending off the TX.
-waitRunTXExecData :: (TXQueueM m) => SendTXExecData m -> TXExecData -> m String
-waitRunTXExecData sendOff txExecData = do
+waitRunTXExecData :: 
+  (TXQueueM m) => 
+  SendTXExecData m -> (TXExecData -> TMVar a) -> TXExecData -> m a
+waitRunTXExecData sendOff tmVar txExecData = do
   sendOff txExecData
-  ioAtomically $ takeTMVar $ resultVar txExecData
+  ioAtomically $ takeTMVar $ tmVar txExecData
 
 -- | Sends the TX by simply placing it in the queue.
 queueTXExecData :: (TXQueueM m) => SendTXExecData m

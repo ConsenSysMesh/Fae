@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.Args where
 
-import Blockchain.Fae.FrontEnd (TransactionID)
+import Blockchain.Fae.FrontEnd 
 
 import Common.Lens hiding (view)
 import Common.ProtocolT
@@ -20,6 +20,7 @@ data PostTXArgs =
     argFake :: Bool,
     argView :: Bool,
     argLazy :: Bool,
+    argImportExport :: (Maybe String, Maybe String),
     argFaeth :: FaethArgs,
     argUsage :: Maybe Usage
   }
@@ -43,6 +44,13 @@ data FinalizedPostTXArgs =
   {
     viewArgTXID :: TransactionID,
     viewArgHost :: String
+  } |
+  ImportExportArgs
+  {
+    exportTXID :: TransactionID,
+    exportSCID :: ShortContractID,
+    exportHost :: String,
+    importHost :: String
   } |
   UsageArgs Usage
 
@@ -74,6 +82,7 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
+    argImportExport = (Nothing, Nothing),
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
     argUsage = Nothing
   }
@@ -85,6 +94,10 @@ argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
+  | ("--export-host", '=' : exportHostArg) <- break (== '=') x
+    = st & _argImportExport . _1 ?~ exportHostArg
+  | ("--import-host", '=' : importHostArg) <- break (== '=') x
+    = st & _argImportExport . _2 ?~ importHostArg
   | ("--faeth-eth-argument", '=' : ethArgumentArg) <- break (== '=') x
     = st
       & _argFaeth . _useFaeth .~ True
@@ -120,6 +133,11 @@ argGetter st x
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | Just u <- argUsage = UsageArgs u
+  | (Just _, Just _) <- argImportExport, 
+    argView || argLazy || argFake || useFaeth
+    = error $
+        "--import-port and -export-port are incompatible with " ++
+        "--view, --lazy, --fake, and --faeth*"
   | argFake && (argView || argLazy || useFaeth)
     = error $
         "--fake is incompatible with --view, --lazy, --faeth*, " ++
@@ -149,6 +167,20 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
         fromMaybe (error $ "Couldn't parse transaction ID: " ++ txIDS) $ 
         readMaybe txIDS,
       viewArgHost = justHost argHostM
+    }
+  | (exportHostM, importHostM) <- argImportExport,
+    Just argData <- argDataM,
+    (exportTXIDS, ':' : exportSCIDS) <- break (== ':') argData =
+    ImportExportArgs
+    {
+      exportTXID = 
+        fromMaybe (error $ "Couldn't parse transaction ID: " ++ exportTXIDS) $ 
+        readMaybe exportTXIDS,
+      exportSCID = 
+        fromMaybe (error $ "Couldn't parse short contract ID: " ++ exportSCIDS) $ 
+        readMaybe exportSCIDS,
+      exportHost = justHost exportHostM,
+      importHost = justHost importHostM
     }
   | otherwise =
     PostArgs

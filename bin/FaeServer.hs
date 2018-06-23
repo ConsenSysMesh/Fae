@@ -58,11 +58,10 @@ main = do
   flip runReaderT txQueue $ case args of
     ArgsServer{..} -> do
       void $ fork $ runFae tID flags
+      void $ fork $ runServer importExportPort importExportApp queueTXExecData
       case serverMode of
-        FaeMode -> do
-          void $ fork $ runServer 27183 importExportApp queueTXExecData
-          runServer 27182 (serverApp $ Proxy @String) queueTXExecData
-        FaethMode -> runFaeth tID
+        FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData
+        FaethMode -> runFaeth faePort tID
     (ArgsUsage xs) -> liftIO $ case xs of
       [] -> do
         usage
@@ -85,11 +84,14 @@ usage = do
       "  --faeth           Receive transactions via Ethereum from a Parity client",
       "  --faeth-mode      Synonym for --faeth",
       "  --normal-mode     Operate as standalone Fae",
+      "  --fae-port=number Listen on the given port for normal-mode requests (default: 27182)",
+      "  --import-export-port=number",
+      "                    Listen on the given port for import/export requests (default: 27183)",
       "  --new-session     Deletes previous transaction history",
       "  --resume-session  Reloads previous transaction history,",
       "",
       "Later options shadow earlier ones when they have the same domain.",
-      "The Fae server listens on port 27182 and accepts import/export data on 27183.",
+      "The Fae server listens on port 'fae-port' and accepts import/export data on 'import-export-port'.",
       "The Faeth server, in addition, connects to Parity at 'localhost:8546'.",
       "",
       "Recognized environment variables:",

@@ -61,7 +61,7 @@ serverApp _ sendTXExecData = \request respond -> do
     fake = getLast False id $ getParams "fake" 
     reward = getLast False id $ getParams "reward" 
 
-  let send = waitResponse respond sendTXExecData
+  let send = waitResponse respond stringHeaders stringUtf8 sendTXExecData resultVar
   case viewM of
     Just viewTXID 
       | fake -> error "'fake' and 'view' are incompatible parameters"
@@ -75,7 +75,12 @@ importExportApp :: TXExecApplication
 importExportApp sendTXExecData = \request respond -> do
   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
   let
-    send = waitResponse respond sendTXExecData
+    send :: 
+      (Serialize a) => 
+      (TXExecData -> TMVar a) ->
+      (ThreadId -> TMVar a -> TXExecData) -> 
+      TXQueueT IO ResponseReceived
+    send = waitResponse respond dataHeaders (byteString . S.encode) sendTXExecData 
     getParams = getParameters params
     importDataM = getLast Nothing Just $ getParams "import"
     exportDataM = getLast Nothing Just $ getParams "export"
@@ -84,9 +89,9 @@ importExportApp sendTXExecData = \request respond -> do
     (Just (importedCID, valueType), Nothing) ->
       let valuePackage = fromMaybe (error $ "Missing 'valuePackage' file") $
             getFile files "valuePackage"
-      in send $ \callerTID signalVar -> ImportValue{..}
+      in send signalVar $ \callerTID signalVar -> ImportValue{..}
     (Nothing, Just (calledInTX, shortCID)) ->
-      send $ \callerTID exportResultVar -> ExportValue{..}
+      send exportResultVar $ \callerTID exportResultVar -> ExportValue{..}
     (Nothing, Nothing) -> 
         error "Must specify either 'import' or 'export' parameter"
     _ -> error "Can't specify both 'import' and 'export' parameters"
@@ -98,15 +103,18 @@ bringOut txqApp =
 waitResponse :: 
   (TXQueueM m) =>
   (Response -> IO ResponseReceived) -> 
+  ResponseHeaders ->
+  (a -> Builder) ->
   SendTXExecData m -> 
+  (TXExecData -> TMVar a) ->
   (ThreadId -> TMVar a -> TXExecData) -> 
   m ResponseReceived
-waitResponse respond sendTXExecData constr = do
+waitResponse respond headers build sendTXExecData tmVarField constr = do
   callerTID <- liftIO myThreadId
   resultVar <- ioAtomically newEmptyTMVar
   let txExecData = constr callerTID resultVar
-  result <- waitRunTXExecData sendTXExecData txExecData
-  liftIO $ respond $ buildResponse result
+  result <- waitRunTXExecData sendTXExecData tmVarField txExecData
+  liftIO $ respond $ responseBuilder ok200 headers $ build result
 
 getParameters :: [(C8.ByteString, C8.ByteString)] -> C8.ByteString -> [String]
 getParameters params paramName = 
@@ -115,16 +123,18 @@ getParameters params paramName =
 getLast :: (Read b) => a -> (b -> a) -> [String] -> a
 getLast x0 f l = last $ x0 : map (f . read) l
 
-buildResponse :: String -> Response
-buildResponse = responseBuilder ok200 headers . stringUtf8 
-
 exceptionResponse :: SomeException -> Response
-exceptionResponse = responseBuilder badRequest400 headers . stringUtf8 . show
+exceptionResponse = responseBuilder badRequest400 stringHeaders . stringUtf8 . show
 
-headers :: ResponseHeaders
-headers = 
+stringHeaders :: ResponseHeaders
+stringHeaders = 
   [
     (hContentEncoding, "utf8"),
     (hContentType, "text/plain")
   ]
 
+dataHeaders :: ResponseHeaders
+dataHeaders =
+  [
+    (hContentType, "application/octet-stream")
+  ]
