@@ -150,10 +150,10 @@ instance ToRequest ParitySubscribe where
 instance ToRequest EthGetBlockByHash where
   requestMethod = const "eth_getBlockByHash"
 
-runFaeth :: ThreadId -> TXQueueT IO ()
-runFaeth mainTID = reThrow mainTID $ do
+runFaeth :: Int -> ThreadId -> TXQueueT IO ()
+runFaeth faePort mainTID = reThrow mainTID $ do
   fork $ runFaethWatcherM faethWatcher 
-  runServer 27182 (serverApp $ Proxy @Salt) faethSendTXExecData 
+  runServer faePort (serverApp $ Proxy @Salt) faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
 faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}
