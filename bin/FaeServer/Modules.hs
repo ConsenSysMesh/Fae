@@ -49,8 +49,7 @@ getFiles files name =
       | (name', FileInfo{..}) <- files, name' == name
   ]
 
-writeModules :: 
-  Module -> ModuleMap -> TransactionID -> IO ()
+writeModules :: Module -> ModuleMap -> TransactionID -> IO ()
 writeModules mainFile modules txID = do
   let
     txIDName = "TX" ++ show txID

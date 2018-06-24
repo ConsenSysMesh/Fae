@@ -57,7 +57,7 @@ main = do
 
   flip runReaderT txQueue $ case args of
     ArgsServer{..} -> do
-      void $ fork $ runFae tID flags
+      void $ fork $ runFae faePort tID flags
       void $ fork $ runServer importExportPort importExportApp queueTXExecData
       case serverMode of
         FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData

@@ -31,12 +31,18 @@ import System.FilePath
 import System.IO
 import System.IO.Error
 
-runFae :: ThreadId -> Flags -> TXQueueT IO ()
-runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
-  if newSession
+runFae :: Int -> ThreadId -> Flags -> TXQueueT IO ()
+runFae port mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
+  liftIO $ do
+    createDirectoryIfMissing False portDir
+    setCurrentDirectory portDir
+
+  if newSession 
   then liftIO $ do
-    gitInit
-    createDirectoryIfMissing True "txcache"
+    removePathForcibly "Blockchain"
+    removePathForcibly "txcache"
+    createDirectory "txcache"
+    gitInit 
   else forM_TXCache $ \tx@TX{..} parentM -> do
     txCount <- innerRun tx parentM gitReset
     updateHistory (Just txID) txCount
@@ -45,6 +51,8 @@ runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
   forever $ do
     txExecData <- readTXExecData
     reThrowExit mainTID (callerTID txExecData) $ runTXExecData txExecData
+
+  where portDir = "port-" ++ show port
 
 runTXExecData :: 
   (MonadIO m, MonadMask m) => 
@@ -59,7 +67,7 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
     then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
     else lift $ showTransaction txID
   if fake
-  then liftIO gitClean
+  then liftIO gitClean 
   else do
     updateHistory (Just txID) (txCount + 1)
     extendTXCache tx parentM

@@ -12,8 +12,6 @@ import System.Process
 gitInit :: IO ()
 gitInit = do
   removePathForcibly "git"
-  removePathForcibly "Blockchain"
-  removePathForcibly "txcache"
   runGitWithArgs "init" ["--quiet"]
   runGitWithArgs "config" ["user.name", "Fae"]
   runGitWithArgs "config" ["user.email", "fae"]
@@ -30,7 +28,7 @@ gitReset :: TransactionID -> IO ()
 gitReset oldTXID = runGitWithArgs "reset" ["--hard", "-q", txGitTag oldTXID]
 
 gitClean :: IO ()
-gitClean = runGitWithArgs "clean" ["-q", "-f", "./Blockchain"]
+gitClean = runGitWithArgs "clean" ["-q", "-f", "Blockchain"]
 
 txGitTag :: TransactionID -> String
 txGitTag txID = "TX" ++ show txID
