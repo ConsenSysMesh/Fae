@@ -67,7 +67,7 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
     then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
     else lift $ showTransaction txID
   if fake
-  then liftIO gitClean 
+  then unless lazy $ liftIO gitClean 
   else do
     updateHistory (Just txID) (txCount + 1)
     extendTXCache tx parentM

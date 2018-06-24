@@ -141,8 +141,8 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     = error $
         "--import-host and --export-host are incompatible with " ++
         "--view, --lazy, --fake, --resend, and --faeth*"
-  | argFake && (argView || argLazy || useFaeth)
-    = error "--fake is incompatible with --view, --lazy, --faeth*, and --faeth*"
+  | argFake && (argView || useFaeth)
+    = error "--fake is incompatible with --view, --faeth*, and --faeth*"
   | argView && (argLazy || argResend || useFaeth)
     = error "--view is incompatible with --lazy, --resend, and --faeth*"
   | not (null newSigners) && (isJust faethFee || isJust faethRecipient)

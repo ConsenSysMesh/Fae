@@ -31,8 +31,8 @@ sendReceiveString :: Request -> IO String
 sendReceiveString = sendReceive LC8.unpack
 
 sendReceiveSerialize :: (Serialize a) => Request -> IO a
-sendReceiveSerialize = 
-  sendReceive $ either (error "Invalid response") id . S.decodeLazy
+sendReceiveSerialize bs = sendReceive $ 
+  either (error $ "Invalid response: " ++ show bs) id $ S.decodeLazy bs
 
 modulePart :: String -> String -> Module -> Part
 modulePart param name = partFileRequestBody (T.pack param) name . RequestBodyBS 
