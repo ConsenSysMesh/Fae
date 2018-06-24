@@ -27,6 +27,7 @@ indispensable:
   - StandaloneDeriving
   - TupleSections
   - TypeApplications
+  - TypeFamilies
 -}
 module Blockchain.Fae.Internal.TX where
 
@@ -194,7 +195,8 @@ runFaeInterpret x = do
         Safe,
         StandaloneDeriving,
         TupleSections,
-        TypeApplications
+        TypeApplications,
+        TypeFamilies
       ]
     trustedPackages =
       [
