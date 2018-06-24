@@ -70,9 +70,10 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
       txSigners,
       result = Result (undefined :: a)
     }
-  ~(result, outputs) <- runTX $ runInputContracts inputArgs >>= 
+  ~(result, (outputs, types)) <- runTX $ runInputContracts inputArgs >>= 
     lift . (withReward >=> doTX f fallback . getInputValues)
   txStorage %= fmap (\txE -> txE{result, outputs})
+  _contractTypes %= (<> types)
 
   where 
     txStorage = _getStorage . at txID
@@ -83,7 +84,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
         shorten cID, 
         InputResults
         {
-          iRealID = withoutNonce cID,
+          iRealID = cID,
           iResult = ReturnValue (),
           iExportedResult = mempty,
           iVersions = emptyVersionMap,
@@ -108,9 +109,11 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
 doTX :: 
   (HasEscrowIDs inputs, GetInputValues inputs, Show a) => 
   Transaction inputs a -> [Transaction inputs ()] -> 
-  inputs -> FaeTXM (Result, Outputs)
-doTX f fallbacks x = 
-  (_2 %~ listToOutputs . force) <$> callTX (doFallbacks fallbacks) x f
+  inputs -> FaeTXM (Result, (Outputs, Types))
+doTX f fallbacks x = do
+  txID <- view _thisTXID
+  (_2 %~ listToOutputs (TransactionOutput txID) . force) <$> 
+    callTX (doFallbacks fallbacks) x f
 
 -- | Performs all fallback transactions, ignoring errors.
 doFallbacks :: [Transaction inputs ()] -> inputs -> FaeTXM OutputsList
@@ -154,11 +157,13 @@ nextInput cID arg (results, vers) = do
 
   (iR, vers') <- case valE of
     Right fAbs -> do 
-      ~(iR, vers', gAbsM) <- lift $ runContract cID vers fAbs arg
+      ~(iR, vers', gAbsM, types) <- lift $ runContract cID vers fAbs arg
 
       -- We don't update the contract if it didn't return cleanly
       let successful = unsafeIsDefined iR
-      when successful $ at cID .= (Right <$> gAbsM)
+      when successful $ do
+        at cID .= (Right <$> gAbsM)
+        _contractTypes %= (<> types)
 
       return (iR, vers')
 
@@ -187,8 +192,9 @@ runContract ::
   VersionMap' ->
   AbstractGlobalContract -> 
   String ->
-  FaeTXM (InputResults, VersionMap', Maybe AbstractGlobalContract)
+  FaeTXM (InputResults, VersionMap', Maybe AbstractGlobalContract, Types)
 runContract cID vers fAbs arg = do
+  thisTXID <- view _thisTXID
   ~(~(~(result, vMap), gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
   let 
     -- We store this with the nonce (if given) so that if (and when) it is
@@ -196,13 +202,14 @@ runContract cID vers fAbs arg = do
     -- contract is called again, its current nonce is no longer the correct
     -- one for this result.
     iRealID = cID
-    iOutputsM = Just $ listToOutputs outputsL
+    (outs, types) = listToOutputs (InputOutput thisTXID (shorten cID)) outputsL
+    iOutputsM = Just outs
     ~(iVersions, vers') = makeOV cID vMap vers
   -- The actual result of the contract includes both 'result' and also
   -- the outputs and continuation function, so we link their fates.
   let iResult = gAbsM `deepseq` outputsL `seq` result
   iExportedResult <- exportReturnValue iResult
-  return (InputResults{..}, vers', gAbsM)
+  return (InputResults{..}, vers', gAbsM, types)
 
 -- | Adds the new version map to the ongoing total, but only if the
 -- contract ID has a nonce.  This restriction is part of the guarantee that

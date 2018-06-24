@@ -20,17 +20,17 @@ importExport exportTXID exportSCID exportHost importHost = do
   sendReceiveSerialize @() importRequest
   putStrLn $
     "Transferred return value of contract " ++ show exportSCID ++
-    "called in transaction " ++ show exportTXID ++
-    "from " ++ exportHost ++ " to " ++ importHost
+    " called in transaction " ++ show exportTXID ++
+    " from " ++ exportHost ++ " to " ++ importHost
 
 buildExportRequest :: (TransactionID, ShortContractID) -> String -> IO Request 
 buildExportRequest exportData exportHost =
   flip formDataBody (requestURL exportHost) $
-    partBS "export" (S.encode exportData) : []
+    modulePart "export" "export" (S.encode exportData) : []
 
 buildImportRequest :: (ContractID, String, ByteString) -> String -> IO Request
 buildImportRequest (cID, typeS, valueBS) importHost =
   flip formDataBody (requestURL importHost) $
-    partBS "import" (S.encode (cID, typeS)) :
+    modulePart "import" "import" (S.encode (cID, typeS)) :
     modulePart "valuePackage" "valuePackage" valueBS : []
 

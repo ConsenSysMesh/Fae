@@ -82,9 +82,9 @@ importExportApp sendTXExecData = \request respond -> do
       TXQueueT IO ResponseReceived
     send = waitResponse respond dataHeaders (byteString . S.encode) sendTXExecData 
     getParams = getParameters params
-    importDataM = getLast Nothing Just $ getParams "import"
-    exportDataM = getLast Nothing Just $ getParams "export"
     parentM = getLast Nothing Just $ getParams "parent"
+    importDataM = either error id . S.decode <$> getFile files "import"
+    exportDataM = either error id . S.decode <$> getFile files "export"
   case (importDataM, exportDataM) of
     (Just (importedCID, valueType), Nothing) ->
       let valuePackage = fromMaybe (error $ "Missing 'valuePackage' file") $

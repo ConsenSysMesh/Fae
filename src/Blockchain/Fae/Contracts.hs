@@ -14,13 +14,15 @@ module Blockchain.Fae.Contracts
   (
     -- * Two-party swap
     -- $twopartyswap
-    twoPartySwap,
+    twoPartySwap, TwoPartySwap(..),
     -- * Direct selling
     -- $vendor
     sell, redeem,
+    Sell(..), Redeem(..),
     -- * Possession
     -- $possession
-    signOver, deposit
+    signOver, deposit,
+    SignOver(..)
   )
   where
 

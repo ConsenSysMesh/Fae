@@ -51,6 +51,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry,
+    contractTypes :: Types,
     importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap)
   }
 
@@ -103,9 +104,12 @@ data InputResults =
 data Outputs = 
   Outputs
   {
-    outputMap :: IntMap ((AbstractGlobalContract, Int), SomeTypeRep),
+    outputMap :: IntMap (AbstractGlobalContract, Int), 
     outputCount :: Int
   }
+
+-- | Convenient abbreviation
+type Types = Map ContractID SomeTypeRep
 
 -- * Template Haskell
 
@@ -186,7 +190,8 @@ instance At Storage where
 valueWithNonce :: 
   ContractID -> Maybe Int -> Lens' Storage (Maybe (IxValue Storage))
 valueWithNonce cID nM = lens getter setter where
-  getter st = st ^. checkNonceAt cID nM . elseImportedValue st cID
+  cIDN = maybe cID (cID :#) nM
+  getter st = st ^. checkNonceAt cID nM . elseImportedValue st cIDN
   setter st Nothing = st
     & nonceAt cID .~ Nothing
     & _importedValues . at cID .~ Nothing
@@ -199,36 +204,37 @@ checkNonceAt cID nM = nonceAt cID . checkNonce cID nM
 
 -- | Like 'at', but retaining the nonce
 nonceAt :: ContractID -> Lens' Storage (Maybe (AbstractGlobalContract, Int))
-nonceAt cID = allAt cID . mLens _1
-
--- | Like 'at', but retaining both the nonce and the type representation.
-allAt :: 
-  ContractID -> Lens' Storage (Maybe ((AbstractGlobalContract, Int), SomeTypeRep))
-allAt cID@(TransactionOutput txID i) =
+nonceAt cID@(TransactionOutput txID i) =
   txLens txID .
-  _outputs .
-  _outputMap .
-  at i
-allAt cID@(InputOutput txID sID i) = 
+  mLens
+  (
+    _outputs .
+    _outputMap .
+    at i
+  )
+nonceAt cID@(InputOutput txID sID i) = 
   txInputLens txID sID .
-  _iOutputsM .
-  defaultLens (throw $ ContractOmitted txID sID) .
-  _outputMap .
-  at i
-allAt cID = throw $ InvalidNonceAt cID
+  mLens
+  (
+    _iOutputsM .
+    defaultLens (throw $ ContractOmitted txID sID) .
+    _outputMap .
+    at i
+  )
+nonceAt cID = throw $ InvalidNonceAt cID
 
 -- | Common activity: looking up an input call's results
-txInputLens :: TransactionID -> ShortContractID -> Lens' Storage InputResults
-txInputLens txID scID = txLens txID . _inputOutputs . at scID . 
-  defaultLens (throw $ BadInputID txID scID)
+txInputLens :: 
+  TransactionID -> ShortContractID -> Lens' Storage (Maybe InputResults)
+txInputLens txID scID = txLens txID . mLens (_inputOutputs . at scID)
 
 -- | Common activity: looking up a transaction by ID
-txLens :: TransactionID -> Lens' Storage TransactionEntry
-txLens txID = _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
+txLens :: TransactionID -> Lens' Storage (Maybe TransactionEntry)
+txLens txID = _getStorage . at txID
 
 -- | For focusing on values 'at' an index (which may be absent).
-mLens :: (Monad m) => Lens' a s -> Lens' (m a) (m s)
-mLens l = lens (fmap $ view l) (liftM2 $ flip $ set l)
+mLens :: (Monad m) => Lens' s (m a) -> Lens' (m s) (m a)
+mLens l = lens (>>= view l) (\ms ma -> set l ma <$> ms)
 
 -- | Enforces nonce-correctness when it is required
 checkNonce :: ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
@@ -255,15 +261,20 @@ elseImportedValue st cID = to f where
   f x = Right <$> x
 
 -- | Just an 'IntMap' constructor, indexing consecutively from 0.
-listToOutputs :: OutputsList -> Outputs
-listToOutputs l = 
-  Outputs
-  {
-    outputMap = oMap, 
-    outputCount = IntMap.size oMap
-  }
-  where oMap = IntMap.fromList $ zip [0 ..] $ zipWith f l (repeat 0) 
-        f (rep, func) n = ((func, n), rep)
+listToOutputs :: 
+  (Int -> ContractID) -> OutputsList -> (Outputs, Types)
+listToOutputs mkCID outsTypes = (outputs, makeMap types) where
+  outputs = 
+    Outputs
+    {
+      outputMap = oMap, 
+      outputCount = IntMap.size oMap
+    }
+  oMap = makeIntMap outs
+  (types, outs) = unzip outsTypes
+  -- Ugh repetition
+  makeIntMap l = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
+  makeMap = Map.fromList . zip (map mkCID [0 ..])
 
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.
@@ -288,8 +299,9 @@ getExportedValue ::
   (MonadState Storage m) =>
   TransactionID -> ShortContractID -> m (ContractID, String, ByteString)
 getExportedValue txID scID = do
-  InputResults{..} <- use $ txInputLens txID scID
-  (_, nameType) <- 
-    use $ allAt iRealID . defaultLens (throw $ BadContractID iRealID)
+  InputResults{..} <- use $ txInputLens txID scID .
+    defaultLens (throw $ BadInputID txID scID)
+  nameType <- use $ _contractTypes . at (withoutNonce iRealID) . 
+    defaultLens (throw $ BadContractID iRealID)
   return (iRealID, show nameType, iExportedResult)
 

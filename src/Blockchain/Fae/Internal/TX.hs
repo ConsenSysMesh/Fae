@@ -109,7 +109,7 @@ instance (Monad m) => MonadState Storage (FaeInterpretT m) where
 -- transactions are faster still.
 interpretTX :: (MonadMask m, MonadIO m) => TX -> FaeInterpretT m ()
 interpretTX TX{..} = handle fixGHCErrors $ do
-  Int.set [searchPath := thisTXPath]
+  Int.set [searchPath := txPath txModName]
   loadModules [txSrc]
   setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]
   run <- interpret runString infer
@@ -121,18 +121,8 @@ interpretTX TX{..} = handle fixGHCErrors $ do
         qualified "body", 
         show $ map (UnquotedString . qualified) fallback
       ]
-    fixGHCErrors (WontCompile []) = error "Compilation error"
-    fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
-    fixGHCErrors (UnknownError e) = error e
-    fixGHCErrors (NotAllowed e) = error e
-    fixGHCErrors (GhcException e) = error e
     txModName = "TX" ++ show txID
     txSrc = "Blockchain.Fae.Transactions." ++ txModName
-    thisTXPath = 
-      [
-        ".",
-        "Blockchain" </> "Fae" </> "Transactions" </> txModName </> "private"
-      ]
     qualified varName = txSrc ++ "." ++ varName
 
 -- | This has to be interpreted because, even though all the information is
@@ -145,28 +135,57 @@ interpretTX TX{..} = handle fixGHCErrors $ do
 interpretImportedValue :: 
   (MonadMask m, MonadIO m) => 
   ContractID -> String -> ByteString -> FaeInterpretT m ()
-interpretImportedValue cID typeS valBS = do
+interpretImportedValue cID typeS valBS = handle fixGHCErrors $ do
+  Int.set [searchPath := txPath txModName]
   loadModules [txSrc]
-  setImports [txSrc, "Type.Reflection", "Blockchain.Fae.Internal"]
+  setImports importImports
   addVal <- interpret runString infer
-  liftFaeStorage $ addVal cID valBS
+  liftFaeStorage $ FaeStorage $ addVal cID valBS
   where
-    txSrc = "Blockchain.Fae.Transactions." ++ "TX" ++ show (parentTX cID)
+    txID = parentTX cID
+    txModName = "TX" ++ show txID
+    txSrc = "Blockchain.Fae.Transactions." ++ "TX" ++ show txID
     runString = unwords
       [
         "addImportedValue",
         "(typeRep @(ValType (" ++ typeS ++ ")))"
       ]
+    importImports =
+     [
+       "Type.Reflection", 
+       "Control.Monad.State",
+       "Data.ByteString",
+       "Data.Functor.Identity",
+       "Blockchain.Fae.Internal", 
+       "Blockchain.Fae.Currency", 
+       "Blockchain.Fae.Contracts",
+       txSrc
+     ] 
 
 liftFaeStorage :: (Monad m) => FaeStorage a -> FaeInterpretT m a
 liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
 
+txPath :: String -> [String]
+txPath txModName =
+  [
+    ".",
+    "Blockchain" </> "Fae" </> "Transactions" </> txModName </> "private"
+  ]
+
+
+fixGHCErrors :: InterpreterError -> a
+fixGHCErrors (WontCompile []) = error "Compilation error"
+fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
+fixGHCErrors (UnknownError e) = error e
+fixGHCErrors (NotAllowed e) = error e
+
+fixGHCErrors (GhcException e) = error e
 -- | runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
   fmap (either throw id) $
-    flip evalStateT (Storage Map.empty Map.empty) $ 
+    flip evalStateT (Storage Map.empty Map.empty Map.empty) $ 
       case ghcLibdirM of
         Nothing -> unsafeRunInterpreterWithArgs args x
         Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir x

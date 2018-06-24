@@ -1,5 +1,7 @@
 module PostTX.Network where
 
+import Blockchain.Fae.FrontEnd (printHex)
+
 import Data.Maybe
 import Data.Serialize (Serialize)
 
@@ -31,8 +33,8 @@ sendReceiveString :: Request -> IO String
 sendReceiveString = sendReceive LC8.unpack
 
 sendReceiveSerialize :: (Serialize a) => Request -> IO a
-sendReceiveSerialize bs = sendReceive $ 
-  either (error $ "Invalid response: " ++ show bs) id $ S.decodeLazy bs
+sendReceiveSerialize = sendReceive $ \bs ->
+  either (error $ "Invalid response: " ++ printHex bs) id $ S.decodeLazy bs
 
 modulePart :: String -> String -> Module -> Part
 modulePart param name = partFileRequestBody (T.pack param) name . RequestBodyBS 
