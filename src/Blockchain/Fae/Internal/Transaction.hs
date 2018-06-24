@@ -70,7 +70,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
       txSigners,
       result = Result (undefined :: a)
     }
-  ~(result, (outputs, types)) <- runTX $ runInputContracts inputArgs >>= 
+  ~(result, ~(outputs, types)) <- runTX $ runInputContracts inputArgs >>= 
     lift . (withReward >=> doTX f fallback . getInputValues)
   txStorage %= fmap (\txE -> txE{result, outputs})
   _contractTypes %= (<> types)

@@ -125,3 +125,4 @@ instance
 
   put (SERep1 x) = S.gPut x
   get = SERep1 <$> S.gGet
+

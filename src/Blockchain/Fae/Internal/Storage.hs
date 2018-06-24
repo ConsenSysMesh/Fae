@@ -154,12 +154,11 @@ instance Monoid Outputs where
 -- short IDs.  If that happens, the later contract call is /definitely/
 -- malicious, and so it's okay to mishandle it.
 instance Semigroup InputResults where
-  (<>) InputResults{iOutputsM = osM1, iVersions = VersionMap vs1}
-       InputResults{iOutputsM = osM2, iVersions = VersionMap vs2, ..}
+  (<>) InputResults{iOutputsM = osM1, iVersions = VersionMap vs1, ..}
+       InputResults{iOutputsM = osM2, iVersions = VersionMap vs2}
      = InputResults
        {
-         -- 'combineO' shifts the second argument, which needs to be the new
-         -- map.      
+         -- @(<>)@ shifts the second argument, which needs to be the new map.      
          iOutputsM = osM2 <> osM1, 
          iVersions = VersionMap $ vs1 <> vs2,
          ..

@@ -17,7 +17,7 @@ module Blockchain.Fae.Currency
     -- * Basic numeric currency
     -- | This is a nearly featureless currency that most likely suffers
     -- from the effects of inflation, since its reward function creates one
-    Coin, reward
+    CoinName(..), Coin, reward
   )
 where
 

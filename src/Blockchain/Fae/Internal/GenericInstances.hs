@@ -61,7 +61,7 @@ instance {-# OVERLAPPABLE #-}
 instance {-# OVERLAPPABLE #-}
   (Generic a, EGeneric1 (Rep a), ERep a ~ SERep1 (Rep a)) => EGeneric a where
 
-  eFrom = fmap SERep1 . eFrom1 @_ @_ @() . from where
+  eFrom = fmap SERep1 . eFrom1 @_ @_ @() . from 
   eTo (SERep1 x) = to <$> eTo1 @_ @_ @() x
 
 -- | This shrinks the signature of the constraint, allowing it to be used
