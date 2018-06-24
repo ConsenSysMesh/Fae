@@ -9,8 +9,6 @@ Stability: experimental
 This module defines TXSummary type aswell as the Pretty Fae Class and associated pretty-printing instances.
 Note that the pretty-printing has to be done in a 'FaeStorage' monad, so the class can't just be 'Pretty'.
 -}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.TXSummary (
