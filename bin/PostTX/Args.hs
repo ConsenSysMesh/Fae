@@ -20,6 +20,7 @@ data PostTXArgs =
     argFake :: Bool,
     argView :: Bool,
     argLazy :: Bool,
+    argResend :: Bool,
     argImportExport :: (Maybe String, Maybe String),
     argFaeth :: FaethArgs,
     argUsage :: Maybe Usage
@@ -28,7 +29,7 @@ data PostTXArgs =
 data FinalizedPostTXArgs =
   PostArgs  
   {
-    postArgTXName :: String,
+    postArgTXNameOrID :: Either TransactionID String,
     postArgHost :: String,
     postArgFake :: Bool,
     postArgLazy :: Bool,
@@ -82,6 +83,7 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
+    argResend = False,
     argImportExport = (Nothing, Nothing),
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
     argUsage = Nothing
@@ -92,6 +94,7 @@ argGetter st "--help" = st & _argUsage .~ Just UsageSuccess
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
+argGetter st "--resend" = st & _argResend .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
   | ("--export-host", '=' : exportHostArg) <- break (== '=') x
@@ -134,21 +137,25 @@ finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | Just u <- argUsage = UsageArgs u
   | (Just _, Just _) <- argImportExport, 
-    argView || argLazy || argFake || useFaeth
+    argView || argLazy || argFake || argResend || useFaeth
     = error $
-        "--import-port and -export-port are incompatible with " ++
-        "--view, --lazy, --fake, and --faeth*"
+        "--import-host and --export-host are incompatible with " ++
+        "--view, --lazy, --fake, --resend, and --faeth*"
   | argFake && (argView || argLazy || useFaeth)
-    = error $
-        "--fake is incompatible with --view, --lazy, --faeth*, " ++
-        "and --new-sender-account"
-  | argView && (argLazy || useFaeth)
-    = error
-        "--view is incompatible with --lazy, --faeth*, and --new-sender-account"
+    = error "--fake is incompatible with --view, --lazy, --faeth*, and --faeth*"
+  | argView && (argLazy || argResend || useFaeth)
+    = error "--view is incompatible with --lazy, --resend, and --faeth*"
   | not (null newSigners) && (isJust faethFee || isJust faethRecipient)
     = error $
       "--faeth-add-signature is incompatible with " ++
       "--faeth-fee and --faeth-recipient"
+  | argResend && 
+    (
+      not (null newSigners) || 
+      isJust faethFee || isJust faethValue || isJust faethArgument || 
+      isJust faethRecipient || isJust faethTo
+    )
+    = error "--resend is incompatible with --faeth-*"
   | argView, Nothing <- argDataM
     = UsageArgs $ UsageFailure "--view requires a transaction ID"
   | not (null newSigners), Just ethTXIDS <- argDataM =
@@ -185,7 +192,15 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
   | otherwise =
     PostArgs
     {
-      postArgTXName = fromMaybe "TX" argDataM,
+      postArgTXNameOrID = 
+        if argResend
+        then Left $
+          maybe (error $ "--resend requires a Fae transaction ID")
+            (\argData -> 
+              fromMaybe (error $ "Couldn't parse transaction ID: " ++ argData) $ 
+              readMaybe argData
+            ) argDataM
+        else Right $ fromMaybe "TX" argDataM,
       postArgHost = justHost argHostM,
       postArgFake = argFake,
       postArgLazy = argLazy,

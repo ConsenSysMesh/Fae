@@ -5,6 +5,9 @@ import Control.Monad.Trans
 
 import Data.Maybe
 
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.Serialize as S
+
 import PostTX.Args
 import PostTX.Faeth
 import PostTX.ImportExport
@@ -23,20 +26,30 @@ main = do
   userHome <- getHomeDirectory
   faeHome <- fromMaybe (userHome </> "fae") <$> lookupEnv "FAE_HOME"
   createDirectoryIfMissing True faeHome
+  createDirectoryIfMissing True $ faeHome </> "txspecs"
   txDir <- getCurrentDirectory
   setCurrentDirectory faeHome
 
   args <- getArgs
   case parseArgs args of
     PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
-      txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
+      let buildTXSpec f = case postArgTXNameOrID of
+            Left txID ->
+              either (error $ "Bad transaction file: " ++ show txID) id .
+                S.decode <$> (C8.readFile $ "txspecs" </> show txID)
+            Right txName ->  do
+              txData <- withCurrentDirectory txDir $ buildTXData txName
+              txSpec <- f $ txDataToTXSpec txData
+              let txID = getTXID $ txMessage txSpec
+              C8.writeFile ("txspecs" </> show txID) $ S.encode txSpec
+              return txSpec
       if useFaeth 
       then do
-        txSpec <- runReaderT (txDataToTXSpec txData) postArgFaeth
+        txSpec <- buildTXSpec $ flip runReaderT postArgFaeth
         submitFaeth postArgHost faethValue faethTo txSpec
       else do
-        txSpec <- txDataToTXSpec txData
-        submit postArgTXName postArgHost postArgFake postArgLazy txSpec
+        txSpec <- buildTXSpec id
+        submit postArgHost postArgFake postArgLazy txSpec
     OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost
@@ -70,6 +83,7 @@ usage = do
       "",
       "    with data = (Fae tx ID)",
       "    --view      Display the results of a previously submitted transaction",
+      "    --resend    Post a previous, signed transaction to a new host",
       "",
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",

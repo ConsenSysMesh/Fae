@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module PostTX.TXSpec (module PostTX.TXSpec, Module, ModuleMap) where
+module PostTX.TXSpec (module PostTX.TXSpec, Module, ModuleMap, getTXID) where
 
 import Blockchain.Fae.FrontEnd
 
@@ -21,6 +21,8 @@ import Data.Serialize (Serialize)
 
 import Data.Maybe
 import Data.Time.Clock
+
+import GHC.Generics
 
 import PostTX.Args
 
@@ -49,6 +51,7 @@ data TXSpec a =
     isReward :: Bool,
     parentM :: Maybe TransactionID
   }
+  deriving (Generic)
 
 data ParsedModules =
   ParsedModules
@@ -63,6 +66,7 @@ data LoadedModules =
     mainModule :: (FileName, Module),
     otherModules :: ModuleMap
   }
+  deriving (Generic)
 
 type Modules = ModuleMap
 type FileName = String
@@ -76,6 +80,9 @@ class (Monad m, Serialize a) => MakesTXSpec m a where
 makeLenses ''TXData
 makeLenses ''TXSpec
 makeLenses ''ParsedModules
+
+instance Serialize LoadedModules
+instance (Serialize a) => Serialize (TXSpec a)
 
 instance MakesTXSpec IO String where
   txDataToTXSpec = txSpecTimeSalt id
