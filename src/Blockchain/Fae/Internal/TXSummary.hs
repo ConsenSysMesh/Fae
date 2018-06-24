@@ -16,6 +16,7 @@ Note that the pretty-printing has to be done in a 'FaeStorage' monad, so the cla
 module Blockchain.Fae.Internal.TXSummary (
     collectTransaction,
     showTransaction,
+    showTXSummary,
     TXSummary(..),
     TXInputSummary(..),
     TransactionID
@@ -45,6 +46,7 @@ import Data.Void
 import GHC.Generics
 
 import Text.PrettyPrint.Annotated
+import Text.PrettyPrint.Annotated.HughesPJClass
 
 -- | Outputs decorated with what they were output from.  Sort of
 -- a proto-ContractID.
@@ -62,10 +64,10 @@ data EntryOf = EntryOf TransactionID TransactionEntry
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
   transactionID :: ShortContractID,
-  txResult :: String,
+  txResult :: Result,
   txOutputs:: [ShortContractID],
   txInputSummary :: [TXInputSummary],
-  signers :: [String]
+  signers :: [(String,String)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
@@ -84,6 +86,33 @@ type VDoc = Doc Void
 -- module, but it helps keep the number of function names down.
 class PrettyFae a where
   prettyFae :: (MonadState Storage m, MonadCatch m, MonadIO m) => a -> m VDoc
+
+instance Pretty ShortContractID where 
+  pPrint (ShortContractID digest') = text (show digest')
+
+instance Pretty TXSummary where
+   pPrint TXSummary{..} = do
+    let 
+      result = prettyPair ("result", txResult)
+      inputs = pPrint txInputSummary
+      outputs = prettyPair ("outputs", (pPrint txOutputs))
+      signers' = prettyList "signers" signers
+      entry = vcat [ result, outputs, signers', inputs ]
+    prettyHeader header entry
+    where header = labelHeader "Transaction" transactionID
+
+instance Pretty TXInputSummary where
+  pPrint TXInputSummary{..} = do
+    let
+      outputs = prettyPair ("outputs", txInputOutputs)
+      versions = prettyPair ("versions", txInputVersion)
+      nonce = prettyPair ("nonce", txInputNonce)
+      inputBody = vcat [ nonce, outputs, versions ]
+    prettyHeader header inputBody
+    where header = labelHeader "input" txInputTXID
+
+showTXSummary :: TXSummary -> IO ()
+showTXSummary txSummary = print $ pPrint txSummary
 
 -- | -
 instance PrettyFae Signers where
@@ -205,9 +234,9 @@ collectTransaction txID = do
   let Signers signers' = txSigners
   let 
       transactionID = txID
-      signers = show <$> Map.toList signers'
+      signers = (_2 %~ show) <$> (Map.toList signers')
       txInputSCIDs = nub inputOrder
-      txResult = show result 
+      txResult = result 
       txOutputs = snd <$> getTXOutputs (OutputOfTransaction txID outputs)
   txInputSummary <- getInputSummary txID  txInputSCIDs inputOutputs
   return $ TXSummary{..}

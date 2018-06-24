@@ -19,11 +19,8 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.Transaction,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
+    -- * Types and Instances for Clients
     module Blockchain.Fae.Internal.TXSummary,
-  --  collectTransaction,
-   -- showTransaction,
- --  TXSummary,
- --   TXInputSummary,
     -- * Cryptography types and functions
     module Blockchain.Fae.Internal.Crypto,
     -- * Fae exceptions

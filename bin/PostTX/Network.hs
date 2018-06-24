@@ -1,6 +1,6 @@
 module PostTX.Network where
 
-import Blockchain.Fae.FrontEnd (collectTransaction, showTransaction, TXSummary)
+import Blockchain.Fae.FrontEnd (collectTransaction, showTXSummary, TXSummary)
 
 import Common.JSON
 
@@ -24,4 +24,4 @@ sendReceive jsonEnabled request = do
     txSummary = decodeJSON $ txSummaryJSON :: Maybe TXSummary
   if jsonEnabled
     then LC8.putStrLn txSummaryJSON
-    else maybe (print txSummaryJSON) print txSummary
+    else maybe (print txSummaryJSON) showTXSummary txSummary

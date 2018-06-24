@@ -47,6 +47,12 @@ instance FromJSON TXInputSummary where
     txInputVersion  <- o .: "txInputVersion"
     return TXInputSummary{..}
 
+instance FromJSON Result where
+  parseJSON (A.String result) = return $ Result result
+    
+instance ToJSON Result where
+  toJSON result = A.String $ T.pack $ show result
+
 instance FromJSON ShortContractID where
   parseJSON (A.String scid) = return $ ShortContractID $ digest $ C8.pack $ T.unpack scid
 
