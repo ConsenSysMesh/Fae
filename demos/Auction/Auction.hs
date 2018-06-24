@@ -28,25 +28,32 @@ data AuctionState coin =
   RemitState (Map PublicKey (Maybe coin))
 
 auction :: 
-  (NFData a, Versionable a, HasEscrowIDs a, Currency coin, MonadTX m) =>
+  (ContractVal a, Currency coin, MonadTX m) =>
   a -> Valuation coin -> Natural -> m ()
 auction _ _ 0 = throw NoBids
 auction x bid0 maxBids = do
   seller <- signer "self" 
   let state0 = BidState Map.empty bid0 seller maxBids
-  newContract [bearer x] $ flip evalStateT state0 . auctionC x
+  newContract [bearer x] $ Auction state0 x
+  
+data Auction coin a = Auction (AuctionState coin) a
+
+instance (ContractVal a, Currency coin) => ContractName (Auction coin a) where
+  type ArgType (Auction coin a) = Maybe (Versioned coin)
+  type ValType (Auction coin a) = Maybe (Either coin a)
+  theContract (Auction state0 x) = usingState state0 $ auctionC x
 
 auctionC ::
   (Typeable a, HasEscrowIDs a, Currency coin) =>
   a -> 
   ContractM (StateT (AuctionState coin)) 
     (Maybe (Versioned coin))
-    (Maybe (Either (Versioned coin) (Versioned a)))
+    (Maybe (Either coin a))
 auctionC x bidM = do
   bidStage bidM 
   -- The last bidder was the one with the highest (winning) bid, so they
   -- get the prize
-  next <- release (Just $ Right $ Versioned x) 
+  next <- release (Just $ Right x) 
   remitStage next
   
 bidStage :: 
@@ -54,7 +61,7 @@ bidStage ::
   Maybe (Versioned coin) ->
   StateT 
     (AuctionState coin) 
-    (Fae (Maybe (Versioned coin)) (Maybe (Either (Versioned coin) (Versioned a))))
+    (Fae (Maybe (Versioned coin)) (Maybe (Either coin a)))
     ()
 bidStage Nothing = throw MustBid
 bidStage (Just (Versioned inc)) = do
@@ -92,7 +99,7 @@ remitStage ::
   ContractM 
     (StateT (AuctionState coin)) 
     (Maybe (Versioned coin)) 
-    (Maybe (Either (Versioned coin) (Versioned a)))
+    (Maybe (Either coin a))
 remitStage Nothing = do
   RemitState remits <- get
   sender <- signer "self"
@@ -105,7 +112,7 @@ remitStage Nothing = do
   -- Disable them from getting more money
   put $ RemitState $ Map.insert sender Nothing remits
   -- Remit
-  next <- release (Just $ Left $ Versioned bid)
+  next <- release (Just $ Left bid)
   -- Loop.  This contract never terminates, even after all the money is
   -- returned to the losers and paid to the seller.
   remitStage next
