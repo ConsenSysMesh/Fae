@@ -17,12 +17,14 @@ import Blockchain.Fae.FrontEnd
 
 import qualified Data.ByteString.Char8 as C8
 
-import Data.Aeson (eitherDecode, FromJSON, ToJSON, toJSON, parseJSON, object, withObject, (.=), (.:))
+import Data.Aeson (eitherDecode, FromJSON, ToJSON, toJSON, parseJSON, object, withObject, (.=), (.:), (.:?))
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as LC8
+import Text.Read
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as X
 import qualified Data.Text.Lazy.Encoding as D
+import Data.Maybe
 
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = object [
@@ -60,10 +62,11 @@ instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
     transactionID <- o .: "transactionID"
     txResult  <- o .: "txResult"
-    txOutputs <- o .: "txOutputs"
+    txOutputs' <- o .:? "txOutputs"
     txInputSummary  <- o .: "txInputSummary"
     signers <- o .: "signers"
-    return TXSummary{ txOutputs = read txOutputs, ..}
+    let txOutputs = read $ fromMaybe [] txOutputs'
+    return TXSummary{..}
 
 encodeJSON ::(ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
