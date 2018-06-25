@@ -62,10 +62,10 @@ data EntryOf = EntryOf TransactionID TransactionEntry
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
   transactionID :: ShortContractID,
-  txResult :: Result,
+  txResult :: String,
   txOutputs:: [ShortContractID],
   txInputSummary :: [TXInputSummary],
-  signers :: [(String,String)]
+  signers :: [(String, String)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
@@ -91,10 +91,10 @@ instance Pretty ShortContractID where
 instance Pretty TXSummary where
    pPrint TXSummary{..} = do
     let 
-      result = prettyPair ("result", txResult)
+      result = prettyPair' ("Result", txResult)
       inputs = pPrint txInputSummary
       outputs = prettyPair ("outputs", (pPrint txOutputs))
-      signers' = prettyList "signers" signers
+      signers' = prettyList' "signers" signers 
       entry = vcat [ result, outputs, signers', inputs ]
     prettyHeader header entry
     where header = labelHeader "Transaction" transactionID
@@ -103,7 +103,7 @@ instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = do
     let
       outputs = prettyPair ("outputs", txInputOutputs)
-      versions = prettyPair ("versions", txInputVersion)
+      versions = prettyPair' ("versions", txInputVersion)
       nonce = prettyPair ("nonce", txInputNonce)
       inputBody = vcat [ nonce, outputs, versions ]
     prettyHeader header inputBody
@@ -211,6 +211,19 @@ prettyPairs = vcat . map prettyPair
 prettyPair :: (Show v) => (String, v) -> Doc ann
 prettyPair (x, y) = text x <> colon <+> text (show y)
 
+-- | Converts a string and list of "lines" into a body with header.
+prettyList' :: String -> [(String, String)] -> Doc ann
+prettyList' headString bodyList = 
+  prettyHeader (text headString) (prettyPairs' bodyList)
+
+-- | Converts a list of pairs into a display, without header.
+prettyPairs' ::  [(String, String)] -> Doc ann
+prettyPairs' = vcat . map prettyPair'
+
+-- | Prints a key-value pair with a colon.
+prettyPair' ::  (String, String) -> Doc ann
+prettyPair' (x, y) = text x <> colon <+> text y
+
 -- | Flushes out all exceptions present in the input, returning a formatted
 -- error message if one is found.
 displayException :: 
@@ -234,7 +247,7 @@ collectTransaction txID = do
       transactionID = txID
       signers = (_2 %~ show) <$> (Map.toList signers')
       txInputSCIDs = nub inputOrder
-      txResult = result 
+      txResult = show result 
       txOutputs = snd <$> getTXOutputs (OutputOfTransaction txID outputs)
   txInputSummary <- getInputSummary txID  txInputSCIDs inputOutputs
   return $ TXSummary{..}

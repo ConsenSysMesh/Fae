@@ -49,7 +49,7 @@ instance FromJSON TXInputSummary where
 
 instance FromJSON Result where
   parseJSON (A.String result) = return $ Result result
-    
+
 instance ToJSON Result where
   toJSON result = A.String $ T.pack $ show result
 
@@ -63,7 +63,7 @@ instance FromJSON TXSummary where
     txOutputs <- o .: "txOutputs"
     txInputSummary  <- o .: "txInputSummary"
     signers <- o .: "signers"
-    return TXSummary{txOutputs = read txOutputs, ..}
+    return TXSummary{ txOutputs = read txOutputs, ..}
 
 encodeJSON ::(ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
