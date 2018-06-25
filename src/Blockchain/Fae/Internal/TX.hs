@@ -152,6 +152,7 @@ interpretImportedValue cID typeS valBS = handle fixGHCErrors $ do
       ]
     importImports =
      [
+       "Prelude",
        "Type.Reflection", 
        "Control.Monad.State",
        "Data.ByteString",

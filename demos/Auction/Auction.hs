@@ -112,7 +112,8 @@ remitStage Nothing = do
   -- Disable them from getting more money
   put $ RemitState $ Map.insert sender Nothing remits
   -- Remit
-  next <- release (Just $ Left bid)
+  Just (_, Just remit) <- change bid 0
+  next <- release (Just $ Left remit)
   -- Loop.  This contract never terminates, even after all the money is
   -- returned to the losers and paid to the seller.
   remitStage next

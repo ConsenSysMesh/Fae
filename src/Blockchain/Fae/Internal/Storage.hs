@@ -238,11 +238,11 @@ mLens l = lens (>>= view l) (\ms ma -> set l ma <$> ms)
 -- | Enforces nonce-correctness when it is required
 checkNonce :: ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
 checkNonce _ Nothing = lens (fmap fst) nonceSetter
-checkNonce cID (Just n) = lens (fmap $ \(x, m) -> f m x) checkNonceSetter where
-  checkNonceSetter xM@(Just (_, m)) yM = f m $ nonceSetter xM yM
+checkNonce cID (Just n) = lens (>>= uncurry (flip f)) checkNonceSetter where
+  checkNonceSetter xM@(Just (_, m)) yM = f m =<< nonceSetter xM yM
   checkNonceSetter Nothing yM = nonceSetter Nothing yM
-  f :: Int -> b -> b
-  f m x = if m == n then x else throw $ BadNonce cID n m
+  f :: Int -> b -> Maybe b
+  f m x = if m == n then Just x else Nothing
 
 -- | Updating a contract entry nonce-correctly
 nonceSetter :: Maybe (a, Int) -> Maybe a -> Maybe (a, Int)
