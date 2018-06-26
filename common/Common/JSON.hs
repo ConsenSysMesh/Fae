@@ -65,8 +65,9 @@ instance FromJSON TXSummary where
     txOutputs' <- o .:? "txOutputs"
     txInputSummary  <- o .: "txInputSummary"
     signers <- o .: "signers"
-    let txOutputs = read $ fromMaybe [] txOutputs'
+    let txOutputs = fromMaybe raiseErr $ readMaybe $ fromMaybe raiseErr txOutputs'
     return TXSummary{..}
+    where raiseErr = error "Can't parse txOutputs when decoding TXSummary JSON"
 
 encodeJSON ::(ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
