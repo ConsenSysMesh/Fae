@@ -4,6 +4,7 @@ import Blockchain.Fae.FrontEnd (collectTransaction, showTXSummary, TXSummary)
 
 import Common.JSON
 
+import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import Data.Maybe
 
@@ -22,6 +23,7 @@ sendReceive jsonEnabled request = do
   let 
     txSummaryJSON = responseBody response
     txSummary = decodeJSON $ txSummaryJSON :: Maybe TXSummary
+    txSummary' = A.eitherDecode txSummaryJSON  :: Either String TXSummary
   if jsonEnabled
     then LC8.putStrLn txSummaryJSON
-    else maybe (print txSummaryJSON) showTXSummary txSummary
+    else either (print . (++) "Failed To Parse TXSummary JSON: ") showTXSummary txSummary'
