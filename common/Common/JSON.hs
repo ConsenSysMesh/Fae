@@ -56,7 +56,8 @@ instance ToJSON Result where
   toJSON result = A.String $ T.pack $ show result
 
 instance FromJSON ShortContractID where
-  parseJSON (A.String scid) = return $ ShortContractID $ digest $ C8.pack $ T.unpack scid
+  parseJSON (A.String scid) = return $ fromMaybe (error $ errMsg ++ (show scid)) (readMaybe $ T.unpack scid)
+    where errMsg = "Couldn't read ShortContractID whilst parsing TXSummary JSON: "
 
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
