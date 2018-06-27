@@ -63,7 +63,7 @@ data EntryOf = EntryOf TransactionID TransactionEntry
 data TXSummary = TXSummary {
   transactionID :: ShortContractID,
   txResult :: String,
-  txOutputs:: [ShortContractID],
+  txOutputs:: [Int],
   txInputSummary :: [TXInputSummary],
   signers :: [(String, String)]
 } deriving (Show, Generic)
@@ -71,7 +71,7 @@ data TXSummary = TXSummary {
 data TXInputSummary = TXInputSummary {
   txInputTXID :: ShortContractID,
   txInputNonce :: Int,
-  txInputOutputs :: [ShortContractID],
+  txInputOutputs :: [Int],
   txInputVersion :: String
 } deriving (Show, Generic)
 
@@ -86,13 +86,13 @@ class PrettyFae a where
   prettyFae :: (MonadState Storage m, MonadCatch m, MonadIO m) => a -> m VDoc
 
 instance Pretty ShortContractID where 
-  pPrint (ShortContractID digest') = text (show digest')
+  pPrint scid = text (show scid)
 
 instance Pretty TXSummary where
    pPrint TXSummary{..} = do
     let 
-      result = prettyPair' ("Result", txResult)
-      inputs = pPrint txInputSummary
+      result = prettyPair' ("result", txResult)
+      inputs = vcat $ pPrint <$> txInputSummary
       outputs = prettyPair ("outputs", (pPrint txOutputs))
       signers' = prettyList' "signers" signers 
       entry = vcat [ result, outputs, signers', inputs ]
@@ -129,6 +129,7 @@ instance PrettyFae OutputOf where
         makeOutputCIDs (InputOutput txID scID) outputs
       makeOutputCIDs makeCID Outputs{..} = 
         IntMap.mapWithKey (\i _ -> makeCID i) outputMap
+
 -- | -
 instance PrettyFae VersionRepMap where
   prettyFae vers = do
@@ -241,6 +242,7 @@ showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
 -- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
+  liftIO $ print ("collect transaction" ++ show txID)
   TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   let Signers signers' = txSigners
   let 
@@ -248,7 +250,7 @@ collectTransaction txID = do
       signers = (_2 %~ show) <$> (Map.toList signers')
       txInputSCIDs = nub inputOrder
       txResult = show result 
-      txOutputs = snd <$> getTXOutputs (OutputOfTransaction txID outputs)
+      txOutputs = getTXOutputs (OutputOfTransaction txID outputs)
   txInputSummary <- getInputSummary txID  txInputSCIDs inputOutputs
   return $ TXSummary{..}
 
@@ -260,12 +262,12 @@ getInputSummary txID inputSCIDs inputMap = do
         input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
         ~InputOutputVersions{..} = input
         txInputVersion = show $ Map.toList $ getVersionMap iVersions
-        inputOutputSCIDs = snd <$> (getTXOutputs (OutputOfContract txID scID iOutputs))
+        inputOutputSCIDs = getTXOutputs (OutputOfContract txID scID iOutputs)
         n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
       return TXInputSummary { txInputTXID = txID, txInputNonce = n, txInputOutputs = inputOutputSCIDs, txInputVersion=txInputVersion}
 
-getTXOutputs :: OutputOf -> [(String, ShortContractID)]
-getTXOutputs outs = outputsToList $ outputCIDs outs
+getTXOutputs :: OutputOf -> [Int]
+getTXOutputs outs = IntMap.keys $ outputCIDs outs
   where
     outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
     outputCIDs (OutputOfTransaction txID outputs) = 

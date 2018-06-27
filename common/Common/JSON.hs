@@ -44,9 +44,11 @@ instance ToJSON TXSummary where
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     txInputTXID <- o .: "txInputTXID"
-    txInputNonce  <- o .: "txInputNonce"
-    txInputOutputs <- o .: "txInputOutputs"
+    txInputNonce'  <- o .: "txInputNonce"
+    txInputOutputs' <- o .: "txInputOutputs"
     txInputVersion  <- o .: "txInputVersion"
+    let txInputNonce = fromJust $(readMaybe txInputNonce' :: Maybe Int)
+    let txInputOutputs = fromJust (readMaybe txInputOutputs' :: Maybe [Int])
     return TXInputSummary{..}
 
 instance FromJSON Result where
@@ -75,3 +77,6 @@ encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
 
 decodeJSON :: (FromJSON a) => LC8.ByteString -> Maybe a
 decodeJSON = A.decode
+
+eitherDec :: (FromJSON a) => LC8.ByteString -> Either String a
+eitherDec = A.eitherDecode
