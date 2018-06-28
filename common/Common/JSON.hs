@@ -47,7 +47,7 @@ instance FromJSON TXInputSummary where
     txInputNonce'  <- o .: "txInputNonce"
     txInputOutputs' <- o .: "txInputOutputs"
     txInputVersion  <- o .: "txInputVersion"
-    let txInputNonce = fromJust $(readMaybe txInputNonce' :: Maybe Int)
+    let txInputNonce = fromJust (readMaybe txInputNonce' :: Maybe Int)
     let txInputOutputs = fromJust (readMaybe txInputOutputs' :: Maybe [Int])
     return TXInputSummary{..}
 
