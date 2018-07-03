@@ -25,10 +25,10 @@ instance ToJSON GetFaethTX where
 instance ToRequest GetFaethTX where
   requestMethod _ = "eth_getTransactionByHash"
 
-submitFaeth :: String -> Maybe Integer -> Maybe EthAddress -> TXSpec Salt -> IO ()
+--submitFaeth :: String -> Maybe Integer -> Maybe EthAddress -> TXSpec Salt -> IO ()
 submitFaeth host valM faethTo TXSpec{specModules = LoadedModules{..}, ..} = do
   senderEthAccount <- inputAccount
-  runProtocolT $ do
+  runProtocolT "127.0.0.1" 8000 $ do
     ethTXID <- sendReceiveProtocolT 
       FaethTXData
       {
@@ -50,7 +50,7 @@ submitFaeth host valM faethTo TXSpec{specModules = LoadedModules{..}, ..} = do
 resubmitFaeth :: String -> EthTXID -> FaethArgs -> IO ()
 resubmitFaeth host ethTXID FaethArgs{..} = do
   senderEthAccount <- inputAccount
-  runProtocolT $ do
+  runProtocolT "127.0.0.1" 8000 $ do
     faethTXData <- sendReceiveProtocolT $ GetFaethTX ethTXID
     newKeys <- liftIO $ mapM resolveKeyName newKeyNames
     let 

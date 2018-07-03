@@ -60,7 +60,7 @@ main = do
       void $ fork $ runFae tID flags
       case serverMode of
         FaeMode -> runFaeServer (Proxy @String) queueTXExecData 
-        FaethMode -> runFaeth tID
+        FaethMode -> runFaeth flags tID
     (ArgsUsage xs) -> liftIO $ case xs of
       [] -> do
         usage

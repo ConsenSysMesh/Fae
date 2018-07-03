@@ -159,4 +159,3 @@ usage = do
       "",
       "  All IDs, and public keys, are 32-byte unprefixed hex strings"
     ]
-
