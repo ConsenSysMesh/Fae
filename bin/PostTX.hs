@@ -85,7 +85,7 @@ usage = do
       "    --faeth-add-signature name    Sign the Fae portion of an existing", 
       "                                  Faeth transaction as the given identity",
       "",
-      "    with ether",
+      "    with either",
       "    --faeth-eth-value number      Set the ether value sent with a Faeth", 
       "                                  transaction",
       "    --faeth-eth-to address        Set the Ethereum 'to' address for a", 

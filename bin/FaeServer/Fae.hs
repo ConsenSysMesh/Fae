@@ -76,7 +76,7 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
 runTXExecData View{..} = do
   void $ recallHistory parentM
   txSummary <- lift $ collectTransaction viewTXID
-  ioAtomically $ putTMVar resultVar (show txSummary)
+  ioAtomically $ putTMVar resultVar (encodeJSON txSummary)
 
 innerRun :: 
   (MonadIO m, MonadMask m) =>

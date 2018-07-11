@@ -1,6 +1,6 @@
 module PostTX.Network where
 
-import Blockchain.Fae.FrontEnd (collectTransaction, showTXSummary, TXSummary)
+import Blockchain.Fae.FrontEnd (collectTransaction, TXSummary)
 
 import Common.JSON
 
@@ -9,6 +9,9 @@ import qualified Data.ByteString.Lazy.Char8 as LC8
 import Data.Maybe
 
 import Network.HTTP.Client
+
+import Text.PrettyPrint.Annotated.HughesPJClass
+
 
 requestURL :: String -> Request
 requestURL host = fromMaybe (error $ "Bad host string: " ++ host) $ 
@@ -22,8 +25,7 @@ sendReceive jsonEnabled request = do
   response <- httpLbs request manager 
   let 
     txSummaryJSON = responseBody response
-    txSummary = decodeJSON $ txSummaryJSON :: Maybe TXSummary
-    txSummary' = A.eitherDecode txSummaryJSON  :: Either String TXSummary
+    txSummaryE = A.eitherDecode txSummaryJSON  :: Either String TXSummary
   if jsonEnabled
     then LC8.putStrLn txSummaryJSON
-    else either (print . (++) "Failed To Parse TXSummary JSON: ") showTXSummary txSummary'
+    else putStrLn $ either ((++) "Failed To Parse TXSummary JSON: ") prettyShow txSummaryE

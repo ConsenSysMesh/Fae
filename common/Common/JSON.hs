@@ -11,6 +11,7 @@ are generally useful both to the server (@faeServer@) and the client (@postTX@).
 
 -}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Common.JSON where 
 
 import Blockchain.Fae.FrontEnd
@@ -25,58 +26,65 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as X
 import qualified Data.Text.Lazy.Encoding as D
 import Data.Maybe
+import Data.Typeable
 
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = object [
     "txInputTXID" .= show txInputTXID,
     "txInputNonce" .= show txInputNonce,
     "txInputOutputs" .= show txInputOutputs,
-    "txInputVersion" .= txInputVersion ]
+    "txInputVersions" .= txInputVersions ]
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
     "transactionID" .= show transactionID,
     "txResult" .= txResult,
     "txOutputs" .= show txOutputs,
-    "txInputSummary" .= txInputSummary,
+    "txInputSummaries" .= txInputSummaries,
     "signers" .= signers ]
 
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
-    txInputTXID <- o .: "txInputTXID"
-    txInputNonce'  <- o .: "txInputNonce"
-    txInputOutputs' <- o .: "txInputOutputs"
-    txInputVersion  <- o .: "txInputVersion"
-    let txInputNonce = fromJust $(readMaybe txInputNonce' :: Maybe Int)
-    let txInputOutputs = fromJust (readMaybe txInputOutputs' :: Maybe [Int])
-    return TXInputSummary{..}
+    TXInputSummary
+      <$> o .: "txInputTXID"
+      <*> (either fail return . readEither =<< (o .: "txInputNonce"))
+      <*> (either fail return . readEither =<< (o .: "txInputOutputs"))
+      <*> o .: "txInputVersions"
 
-instance FromJSON Result where
-  parseJSON (A.String result) = return $ Result result
+instance FromJSON PublicKey where
+  parseJSON (A.String vid) = either fail return $ readEither (T.unpack vid)
 
-instance ToJSON Result where
-  toJSON result = A.String $ T.pack $ show result
+instance ToJSON PublicKey where
+  toJSON vid = A.String $ T.pack $ show vid
+
+instance FromJSON VersionID where
+  parseJSON (A.String vid) = either fail return $ readEither (T.unpack vid)
+
+instance ToJSON VersionID where
+  toJSON vid = A.String $ T.pack $ show vid
+
+instance Read TypeRep where
+  readsPrec = readsPrec
+
+instance FromJSON TypeRep where
+  parseJSON (A.String vid) = either fail return $ readEither (T.unpack vid)
+
+instance ToJSON TypeRep where
+  toJSON vid = A.String $ T.pack $ show vid
 
 instance FromJSON ShortContractID where
-  parseJSON (A.String scid) = return $ fromMaybe (error $ errMsg ++ (show scid)) (readMaybe $ T.unpack scid)
-    where errMsg = "Couldn't read ShortContractID whilst parsing TXSummary JSON: "
+  parseJSON (A.String scid) = either fail return $ readEither (T.unpack scid)
 
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
     transactionID <- o .: "transactionID"
     txResult  <- o .: "txResult"
     txOutputs' <- o .:? "txOutputs"
-    txInputSummary  <- o .: "txInputSummary"
+    txInputSummaries  <- o .: "txInputSummaries"
     signers <- o .: "signers"
     let txOutputs = fromMaybe raiseErr $ readMaybe $ fromMaybe raiseErr txOutputs'
     return TXSummary{..}
     where raiseErr = error "Can't parse txOutputs when decoding TXSummary JSON"
-
+    
 encodeJSON ::(ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
-
-decodeJSON :: (FromJSON a) => LC8.ByteString -> Maybe a
-decodeJSON = A.decode
-
-eitherDec :: (FromJSON a) => LC8.ByteString -> Either String a
-eitherDec = A.eitherDecode

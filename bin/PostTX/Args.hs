@@ -131,8 +131,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
         "and --new-sender-account"
   | argJSON && (argLazy || useFaeth)
     = error $
-        "--json is incompatible with --lazy, --faeth*" ++
-        "and --new-sender-account"
+        "--json is incompatible with --lazy, --faeth*"
   | argView && (argLazy || useFaeth)
     = error
         "--view is incompatible with --lazy, --faeth*, and --new-sender-account"

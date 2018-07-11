@@ -13,17 +13,17 @@ Note that the pretty-printing has to be done in a 'FaeStorage' monad, so the cla
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.TXSummary (
     collectTransaction,
-    showTransaction,
-    showTXSummary,
     TXSummary(..),
     TXInputSummary(..),
     TransactionID
 ) where
 
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
+import Blockchain.Fae.Internal.TX
 
 import Common.Lens hiding ((.=))
 
@@ -39,9 +39,10 @@ import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
 import Data.List
+import Data.Typeable
 import Data.Void
 
-import GHC.Generics
+import GHC.Generics hiding (to)
 
 import Text.PrettyPrint.Annotated
 import Text.PrettyPrint.Annotated.HughesPJClass
@@ -63,16 +64,16 @@ data EntryOf = EntryOf TransactionID TransactionEntry
 data TXSummary = TXSummary {
   transactionID :: ShortContractID,
   txResult :: String,
-  txOutputs:: [Int],
-  txInputSummary :: [TXInputSummary],
-  signers :: [(String, String)]
+  txOutputs:: [(Int, ShortContractID)],
+  txInputSummaries :: [TXInputSummary],
+  signers :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
   txInputTXID :: ShortContractID,
   txInputNonce :: Int,
-  txInputOutputs :: [Int],
-  txInputVersion :: String
+  txInputOutputs :: [(Int, ShortContractID)],
+  txInputVersions :: [(VersionID, TypeRep)]
 } deriving (Show, Generic)
 
 makeLenses ''TXSummary
@@ -80,116 +81,25 @@ makeLenses ''TXSummary
 -- | Helpful shorthand; we don't use annotations.
 type VDoc = Doc Void
 
--- | This class isn't really necessary, as it's not used outside this
--- module, but it helps keep the number of function names down.
-class PrettyFae a where
-  prettyFae :: (MonadState Storage m, MonadCatch m, MonadIO m) => a -> m VDoc
-
 instance Pretty ShortContractID where 
   pPrint scid = text (show scid)
 
 instance Pretty TXSummary where
-   pPrint TXSummary{..} = do
-    let 
-      result = prettyPair' ("result", txResult)
-      inputs = vcat $ pPrint <$> txInputSummary
-      outputs = prettyPair ("outputs", (pPrint txOutputs))
-      signers' = prettyList' "signers" signers 
-      entry = vcat [ result, outputs, signers', inputs ]
-    prettyHeader header entry
+   pPrint TXSummary{..} = prettyHeader header entry
     where header = labelHeader "Transaction" transactionID
+          result = prettyPair ("result", UnquotedString txResult)
+          inputs = vcat $ pPrint <$> txInputSummaries
+          outputs = prettyPair ("outputs", (pPrint txOutputs))
+          signers' = prettyList "signers" signers 
+          entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = do
-    let
-      outputs = prettyPair ("outputs", txInputOutputs)
-      versions = prettyPair' ("versions", txInputVersion)
-      nonce = prettyPair ("nonce", txInputNonce)
-      inputBody = vcat [ nonce, outputs, versions ]
-    prettyHeader header inputBody
+  pPrint TXInputSummary{..} = prettyHeader header inputBody
     where header = labelHeader "input" txInputTXID
-
-showTXSummary :: TXSummary -> IO ()
-showTXSummary txSummary = print $ pPrint txSummary
-
--- | -
-instance PrettyFae Signers where
-  prettyFae = return . prettyList "txSigners" . Map.toList . getSigners
-
--- | -
-instance PrettyFae OutputOf where
-  prettyFae outs = do
-    outputBody <- displayException $ prettyPairs $ outputsToList $ outputCIDs outs
-    return $ prettyHeader (text "outputs") outputBody
-    where
-      outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
-      outputCIDs (OutputOfTransaction txID outputs) = 
-        makeOutputCIDs (TransactionOutput txID) outputs
-      outputCIDs (OutputOfContract txID scID outputs) =
-        makeOutputCIDs (InputOutput txID scID) outputs
-      makeOutputCIDs makeCID Outputs{..} = 
-        IntMap.mapWithKey (\i _ -> makeCID i) outputMap
-
--- | -
-instance PrettyFae VersionRepMap where
-  prettyFae vers = do
-    versionBody <- displayException $
-      prettyPairs $ map (_1 %~ show) $ Map.toList $ getVersionMap vers
-    return $ prettyHeader (text "versions") versionBody
-
--- | -
-instance PrettyFae InputOf where
-  prettyFae (InputOf txID scID n ~InputOutputVersions{..}) = do
-    outputsD <- prettyFae (OutputOfContract txID scID iOutputs)
-    versionsD <- prettyFae iVersions
-    let nonceD = prettyPair ("nonce", n)
-    inputBody <- displayException $ vcat
-      [
-        nonceD,
-        outputsD,
-        versionsD
-      ]
-    return $ prettyHeader header inputBody
-    where header = labelHeader "input" scID
-
--- | -
-instance PrettyFae InputsOf where
-  prettyFae (InputsOf txID inputSCIDs inputMap) = 
-    fmap vcat $ forM (nub inputSCIDs) $ \scID -> do
-      let 
-        input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
-        ~InputOutputVersions{..} = input
-      storage <- get
-      let n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
-      prettyFae $ InputOf txID scID n input
-
--- | -
-instance PrettyFae EntryOf where
-  prettyFae (EntryOf txID ~TransactionEntry{..}) = do
-    resultD <- displayException $ text $ show result
-    outputsD <- prettyFae $ OutputOfTransaction txID outputs
-    inputsD <- prettyFae $ InputsOf txID inputOrder inputOutputs
-    signersD <- prettyFae txSigners
-    return $ prettyHeader header $ vcat
-      [
-        prettyPair ("result", resultD),
-        outputsD,
-        signersD,
-        inputsD
-      ]
-    where header = labelHeader "Transaction" txID
-
--- | Convenience function for neatly showing a 'TransactionEntry' by ID,
--- rather than actually going into the storage to get and format it.  It
--- catches all exceptions thrown by contracts or transactions and prints
--- an error message instead; thus, whatever actually did complete is part
--- of the output.
-showTransaction ::
-  (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m String
-showTransaction txID = do
-  entry <- use $ 
-    _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  render <$> prettyFae (EntryOf txID entry)
+          outputs = prettyPair ("outputs", txInputOutputs)
+          versions = prettyPair ("versions", txInputVersions)
+          nonce = prettyPair ("nonce", txInputNonce)
+          inputBody = vcat [ nonce, outputs, versions ]
 
 -- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc ann
@@ -212,64 +122,34 @@ prettyPairs = vcat . map prettyPair
 prettyPair :: (Show v) => (String, v) -> Doc ann
 prettyPair (x, y) = text x <> colon <+> text (show y)
 
--- | Converts a string and list of "lines" into a body with header.
-prettyList' :: String -> [(String, String)] -> Doc ann
-prettyList' headString bodyList = 
-  prettyHeader (text headString) (prettyPairs' bodyList)
-
--- | Converts a list of pairs into a display, without header.
-prettyPairs' ::  [(String, String)] -> Doc ann
-prettyPairs' = vcat . map prettyPair'
-
--- | Prints a key-value pair with a colon.
-prettyPair' ::  (String, String) -> Doc ann
-prettyPair' (x, y) = text x <> colon <+> text y
-
--- | Flushes out all exceptions present in the input, returning a formatted
--- error message if one is found.
-displayException :: 
-  (MonadCatch m, MonadIO m) => VDoc -> m VDoc
-displayException doc = 
-  catchAll (liftIO $ evaluate $ force doc) (return . showException)
-
--- | Actually prints the exception nicely.  Due to call stack cruft we only
--- take the first line.
-showException :: SomeException -> VDoc
-showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
-  safeHead [] = []
-  safeHead (x : _) = x
-
 -- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
-  liftIO $ print ("collect transaction" ++ show txID)
   TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  let Signers signers' = txSigners
   let 
       transactionID = txID
-      signers = (_2 %~ show) <$> (Map.toList signers')
+      signers = Map.toList $ getSigners txSigners
       txInputSCIDs = nub inputOrder
       txResult = show result 
       txOutputs = getTXOutputs (OutputOfTransaction txID outputs)
-  txInputSummary <- getInputSummary txID  txInputSCIDs inputOutputs
+  txInputSummaries <- getInputSummary txID  txInputSCIDs inputOutputs
   return $ TXSummary{..}
 
 getInputSummary :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> [ShortContractID] -> Map.Map ShortContractID InputOutputVersions -> m [TXInputSummary]
 getInputSummary txID inputSCIDs inputMap = do
-    storage <- get
     forM (nub inputSCIDs) $ \scID -> do
       let 
         input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
         ~InputOutputVersions{..} = input
-        txInputVersion = show $ Map.toList $ getVersionMap iVersions
-        inputOutputSCIDs = getTXOutputs (OutputOfContract txID scID iOutputs)
-        n = snd $ storage ^. nonceAt iRealID . defaultLens (undefined, -1)
-      return TXInputSummary { txInputTXID = txID, txInputNonce = n, txInputOutputs = inputOutputSCIDs, txInputVersion=txInputVersion}
+        txInputVersions = Map.toList $ getVersionMap iVersions
+        txInputOutputs = getTXOutputs (OutputOfContract txID scID iOutputs)
+      txInputNonce <- use $ nonceAt iRealID . to (fmap snd) . defaultLens (-1)
+      return TXInputSummary {txInputTXID = txID, ..}
 
-getTXOutputs :: OutputOf -> [Int]
-getTXOutputs outs = IntMap.keys $ outputCIDs outs
+getTXOutputs :: OutputOf -> [(Int, ShortContractID)]
+getTXOutputs outs = outputsToList $ outputCIDs outs
   where
-    outputsToList = map (_1 %~ show) . IntMap.toList . IntMap.map shorten
+    outputsToList = IntMap.toList . IntMap.map shorten
     outputCIDs (OutputOfTransaction txID outputs) = 
       makeOutputCIDs (TransactionOutput txID) outputs
     outputCIDs (OutputOfContract txID scID outputs) =

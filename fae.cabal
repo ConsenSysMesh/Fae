@@ -177,6 +177,7 @@ executable postTX
     http-client,
     lens,
     mtl,
+    pretty,
     process,
     template-haskell,
     text,

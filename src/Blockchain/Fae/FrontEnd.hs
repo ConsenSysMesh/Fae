@@ -33,7 +33,8 @@ import Blockchain.Fae.Internal.Crypto hiding
   (
     Serialize, PassFail, PartialSerialize,
     compareSerialize, putPartialSerialize, 
-    getPartialSerialize, readsPrecSer
+    getPartialSerialize, readsPrecSer,
+    EdPublicKey
   )
 import Blockchain.Fae.Internal.Exceptions hiding (unsafeIsDefined)
 import Blockchain.Fae.Internal.IDs hiding
