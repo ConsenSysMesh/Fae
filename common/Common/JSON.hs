@@ -67,10 +67,10 @@ instance Read TypeRep where
   readsPrec = readsPrec
 
 instance FromJSON TypeRep where
-  parseJSON (A.String vid) = either fail return $ readEither (T.unpack vid)
+  parseJSON (A.String a) = either fail return $ readEither (T.unpack a)
 
 instance ToJSON TypeRep where
-  toJSON vid = A.String $ T.pack $ show vid
+  toJSON a = A.String $ T.pack $ show a
 
 instance FromJSON ShortContractID where
   parseJSON (A.String scid) = either fail return $ readEither (T.unpack scid)
