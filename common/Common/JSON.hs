@@ -18,7 +18,7 @@ import Blockchain.Fae.FrontEnd
 
 import qualified Data.ByteString.Char8 as C8
 
-import Data.Aeson (eitherDecode, FromJSON, ToJSON, toJSON, parseJSON, object, withObject, (.=), (.:), (.:?))
+import Data.Aeson (eitherDecode, FromJSON, ToJSON, toJSON, parseJSON, object, withText, withObject, (.=), (.:), (.:?))
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import Text.Read
@@ -52,16 +52,18 @@ instance FromJSON TXInputSummary where
       <*> o .: "txInputVersions"
 
 instance FromJSON PublicKey where
-  parseJSON (A.String vid) = either fail return $ readEither (T.unpack vid)
+  parseJSON = withText "VersionID" $ \pKey -> do
+    either fail return $ readEither (T.unpack pKey)
 
 instance ToJSON PublicKey where
-  toJSON vid = A.String $ T.pack $ show vid
+  toJSON vID = A.String $ T.pack $ show vID
 
 instance FromJSON VersionID where
-  parseJSON (A.String vid) = either fail return $ readEither (T.unpack vid)
+  parseJSON = withText "VersionID" $ \vID -> do
+    either fail return $ readEither (T.unpack vID)
 
 instance ToJSON VersionID where
-  toJSON vid = A.String $ T.pack $ show vid
+  toJSON vID = A.String $ T.pack $ show vID
 
 instance Read TypeRep where
   readsPrec = readsPrec
@@ -73,7 +75,8 @@ instance ToJSON TypeRep where
   toJSON a = A.String $ T.pack $ show a
 
 instance FromJSON ShortContractID where
-  parseJSON (A.String scid) = either fail return $ readEither (T.unpack scid)
+  parseJSON = withText "ShortContractID" $ \scid -> do
+    either fail return $ readEither (T.unpack scid)
 
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
