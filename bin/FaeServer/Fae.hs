@@ -55,7 +55,7 @@ runFae port mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ d
   where portDir = "port-" ++ show port
 
 runTXExecData :: 
-  (MonadIO m, MonadMask m) => 
+  (Typeable m, MonadIO m, MonadMask m) => 
   TXExecData -> FaeInterpretWithHistoryT m ()
 runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
   dup <- gets $ Map.member txID . txStorageAndCounts
@@ -81,7 +81,7 @@ runTXExecData View{..} = do
 
 runTXExecData ExportValue{..} = do
   void $ recallHistory parentM
-  exportResult <- lift $ getExportedValue calledInTX shortCID
+  exportResult <- lift $ lift $ getExportedValue calledInTX shortCID
   ioAtomically $ putTMVar exportResultVar exportResult
 
 runTXExecData ImportValue{..} = do
@@ -91,7 +91,7 @@ runTXExecData ImportValue{..} = do
   ioAtomically $ putTMVar signalVar ()
 
 innerRun :: 
-  (MonadIO m, MonadMask m) =>
+  (Typeable m, MonadIO m, MonadMask m) =>
   TX -> Maybe TransactionID -> (TransactionID -> IO ()) ->
   FaeInterpretWithHistoryT m Integer
 innerRun tx@TX{..} parentM placeModules = do

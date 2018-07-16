@@ -55,6 +55,17 @@ data Storage =
     importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap)
   }
 
+-- | A general storage transformer; used for running transactions in IO.
+newtype FaeStorageT m a = FaeStorageT { getFaeStorageT :: StateT Storage m a }
+  deriving 
+    (
+      Functor, Applicative, Monad, 
+      MonadThrow, MonadCatch, MonadMask, MonadIO
+    )
+-- | The version used for running pure transactions
+newtype FaeStorage a = FaeStorage { getFaeStorage :: State Storage a }
+  deriving (Functor, Applicative, Monad)
+
 -- | Each transaction can produce outputs in two different ways (cf.
 -- 'ContractID'), has an associated "signer" public key, and a result.
 --
@@ -110,6 +121,9 @@ data Outputs =
 
 -- | Convenient abbreviation
 type Types = Map ContractID SomeTypeRep
+
+-- | Encapsulates the arguments to 'addImportedValue'
+newtype SomeValue a = SomeValue { someValueBytes :: ByteString }
 
 -- * Template Haskell
 
@@ -276,28 +290,28 @@ listToOutputs mkCID outsTypes = (outputs, makeMap types) where
   makeMap = Map.fromList . zip (map mkCID [0 ..])
 
 -- | Deserializes an exported value as the correct type and puts it in
--- imported value storage for the future.
+-- imported value storage for the future.  This is in `FaeStorage` and not
+-- `FaeStorageT` because the former is not an instance of the latter, and
+-- the interpreter benefits from having a monomorphic type.
 addImportedValue :: 
-  forall a m.
-  (
-    Versionable a, HasEscrowIDs a, Exportable a,
-    MonadState Storage m
-  ) => 
-  TypeRep a -> ContractID -> ByteString -> m ()
-addImportedValue rep cID bs = do
+  forall a.
+  (Versionable a, HasEscrowIDs a, Exportable a) => 
+  SomeValue a -> ContractID -> FaeStorage ()
+addImportedValue sv@(SomeValue bs) cID = FaeStorage $ do
   unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
-  let (importedValueM, Escrows{..}) = withTypeable rep $
+  let (importedValueM, Escrows{..}) = withTypeable (typeRep @a) $
         runState (importValue @a bs) (Escrows Map.empty nullDigest)
-      importedValue = fromMaybe (throw $ CantImport bs $ SomeTypeRep rep) 
-        importedValueM
+      importedValue = 
+        fromMaybe (throw $ CantImport bs $ someTypeRep sv) importedValueM
       vMap = versionMap (lookupWithEscrows escrowMap) importedValue
   _importedValues . at cID ?= 
     (WithEscrows escrowMap (ReturnValue importedValue), vMap)
 
 getExportedValue :: 
-  (MonadState Storage m) =>
-  TransactionID -> ShortContractID -> m (ContractID, String, ByteString)
-getExportedValue txID scID = do
+  (Monad m) =>
+  TransactionID -> ShortContractID -> 
+  FaeStorageT m (ContractID, String, ByteString)
+getExportedValue txID scID = FaeStorageT $ do
   InputResults{..} <- use $ txInputLens txID scID .
     defaultLens (throw $ BadInputID txID scID)
   nameType <- use $ _contractTypes . at (withoutNonce iRealID) . 

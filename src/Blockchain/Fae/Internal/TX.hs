@@ -94,9 +94,9 @@ instance Show UnquotedString where
 
 -- | -
 instance (Monad m) => MonadState Storage (FaeInterpretT m) where
-  state = lift . state
-  put = lift . put
-  get = lift get
+  state = lift . FaeStorageT . state
+  put = lift . FaeStorageT . put
+  get = lift $ FaeStorageT get
 
 -- * Functions
 
@@ -107,23 +107,18 @@ instance (Monad m) => MonadState Storage (FaeInterpretT m) where
 -- of other transactions.  Now that we dynamically link @faeServer@, the
 -- load-up time for the first transaction is pretty short; subsequent
 -- transactions are faster still.
-interpretTX :: (MonadMask m, MonadIO m) => TX -> FaeInterpretT m ()
-interpretTX TX{..} = handle fixGHCErrors $ do
-  Int.set [searchPath := txPath txModName]
-  loadModules [txSrc]
-  setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]
-  run <- interpret runString infer
-  liftFaeStorage $ run inputs txID pubKeys isReward 
+interpretTX :: 
+  (Typeable m, MonadMask m, MonadIO m) => 
+  TX -> FaeInterpretT m ()
+interpretTX TX{..} = 
+  faeInterpret txID [] runString $ \f -> f inputs txID pubKeys isReward
   where
     runString = unwords
       [
         "runTransaction",
-        qualified "body", 
-        show $ map (UnquotedString . qualified) fallback
+        "body", 
+        show $ UnquotedString <$> fallback
       ]
-    txModName = "TX" ++ show txID
-    txSrc = "Blockchain.Fae.Transactions." ++ txModName
-    qualified varName = txSrc ++ "." ++ varName
 
 -- | This has to be interpreted because, even though all the information is
 -- known /to the sender/ of the value to be imported, it can only be
@@ -133,63 +128,66 @@ interpretTX TX{..} = handle fixGHCErrors $ do
 -- be present for the caller of this function, but the transaction need not
 -- have been run.
 interpretImportedValue :: 
-  (MonadMask m, MonadIO m) => 
+  (Typeable m, MonadMask m, MonadIO m) => 
   ContractID -> String -> ByteString -> FaeInterpretT m ()
-interpretImportedValue cID typeS valBS = handle fixGHCErrors $ do
-  Int.set [searchPath := txPath txModName]
-  loadModules [txSrc]
-  setImports importImports
-  addVal <- interpret runString infer
-  liftFaeStorage $ FaeStorage $ addVal cID valBS
+interpretImportedValue cID typeS valBS = 
+  faeInterpret txID imports runString $ \f -> f valBS cID
   where
     txID = parentTX cID
-    txModName = "TX" ++ show txID
-    txSrc = "Blockchain.Fae.Transactions." ++ "TX" ++ show txID
     runString = unwords
       [
         "addImportedValue",
-        "(typeRep @(ValType (" ++ typeS ++ ")))"
+        ".",
+        "SomeValue @(ValType (" ++ typeS ++ "))"
       ]
-    importImports =
+    imports =
      [
-       "Prelude",
-       "Type.Reflection", 
-       "Control.Monad.State",
-       "Data.ByteString",
-       "Data.Functor.Identity",
-       "Blockchain.Fae.Internal", 
        "Blockchain.Fae.Currency", 
        "Blockchain.Fae.Contracts",
-       txSrc
+       "Data.ByteString"
      ] 
 
-liftFaeStorage :: (Monad m) => FaeStorage a -> FaeInterpretT m a
-liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
+faeInterpret :: 
+  (Typeable m, MonadMask m, MonadIO m, Typeable a) => 
+  TransactionID -> 
+  [String] ->
+  String ->
+  (a -> FaeStorage b) ->
+  FaeInterpretT m b
+faeInterpret txID imports runString apply = handle fixGHCErrors $ do
+  Int.set [searchPath := txPath]
+  loadModules [txSrc]
+  setImports $ txSrc : "Blockchain.Fae.Internal" : "Prelude" : imports
+  act <- interpret runString infer
+  liftFaeStorage $ apply act
+  where
+    txSrc = "Blockchain.Fae.Transactions." ++ txModName
+    txPath =
+      [
+        ".",
+        "Blockchain" </> "Fae" </> "Transactions" </> txModName </> "private"
+      ]
+    txModName = "TX" ++ show txID
 
-txPath :: String -> [String]
-txPath txModName =
-  [
-    ".",
-    "Blockchain" </> "Fae" </> "Transactions" </> txModName </> "private"
-  ]
+    fixGHCErrors (WontCompile []) = error "Compilation error"
+    fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
+    fixGHCErrors (UnknownError e) = error e
+    fixGHCErrors (NotAllowed e) = error e
+    fixGHCErrors (GhcException e) = error e
 
+    liftFaeStorage = 
+      lift . FaeStorageT . mapStateT (return . runIdentity) . getFaeStorage
 
-fixGHCErrors :: InterpreterError -> a
-fixGHCErrors (WontCompile []) = error "Compilation error"
-fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
-fixGHCErrors (UnknownError e) = error e
-fixGHCErrors (NotAllowed e) = error e
-
-fixGHCErrors (GhcException e) = error e
 -- | runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
   fmap (either throw id) $
     flip evalStateT (Storage Map.empty Map.empty Map.empty) $ 
-      case ghcLibdirM of
-        Nothing -> unsafeRunInterpreterWithArgs args x
-        Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir x
+      getFaeStorageT $
+        case ghcLibdirM of
+          Nothing -> unsafeRunInterpreterWithArgs args x
+          Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir x
   
   where
     args = 

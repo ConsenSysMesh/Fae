@@ -112,10 +112,10 @@ type OutputsList = [(SomeTypeRep, AbstractGlobalContract)]
 type EscrowsT = StateT Escrows
 -- | The internal operational monad for Fae contracts.
 type FaeExternalM = ReaderT TXData (Writer OutputsList)
--- | The authoring monad for Fae contracts (when wrapped in 'FaeM')
+-- | The authoring monad for Fae contracts (when wrapped in 'Fae')
 type FaeContractM argType valType = 
   EscrowsT (SuspendT (WithEscrows argType) (WithEscrows valType) FaeExternalM)
--- | The authoring monad for Fae transactions (when wrapped in 'FaeM')
+-- | The authoring monad for Fae transactions (when wrapped in 'FaeTX')
 type FaeTXM = EscrowsT FaeExternalM
 
 -- ** Internal contract functions
@@ -142,16 +142,22 @@ type AbstractGlobalContract =
 
 -- ** User-visible
 
--- | This wrapper is necessary because 'Fae' and 'FaeTX' are monads that
--- contract authors can actually use, and so we need to carefully limit the
--- capabilities they are allowed.
-newtype FaeM m a = Fae { getFae :: m a }
+-- | The monad that users actually write in, a newtype because we need to
+-- limit the capabilities users are allowed to access.
+newtype Fae argType valType a = 
+  Fae 
+  {
+    getFae :: FaeContractM argType valType a
+  }
   deriving (Functor, Applicative, Monad)
-
--- | The monad that users actually write in
-type Fae argType valType = FaeM (FaeContractM argType valType)
--- | Monad for writing transactions (no continuation)
-type FaeTX = FaeM FaeTXM
+-- | Monad for writing transactions (no continuation), a newtype because we
+-- need to limit the capabilities users are allowed to access.
+newtype FaeTX a = 
+  FaeTX 
+  {
+    getFaeTX :: FaeTXM a
+  }
+  deriving (Functor, Applicative, Monad)
 
 -- | The user-provided form of a contract function
 type Contract argType valType = ContractT (Fae argType valType) argType valType
@@ -222,7 +228,7 @@ instance MonadTX FaeTX where
 
 -- | -
 instance MonadTX (Fae argType valType) where
-  liftTX = Fae . mapStateT lift . getFae
+  liftTX = Fae . mapStateT lift . getFaeTX
 
 -- | -
 instance MonadContract argType valType (Fae argType valType) where
@@ -246,7 +252,7 @@ instance {-# OVERLAPPABLE #-}
 
 -- | Looks up a named signatory, maybe. 
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
-lookupSigner s = liftTX $ Fae $ view $ _thisTXSigners . _getSigners . at s
+lookupSigner s = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners . at s
 
 -- | Looks up a named signatory, or throws if not found.
 signer :: (MonadTX m) => String -> m PublicKey
@@ -254,7 +260,7 @@ signer s = fromMaybe (throw $ MissingSigner s) <$> lookupSigner s
 
 -- | Returns the map of all signatories.
 signers :: (MonadTX m) => m (Map String PublicKey)
-signers = liftTX $ Fae $ view $ _thisTXSigners . _getSigners
+signers = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners
 
 -- | Terminates the contract entirely, transferring escrows backing the
 -- return value.
@@ -279,7 +285,7 @@ newContract ::
     MonadTX m
   ) => 
   [BearsValue] -> name -> m ()
-newContract values x = liftTX $ Fae $ do
+newContract values x = liftTX $ FaeTX $ do
   escrowMap <- getEscrowMap values
   contractF <- globalContract <$> hideEscrows escrowMap (theContract x)
   tell [(someTypeRep $ Proxy @name, contractF)]
@@ -288,7 +294,7 @@ newContract values x = liftTX $ Fae $ do
 newEscrow :: 
   (ContractName name, MonadTX m) =>
   [BearsValue] -> name -> m (EscrowID name)
-newEscrow values contractName = liftTX $ Fae $ do
+newEscrow values contractName = liftTX $ FaeTX $ do
   entID <- use _nextID
   endowment <- getEscrowMap values
   let escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
@@ -300,7 +306,7 @@ newEscrow values contractName = liftTX $ Fae $ do
 useEscrow :: 
   (ContractName name, MonadTX m) =>
   EscrowID name -> ArgType name -> m (ValType name)
-useEscrow EscrowID{..} x = liftTX $ Fae $ do
+useEscrow EscrowID{..} x = liftTX $ FaeTX $ do
   EscrowEntry{..} <-
     use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
   let makeLocalCF (AnyNamedContract NamedContract{..}) = 

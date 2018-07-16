@@ -40,13 +40,9 @@ import qualified Data.Map as Map
 -- | How inputs are provided to transactions.
 type Inputs = [(ContractID, String)]
 
--- | The version used for running pure transactions
-newtype FaeStorage a = FaeStorage { getFaeStorage :: FaeStorageT Identity a }
 -- | Transaction monad with storage access, for executing contracts and
 -- saving the results.
 type TXStorageM = StateT Storage FaeTXM
--- | A general storage transformer; used for running transactions in IO.
-type FaeStorageT = StateT Storage
 
 -- * Functions
 
@@ -101,7 +97,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
 
     withReward inputsL
       | isReward = do
-          eID <- getFae $ newEscrow [] RewardName
+          eID <- getFaeTX $ newEscrow [] RewardName
           return $ ReturnValue eID : inputsL
       | otherwise = return inputsL
  
@@ -131,7 +127,7 @@ callTX ::
 callTX g x f = do
   escrows <- get
   let fallback = put escrows >> g x
-  ~(y, w) <- listen . getFae $ f x
+  ~(y, w) <- listen . getFaeTX $ f x
   let result = w `deepseq` Result y
   (result,) <$> if unsafeIsDefined result then return w else fallback
 

@@ -70,7 +70,7 @@ data PrivateKey = PrivateKey EdPublicKey EdSecretKey deriving (Generic)
 data Signature = Signature EdPublicKey EdSignature deriving (Generic, Eq)
 
 -- | A useful abstraction, again allowing semantic improvements in 'sign'.
-data Signed a = Signed {body :: a, sig :: Signature} deriving (Generic)
+data Signed a = Signed {unSigned :: a, sig :: Signature} deriving (Generic)
 
 -- * Type classes
 -- | This is probably a duplicate of some @Hashable@ class, but I want
@@ -301,7 +301,7 @@ sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) =
   Signed
   {
     sig = Signature pubKey $ EdSignature $ Ed.sign secKey edPublicKey dig,
-    body = x
+    unSigned = x
   }
   where HashDigest dig = digest x
 
@@ -310,7 +310,7 @@ sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) =
 --
 -- prop> forall x. (Digestible x) => unsign . sign x = public
 unsign :: (Digestible a) => Signed a -> Maybe PublicKey
-unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig), body = msg}
+unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig), unSigned = msg}
   | Ed.verify edPublicKey dig sig = Just pubKey
   | otherwise = Nothing
   where HashDigest dig = digest msg
