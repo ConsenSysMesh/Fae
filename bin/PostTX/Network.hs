@@ -10,7 +10,7 @@ import Data.Maybe
 
 import Network.HTTP.Client
 
-import Text.PrettyPrint.Annotated.HughesPJClass
+import Text.PrettyPrint.HughesPJClass
 
 
 requestURL :: String -> Request

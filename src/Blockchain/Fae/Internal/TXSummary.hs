@@ -25,7 +25,10 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
 import Blockchain.Fae.Internal.TX
 
+
 import Common.Lens hiding ((.=))
+
+import System.IO.Unsafe
 
 import Control.DeepSeq
 import Control.Monad
@@ -44,21 +47,14 @@ import Data.Void
 
 import GHC.Generics hiding (to)
 
-import Text.PrettyPrint.Annotated
-import Text.PrettyPrint.Annotated.HughesPJClass
+import Text.PrettyPrint
+import Text.PrettyPrint.HughesPJClass
 
 -- | Outputs decorated with what they were output from.  Sort of
 -- a proto-ContractID.
 data OutputOf = 
   OutputOfTransaction TransactionID Outputs |
   OutputOfContract TransactionID ShortContractID Outputs
-
--- | Single input entry decorated with the nonce and transaction.
-data InputOf = InputOf TransactionID ShortContractID Int InputOutputVersions
--- | Inputs map decorated with call order and transaction.
-data InputsOf = InputsOf TransactionID [ShortContractID] InputOutputs
--- | Transaction entry decorated with transaction.
-data EntryOf = EntryOf TransactionID TransactionEntry
 
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
@@ -79,7 +75,7 @@ data TXInputSummary = TXInputSummary {
 makeLenses ''TXSummary
 
 -- | Helpful shorthand; we don't use annotations.
-type VDoc = Doc Void
+type VDoc = Doc
 
 instance Pretty ShortContractID where 
   pPrint scid = text (show scid)
@@ -90,37 +86,50 @@ instance Pretty TXSummary where
           result = prettyPair ("result", UnquotedString txResult)
           inputs = vcat $ pPrint <$> txInputSummaries
           outputs = prettyPair ("outputs", (pPrint txOutputs))
-          signers' = prettyList "signers" signers 
+          signers' = prettyList "signers" signers
           entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = prettyHeader header inputBody
-    where header = labelHeader "input" txInputTXID
-          outputs = prettyPair ("outputs", txInputOutputs)
+    where outputs = prettyPair ("outputs", txInputOutputs)
           versions = prettyPair ("versions", txInputVersions)
           nonce = prettyPair ("nonce", txInputNonce)
-          inputBody = vcat [ nonce, outputs, versions ]
+          inputBody = displayException $ vcat [ nonce, outputs, versions ] 
+          header = labelHeader "input" txInputTXID
+
+--- | Flushes out all exceptions present in the input, returning a formatted
+--- error message if one is found.
+displayException :: VDoc -> VDoc
+displayException doc = 
+  unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
 
 -- | Constructs a header with a name and some other data.
-labelHeader :: (Show a) => String -> a -> Doc ann
+labelHeader :: (Show a) => String -> a -> Doc
 labelHeader h l = text h <+> text (show l)
 
 -- | Formats a nice header with indented body.
-prettyHeader :: Doc ann -> Doc ann -> Doc ann
+prettyHeader :: Doc -> Doc -> Doc
 prettyHeader header body = header <> colon $+$ nest 2 body 
 
 -- | Converts a string and list of "lines" into a body with header.
-prettyList :: (Show v) => String -> [(String, v)] -> Doc ann
+prettyList :: (Show v) => String -> [(String, v)] -> Doc
 prettyList headString bodyList = 
   prettyHeader (text headString) (prettyPairs bodyList)
 
 -- | Converts a list of pairs into a display, without header.
-prettyPairs :: (Show v) => [(String, v)] -> Doc ann
+prettyPairs :: (Show v) => [(String, v)] -> Doc
 prettyPairs = vcat . map prettyPair
 
 -- | Prints a key-value pair with a colon.
-prettyPair :: (Show v) => (String, v) -> Doc ann
+prettyPair :: (Show v) => (String, v) -> Doc
 prettyPair (x, y) = text x <> colon <+> text (show y)
+
+-- | Actually prints the exception nicely.  Due to call stack cruft we only
+-- take the first line.
+showException :: SomeException -> VDoc
+showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
+  safeHead [] = []
+  safeHead (x : _) = x
 
 -- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
