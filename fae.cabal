@@ -120,6 +120,7 @@ executable faeServer
     lens,
     lifted-base,
     mtl,
+    pretty,
     process,
     stm,
     template-haskell,
