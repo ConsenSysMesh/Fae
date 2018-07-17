@@ -21,12 +21,16 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Aeson (eitherDecode, FromJSON, ToJSON, toJSON, parseJSON, object, withText, withObject, (.=), (.:), (.:?))
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as LC8
-import Text.Read
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as X
 import qualified Data.Text.Lazy.Encoding as D
 import Data.Maybe
 import Data.Typeable
+
+import Text.PrettyPrint
+import Text.PrettyPrint.HughesPJClass
+
+import Text.Read
 
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = object [

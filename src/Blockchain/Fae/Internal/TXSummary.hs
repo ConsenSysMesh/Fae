@@ -13,6 +13,7 @@ Note that the pretty-printing has to be done in a 'FaeStorage' monad, so the cla
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.TXSummary (
     collectTransaction,
+    displayException,
     TXSummary(..),
     TXInputSummary(..),
     TransactionID
