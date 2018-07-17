@@ -86,7 +86,7 @@ instance Pretty TXSummary where
     where header = labelHeader "Transaction" transactionID
           result = prettyPair ("result", UnquotedString txResult)
           inputs = vcat $ pPrint <$> txInputSummaries
-          outputs = prettyPair ("outputs", (pPrint txOutputs))
+          outputs = prettyList "outputs" (over (traverse . _1) show txOutputs)
           signers' = prettyList "signers" signers
           entry = vcat [ result, outputs, signers', inputs ]
 
