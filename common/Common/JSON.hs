@@ -13,6 +13,7 @@ are generally useful both to the server (@faeServer@) and the client (@postTX@).
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 module Common.JSON where 
 
 import Blockchain.Fae.FrontEnd
@@ -67,13 +68,13 @@ instance ToJSON TXSummary where
     "txInputSummaries" .= txInputSummaries,
     "signers" .= signers ]
 
--- | If an exception is found then we tag the value as an exception
--- By flushing out the exception we prevent uncaught exceptions being thrown
--- and crashing the fae client or server.
+-- | If an exception is found then we tag the value as an exception.
+-- By forcing evaluation of exceptions we prevent uncaught exceptions being thrown
+-- and crashing faeServer.
 writeJSONField :: Value -> Value
 writeJSONField val = 
   unsafePerformIO $ catchAll (evaluate $ force val)
-    (return . object . pure . ((,)  "exception") . A.String . T.pack . showException)
+    (return . object . pure . ("exception",) . A.String . T.pack . showException)
 
 -- | If parsing fails then we look for the tagged exception.
 readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
