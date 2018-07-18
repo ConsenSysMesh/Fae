@@ -98,12 +98,6 @@ instance Pretty TXInputSummary where
           inputBody = displayException $ vcat [ nonce, outputs, versions ] 
           header = labelHeader "input" txInputTXID
 
---- | Flushes out all exceptions present in the input, returning a formatted
---- error message if one is found.
-displayException :: VDoc -> VDoc
-displayException doc = 
-  unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
-
 -- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc
 labelHeader h l = text h <+> text (show l)
@@ -125,6 +119,12 @@ prettyPairs = vcat . map prettyPair
 prettyPair :: (Show v) => (String, v) -> Doc
 prettyPair (x, y) = text x <> colon <+> text (show y)
 
+--- | Flushes out all exceptions present in the input, returning a formatted
+--- error message if one is found.
+displayException :: VDoc -> VDoc
+displayException doc = 
+  unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
+  
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
 showException :: SomeException -> VDoc
