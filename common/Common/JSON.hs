@@ -10,6 +10,7 @@ This module exports JSON Orphan instances and utilities for types that
 are generally useful both to the server (@faeServer@) and the client (@postTX@).
 
 -}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Common.JSON where 
@@ -18,42 +19,76 @@ import Blockchain.Fae.FrontEnd
 
 import qualified Data.ByteString.Char8 as C8
 
-import Data.Aeson (eitherDecode, FromJSON, ToJSON, toJSON, parseJSON, object, withText, withObject, (.=), (.:), (.:?))
+import Control.DeepSeq
+
+import Data.Aeson (eitherDecode, FromJSON, ToJSON, Object, toJSON, parseJSON, object, Value(..), withText, withObject, (.=), (.:), (.:?))
 import qualified Data.Aeson as A
+import Data.Aeson.Types
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as X
 import qualified Data.Text.Lazy.Encoding as D
 import Data.Maybe
+import Data.Text (Text)
 import Data.Typeable
+
+import System.IO.Unsafe
 
 import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
 import Text.Read
 
+--- | Flushes out all exceptions present in the input, returning a formatted
+--- error message if one is found.
+--forceShow :: a -> m a
+forceEval a = 
+  unsafePerformIO $ catchAll (evaluate $ force a) (return . showException)
+    
+-- | Actually prints the exception nicely.  Due to call stack cruft we only
+-- take the first line.
+showException :: SomeException -> String
+showException e = "<exception> " ++ (safeHead $ lines $ show e) where
+  safeHead [] = []
+  safeHead (x : _) = x
+
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = object [
     "txInputTXID" .= show txInputTXID,
     "txInputNonce" .= show txInputNonce,
-    "txInputOutputs" .= show txInputOutputs,
-    "txInputVersions" .= txInputVersions ]
+    "txInputOutputs" .= writeJSONField (A.String $ T.pack $ show txInputOutputs),
+    "txInputVersions" .= writeJSONField (A.String $ T.pack $ show txInputVersions) ]
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
     "transactionID" .= show transactionID,
-    "txResult" .= txResult,
-    "txOutputs" .= show txOutputs,
+    "txResult" .= writeJSONField (A.String $ T.pack txResult),
+    "txOutputs" .= writeJSONField (A.String $ T.pack $ show txOutputs),
     "txInputSummaries" .= txInputSummaries,
     "signers" .= signers ]
 
+writeJSONField :: Value -> Value
+writeJSONField val = 
+  unsafePerformIO $ catchAll (evaluate $ force val)
+    (return . object . pure . ((,)  "exception") . A.String . T.pack . showException)
+
+readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
+readJSONField fieldName obj = do
+  valM <- obj .:? fieldName
+  case valM of
+    Just val -> return val
+    Nothing -> do
+      message <- obj .: "exception"
+      return $ throw $ userError message
+  
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     TXInputSummary
       <$> o .: "txInputTXID"
-      <*> (either fail return . readEither =<< (o .: "txInputNonce"))
-      <*> (either fail return . readEither =<< (o .: "txInputOutputs"))
-      <*> o .: "txInputVersions"
+      <*> readWithFailure "txInputNonce" o
+      <*> readWithFailure "txInputOutputs" o
+      <*> readWithFailure "txInputVersions" o
+    where readWithFailure fieldName o = either fail return . readEither =<< readJSONField fieldName o
 
 instance FromJSON PublicKey where
   parseJSON = withText "VersionID" $ \pKey -> do
@@ -86,8 +121,8 @@ instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
     transactionID <- o .: "transactionID"
     txResult  <- o .: "txResult"
-    txOutputs' <- o .:? "txOutputs"
-    txInputSummaries  <- o .: "txInputSummaries"
+    txOutputs' <- readJSONField "txOutputs" o
+    txInputSummaries <- o .: "txInputSummaries"
     signers <- o .: "signers"
     let txOutputs = fromMaybe raiseErr $ readMaybe $ fromMaybe raiseErr txOutputs'
     return TXSummary{..}
