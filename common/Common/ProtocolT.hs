@@ -435,11 +435,9 @@ liftWS f = liftProtocolT ask >>= liftIO . f
 
 -- | Opens a websocket connection with whatever handshake that protocol
 -- uses (handled by @websockets@, not by us) and initializes the ID counter
--- to 0.  The host is currently hard-coded.
-runProtocolT :: 
-  (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
-  ProtocolT m () -> m ()
-runProtocolT x = do
+-- to 0.
+runProtocolT :: (MonadIO m, Commutes IO (Reader WS.Connection) m) => String -> Int -> ProtocolT m () -> m ()
+runProtocolT host port x = do
   liftIO $ putStrLn $
     "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"
   xWS <- 
@@ -449,10 +447,6 @@ runProtocolT x = do
     flip evalStateT 0 $
     getProtocolT x
   liftIO $ WS.runClient host port "" $ runReader xWS
-
-  where
-    host = "localhost"
-    port = 8546
 
 -- | Sends a JSON-RPC message over a websocket.
 sendProtocolT :: (ToJSON a, ToRequest a, MonadProtocol m) => a -> m Int
@@ -493,4 +487,3 @@ sendReceiveProtocolT x = handleAll err $ do
   reqID <- sendProtocolT x
   receiveProtocolT reqID
   where err e = error $ "Ethereum client returned an error: " ++ show e
-

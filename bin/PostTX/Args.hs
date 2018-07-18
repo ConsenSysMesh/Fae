@@ -162,4 +162,3 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
 
 justHost :: Maybe String -> String
 justHost = fromMaybe "0.0.0.0:27182"
-
