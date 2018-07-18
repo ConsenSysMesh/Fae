@@ -67,11 +67,15 @@ instance ToJSON TXSummary where
     "txInputSummaries" .= txInputSummaries,
     "signers" .= signers ]
 
+-- | If an exception is found then we tag the value as an exception
+-- By flushing out the exception we prevent uncaught exceptions being thrown
+-- and crashing the fae client or server.
 writeJSONField :: Value -> Value
 writeJSONField val = 
   unsafePerformIO $ catchAll (evaluate $ force val)
     (return . object . pure . ((,)  "exception") . A.String . T.pack . showException)
 
+-- | If parsing fails then we look for the tagged exception.
 readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
 readJSONField fieldName obj = do
   valM <- obj .:? fieldName
