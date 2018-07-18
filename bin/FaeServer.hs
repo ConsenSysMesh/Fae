@@ -82,10 +82,10 @@ usage = do
       "  --help            Print this message",
       "  --faeth           Receive transactions via Ethereum from a Parity client",
       "  --faeth-mode      Synonym for --faeth",
-      "  --hostname        Specify a specific hostname"
+      "  --hostname        Specify a specific Faeth hostname"
       "  --normal-mode     Operate as standalone Fae",
       "  --new-session     Deletes previous transaction history",
-      "  --port            Specify a specific port number"
+      "  --port            Specify a specific Faeth port number"
       "  --resume-session  Reloads previous transaction history,",
       "",
       "Later options shadow earlier ones when they have the same domain.",
