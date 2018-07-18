@@ -88,7 +88,7 @@ instance Pretty TXSummary where
           inputs = vcat $ pPrint <$> txInputSummaries
           outputs = prettyList "outputs" (over (traverse . _1) show txOutputs)
           signers' = prettyList "signers" signers
-          entry = vcat [ result, outputs, signers', inputs ]
+          entry = displayException $ vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = prettyHeader header inputBody
@@ -124,7 +124,7 @@ prettyPair (x, y) = text x <> colon <+> text (show y)
 displayException :: VDoc -> VDoc
 displayException doc = 
   unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
-  
+
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
 showException :: SomeException -> VDoc

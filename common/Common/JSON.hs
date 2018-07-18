@@ -56,7 +56,7 @@ showException e = "<exception> " ++ (safeHead $ lines $ show e) where
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = object [
     "txInputTXID" .= show txInputTXID,
-    "txInputNonce" .= show txInputNonce,
+    "txInputNonce" .= writeJSONField (A.String $ T.pack $ show txInputNonce),
     "txInputOutputs" .= writeJSONField (A.String $ T.pack $ show txInputOutputs),
     "txInputVersions" .= writeJSONField (A.String $ T.pack $ show txInputVersions) ]
 
@@ -85,7 +85,10 @@ readJSONField fieldName obj = do
     Nothing -> do
       message <- obj .: "exception"
       return $ throw $ userError message
-  
+
+readWithFailure :: forall a. (Read a) => Text -> Object -> Parser a
+readWithFailure fieldName o = either fail return . readEither =<< readJSONField fieldName o
+
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     TXInputSummary
@@ -93,7 +96,15 @@ instance FromJSON TXInputSummary where
       <*> readWithFailure "txInputNonce" o
       <*> readWithFailure "txInputOutputs" o
       <*> readWithFailure "txInputVersions" o
-    where readWithFailure fieldName o = either fail return . readEither =<< readJSONField fieldName o
+
+instance FromJSON TXSummary where
+  parseJSON = withObject "TXSummary" $ \o -> do
+    TXSummary
+      <$> o .: "transactionID"
+      <*> readWithFailure "txResult" o
+      <*> readWithFailure "txOutputs" o
+      <*> o .: "txInputSummaries"
+      <*> o .: "signers"
 
 instance FromJSON PublicKey where
   parseJSON = withText "VersionID" $ \pKey -> do
@@ -121,17 +132,6 @@ instance ToJSON TypeRep where
 instance FromJSON ShortContractID where
   parseJSON = withText "ShortContractID" $ \scid -> do
     either fail return $ readEither (T.unpack scid)
-
-instance FromJSON TXSummary where
-  parseJSON = withObject "TXSummary" $ \o -> do
-    transactionID <- o .: "transactionID"
-    txResult  <- o .: "txResult"
-    txOutputs' <- readJSONField "txOutputs" o
-    txInputSummaries <- o .: "txInputSummaries"
-    signers <- o .: "signers"
-    let txOutputs = fromMaybe raiseErr $ readMaybe $ fromMaybe raiseErr txOutputs'
-    return TXSummary{..}
-    where raiseErr = error "Can't parse txOutputs when decoding TXSummary JSON"
     
 encodeJSON ::(ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
