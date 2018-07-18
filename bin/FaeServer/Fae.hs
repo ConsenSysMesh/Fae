@@ -31,12 +31,8 @@ import System.FilePath
 import System.IO
 import System.IO.Error
 
-runFae :: Int -> ThreadId -> Flags -> TXQueueT IO ()
-runFae port mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
-  liftIO $ do
-    createDirectoryIfMissing False portDir
-    setCurrentDirectory portDir
-
+runFae :: ThreadId -> Flags -> TXQueueT IO ()
+runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
   if newSession 
   then liftIO $ do
     removePathForcibly "Blockchain"
@@ -51,8 +47,6 @@ runFae port mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ d
   forever $ do
     txExecData <- readTXExecData
     reThrowExit mainTID (callerTID txExecData) $ runTXExecData txExecData
-
-  where portDir = "port-" ++ show port
 
 runTXExecData :: 
   (Typeable m, MonadIO m, MonadMask m) => 
@@ -86,7 +80,7 @@ runTXExecData ExportValue{..} = do
 
 runTXExecData ImportValue{..} = do
   parentCount <- recallHistory parentM
-  lift $ interpretImportedValue importedCID valueType valuePackage
+  lift $ interpretImportedValue exportData
   updateHistory parentM parentCount
   ioAtomically $ putTMVar signalVar ()
 

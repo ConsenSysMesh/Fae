@@ -215,6 +215,14 @@ processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
 
 runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
 runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
+  let
+    (tx, mainFile, modules) = 
+      makeFilesMap txMessage mainFile0 modules0 False
+    thisTXID = txID tx
+    execError txID e = liftIO . putStrLn $
+      "\nError while executing Fae transaction " ++ show txID ++
+      "\n              in Ethereum transaction " ++ show ethTXID ++
+      "\nError was: " ++ show e ++ "\n"
   tmVar <- ioAtomically newEmptyTMVar
   callerTID <- view _1
   handleAll (execError thisTXID) $ do
@@ -229,17 +237,6 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
       }
     liftIO $ putStrLn txResult
   return thisTXID
-
-  where
-    tx = maybe (error "Invalid transaction message") id $ 
-      txMessageToTX False txMessage -- ^ When can this be True?
-    thisTXID = txID tx
-    mainFile = addHeader thisTXID mainFile0
-    modules = Map.mapWithKey (fixHeader thisTXID) modules0
-    execError txID e = liftIO . putStrLn $
-      "\nError while executing Fae transaction " ++ show txID ++
-      "\n              in Ethereum transaction " ++ show ethTXID ++
-      "\nError was: " ++ show e ++ "\n"
 
 runFaethWatcherM :: FaethWatcherM () -> TXQueueT IO ()
 runFaethWatcherM xFW = do

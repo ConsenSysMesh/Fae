@@ -46,15 +46,13 @@ data TXExecData =
     parentM :: Maybe TransactionID,
     calledInTX :: TransactionID,
     shortCID :: ShortContractID,
-    exportResultVar :: TMVar (ContractID, String, ByteString),
+    exportResultVar :: TMVar ExportData,
     callerTID :: ThreadId
   } |
   ImportValue
   {
     parentM :: Maybe TransactionID,
-    importedCID :: ContractID,
-    valueType :: String,
-    valuePackage :: ByteString,
+    exportData :: ExportData,
     signalVar :: TMVar (),
     callerTID :: ThreadId
   }

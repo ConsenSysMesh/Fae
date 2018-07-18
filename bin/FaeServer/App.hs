@@ -68,7 +68,13 @@ serverApp _ sendTXExecData = \request respond -> do
       | lazy -> error "'lazy and 'view' are incompatible parameters"
       | otherwise -> send $ \callerTID resultVar -> View{..}
     Nothing -> 
-      let (tx, mainFile, modules) = makeFilesMap (Proxy @a) files reward
+      let mainFile0 = getFile files "body"
+          modules0 = Map.fromList $ getFiles files "other"
+          txMessage = 
+            either (error "Couldn't decode transaction message") id $ 
+            S.decode @(TXMessage a) $ getFile files "message"
+          (tx, mainFile, modules) =
+            makeFilesMap txMessage mainFile0 modules0 reward
       in  send $ \callerTID resultVar -> TXExecData{..} 
 
 importExportApp :: TXExecApplication
@@ -83,12 +89,12 @@ importExportApp sendTXExecData = \request respond -> do
     send = waitResponse respond dataHeaders (byteString . S.encode) sendTXExecData 
     getParams = getParameters params
     parentM = getLast Nothing Just $ getParams "parent"
-    importDataM = either error id . S.decode <$> getFile files "import"
-    exportDataM = either error id . S.decode <$> getFile files "export"
+    importDataM = either error id . S.decode <$> getFileMaybe files "import"
+    exportDataM = either error id . S.decode <$> getFileMaybe files "export"
   case (importDataM, exportDataM) of
-    (Just (importedCID, valueType), Nothing) ->
-      let valuePackage = fromMaybe (error $ "Missing 'valuePackage' file") $
-            getFile files "valuePackage"
+    (Just (importedCID, valueModules, valueType), Nothing) ->
+      let valuePackage = getFile files "valuePackage"
+          exportData = (importedCID, valueModules, valueType, valuePackage)
       in send signalVar $ \callerTID signalVar -> ImportValue{..}
     (Nothing, Just (calledInTX, shortCID)) ->
       send exportResultVar $ \callerTID exportResultVar -> ExportValue{..}

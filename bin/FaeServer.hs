@@ -57,7 +57,11 @@ main = do
 
   flip runReaderT txQueue $ case args of
     ArgsServer{..} -> do
-      void $ fork $ runFae faePort tID flags
+      let portDir = "port-" ++ show faePort
+      liftIO $ do
+        createDirectoryIfMissing False portDir
+        setCurrentDirectory portDir
+      void $ fork $ runFae tID flags
       void $ fork $ runServer importExportPort importExportApp queueTXExecData
       case serverMode of
         FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData

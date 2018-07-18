@@ -32,6 +32,7 @@ import Data.Maybe
 import Data.Monoid hiding ((<>))
 import Data.Semigroup
 import Data.Serialize hiding (Result)
+import Data.Typeable (splitTyConApp)
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -122,8 +123,11 @@ data Outputs =
 -- | Convenient abbreviation
 type Types = Map ContractID SomeTypeRep
 
--- | Encapsulates the arguments to 'addImportedValue'
-newtype SomeValue a = SomeValue { someValueBytes :: ByteString }
+-- | Not only convenient, but also important for ensuring that the three
+-- different source trees using this type all have the same version of it.
+-- Since this type is exchanged in serialized form between different
+-- processes, type checking cannot verify it at compile time.
+type ExportData = (ContractID, [String], String, ByteString)
 
 -- * Template Haskell
 
@@ -294,15 +298,12 @@ listToOutputs mkCID outsTypes = (outputs, makeMap types) where
 -- `FaeStorageT` because the former is not an instance of the latter, and
 -- the interpreter benefits from having a monomorphic type.
 addImportedValue :: 
-  forall a.
   (Versionable a, HasEscrowIDs a, Exportable a) => 
-  SomeValue a -> ContractID -> FaeStorage ()
-addImportedValue sv@(SomeValue bs) cID = FaeStorage $ do
+  State Escrows a -> ContractID -> FaeStorage ()
+addImportedValue valueImporter cID = FaeStorage $ do
   unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
-  let (importedValueM, Escrows{..}) = withTypeable (typeRep @a) $
-        runState (importValue @a bs) (Escrows Map.empty nullDigest)
-      importedValue = 
-        fromMaybe (throw $ CantImport bs $ someTypeRep sv) importedValueM
+  let (importedValue, Escrows{..}) = 
+        runState valueImporter (Escrows Map.empty nullDigest)
       vMap = versionMap (lookupWithEscrows escrowMap) importedValue
   _importedValues . at cID ?= 
     (WithEscrows escrowMap (ReturnValue importedValue), vMap)
@@ -310,11 +311,17 @@ addImportedValue sv@(SomeValue bs) cID = FaeStorage $ do
 getExportedValue :: 
   (Monad m) =>
   TransactionID -> ShortContractID -> 
-  FaeStorageT m (ContractID, String, ByteString)
+  FaeStorageT m ExportData
 getExportedValue txID scID = FaeStorageT $ do
   InputResults{..} <- use $ txInputLens txID scID .
     defaultLens (throw $ BadInputID txID scID)
   nameType <- use $ _contractTypes . at (withoutNonce iRealID) . 
     defaultLens (throw $ BadContractID iRealID)
-  return (iRealID, show nameType, iExportedResult)
+  let modNames = tyConModule <$> listTyCons nameType
+  return (iRealID, modNames, show nameType, iExportedResult)
+
+  where
+    listTyCons :: SomeTypeRep -> [TyCon]
+    listTyCons rep = con : (reps >>= listTyCons) where
+      (con, reps) = splitTyConApp rep
 

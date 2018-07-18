@@ -174,7 +174,7 @@ type Transaction a b = a -> FaeTX b
 
 -- | Instances of this class can be serialized, at least with the
 -- assistance of some Fae contextual data (namely, the escrow storage).
-class Exportable a where
+class (Typeable a) => Exportable a where
   exportValue :: (MonadState Escrows m) => a -> m ByteString
   importValue :: (MonadState Escrows m) => ByteString -> m (Maybe a)
 

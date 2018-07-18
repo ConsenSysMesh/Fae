@@ -52,7 +52,7 @@ instance {-# OVERLAPPABLE #-}
 
 -- | /So/ undecidable
 instance {-# OVERLAPPABLE #-}
-  (EGeneric a, Serialize (ERep a)) => Exportable a where
+  (Typeable a, EGeneric a, Serialize (ERep a)) => Exportable a where
 
   exportValue = fmap S.encode . eFrom
   importValue = either (const $ return Nothing) (fmap Just . eTo) . S.decode
