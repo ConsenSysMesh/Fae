@@ -4,6 +4,7 @@ module FaeServer.Args where
 import Common.Lens
 import Data.List
 import Data.Maybe
+import Text.Read
 
 data Args =
   ArgsServer
@@ -36,19 +37,17 @@ parseArgs = foldl addArg
   {
     serverMode = FaeMode,
     flags = Flags
-    
     { 
       newSession = True,
-      hostname   = defaultHost,
-      port       = defaultPort
+      hostname = defaultHost,
+      port = defaultPort
     }
   }
 
-addArg :: Args -> String ->  Args
+addArg :: Args -> String -> Args
 addArg args x = getArgAction x & case args of
   ArgsServer{} -> maybe (ArgsUsage [x]) ($ args)
   (ArgsUsage xs) -> maybe (ArgsUsage $ x : xs) (const args)
-   
    
 getArgAction :: String -> Maybe (Args -> Args)
 getArgAction = \case 
@@ -56,11 +55,9 @@ getArgAction = \case
   x | ("--hostname", '=' : hostnameArgument) <- break (== '=') x
     -> Just $ _flags . _hostname .~ hostnameArgument
   x | ("--port", '=' : portArgument) <- break (== '=') x
-      -> Just $ _flags . _port .~ read portArgument
+      -> Just $ _flags . _port .~ (fromMaybe (error $ "Could not read port argument: " ++ portArgument) $ readMaybe portArgument)
   "--normal-mode" -> Just $ _serverMode .~ FaeMode
   "--resume-session" -> Just $ _flags . _newSession .~ False
   "--new-session" -> Just $ _flags . _newSession .~ True
   "--help" -> Just $ const $ ArgsUsage []
   _ -> Nothing
-
-

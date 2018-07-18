@@ -247,7 +247,6 @@ runFaethWatcherM Flags{..} xFW = do
   tID <- myThreadId
   blockTXIDs <- liftIO $ newTVarIO Map.empty
   forever $ handleAll waitRestart $ 
-    
     runProtocolT hostname port $ do
       subID <- sendReceiveProtocolT ParitySubscribe
       runReaderT (getFaethWatcherM xFW) (tID, subID, blockTXIDs) 
@@ -273,4 +272,3 @@ receiveSubscription = do
     "parity_subscribe notification has subscription ID " ++ show ethSubID ++
     "; expected " ++ show subID
   either (error . errMessage) return ethBlockE
-
