@@ -42,7 +42,6 @@ import Text.Read
 
 --- | Flushes out all exceptions present in the input, returning a formatted
 --- error message if one is found.
---forceShow :: a -> m a
 forceEval a = 
   unsafePerformIO $ catchAll (evaluate $ force a) (return . showException)
     
@@ -53,27 +52,30 @@ showException e = "<exception> " ++ (safeHead $ lines $ show e) where
   safeHead [] = []
   safeHead (x : _) = x
 
+-- handle any exception in any  field as a exception for txinputsummary
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = object [
-    "txInputTXID" .= show txInputTXID,
-    "txInputNonce" .= writeJSONField (A.String $ T.pack $ show txInputNonce),
-    "txInputOutputs" .= writeJSONField (A.String $ T.pack $ show txInputOutputs),
-    "txInputVersions" .= writeJSONField (A.String $ T.pack $ show txInputVersions) ]
+     -- should be moved up one level and used as
+    -- the field name in the json list of txinput summaries,
+    "txInputNonce" .= txInputNonce,
+    "txInputOutputs" .= txInputOutputs,
+    "txInputVersions" .= txInputVersions ]
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
     "transactionID" .= show transactionID,
-    "txResult" .= writeJSONField (A.String $ T.pack txResult),
-    "txOutputs" .= writeJSONField (A.String $ T.pack $ show txOutputs),
-    "txInputSummaries" .= txInputSummaries,
+    "txResult" .= (writeJSONField txResult),
+    "txOutputs" .= (object $ (\(ix, scid) -> (T.pack $ show ix, writeJSONField scid)) <$> txOutputs),
+    "txInputSummaries" .= ((\TXInputSummary{..} ->
+      object [ (T.pack $ show txInputSCID) .= writeJSONField TXInputSummary{..} ]) <$> txInputSummaries),
     "signers" .= signers ]
 
 -- | If an exception is found then we tag the value as an exception.
 -- By forcing evaluation of exceptions we prevent uncaught exceptions being thrown
 -- and crashing faeServer.
-writeJSONField :: Value -> Value
+writeJSONField :: forall a. (ToJSON a) => a -> Value
 writeJSONField val = 
-  unsafePerformIO $ catchAll (evaluate $ force val)
+  unsafePerformIO $ catchAll (evaluate $ force $ toJSON val)
     (return . object . pure . ("exception",) . A.String . T.pack . showException)
 
 -- | If parsing fails then we look for the tagged exception.
@@ -86,39 +88,43 @@ readJSONField fieldName obj = do
       message <- obj .: "exception"
       return $ throw $ userError message
 
-readWithFailure :: forall a. (Read a) => Text -> Object -> Parser a
-readWithFailure fieldName o = either fail return . readEither =<< readJSONField fieldName o
-
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     TXInputSummary
-      <$> o .: "txInputTXID"
-      <*> readWithFailure "txInputNonce" o
-      <*> readWithFailure "txInputOutputs" o
-      <*> readWithFailure "txInputVersions" o
+      <$> o .: "txInputSCID"
+      <*> readJSONField "txInputNonce" o
+      <*> (return . read =<< readJSONField "txInputOutputs" o)
+      <*> readJSONField "txInputVersions" o
 
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
     TXSummary
       <$> o .: "transactionID"
-      <*> readWithFailure "txResult" o
-      <*> readWithFailure "txOutputs" o
-      <*> o .: "txInputSummaries"
+      <*> readJSONField "txResult" o
+      <*> readJSONField "txOutputs" o
+      <*> readJSONField "txInputSummaries" o
       <*> o .: "signers"
+
+--readWithFailure :: forall a. (Read a) => Text -> Object -> Parser a
+--readWithFailure fieldName o = readJSONField fieldName o
+--either fail return . readEither =<< 
 
 instance FromJSON PublicKey where
   parseJSON = withText "VersionID" $ \pKey -> do
     either fail return $ readEither (T.unpack pKey)
 
 instance ToJSON PublicKey where
-  toJSON vID = A.String $ T.pack $ show vID
+  toJSON vID = toJSON $ T.pack $ show vID
+
+instance ToJSON ShortContractID where
+  toJSON scid = toJSON $ T.pack $ show scid
 
 instance FromJSON VersionID where
   parseJSON = withText "VersionID" $ \vID -> do
     either fail return $ readEither (T.unpack vID)
 
 instance ToJSON VersionID where
-  toJSON vID = A.String $ T.pack $ show vID
+  toJSON vID = toJSON $ T.pack $ show vID
 
 instance Read TypeRep where
   readsPrec = readsPrec
@@ -127,11 +133,11 @@ instance FromJSON TypeRep where
   parseJSON (A.String a) = either fail return $ readEither (T.unpack a)
 
 instance ToJSON TypeRep where
-  toJSON a = A.String $ T.pack $ show a
+  toJSON a = toJSON $ T.pack $ show a
 
 instance FromJSON ShortContractID where
   parseJSON = withText "ShortContractID" $ \scid -> do
     either fail return $ readEither (T.unpack scid)
     
-encodeJSON ::(ToJSON a) => a -> String
+encodeJSON :: (ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a

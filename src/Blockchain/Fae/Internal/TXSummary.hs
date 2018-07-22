@@ -67,7 +67,7 @@ data TXSummary = TXSummary {
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
-  txInputTXID :: ShortContractID,
+  txInputSCID :: ShortContractID,
   txInputNonce :: Int,
   txInputOutputs :: [(Int, ShortContractID)],
   txInputVersions :: [(VersionID, TypeRep)]
@@ -96,7 +96,7 @@ instance Pretty TXInputSummary where
           versions = prettyPair ("versions", txInputVersions)
           nonce = prettyPair ("nonce", txInputNonce)
           inputBody = displayException $ vcat [ nonce, outputs, versions ] 
-          header = labelHeader "input" txInputTXID
+          header = labelHeader "input" txInputSCID
 
 -- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc
@@ -154,7 +154,7 @@ getInputSummary txID inputSCIDs inputMap = do
         txInputVersions = Map.toList $ getVersionMap iVersions
         txInputOutputs = getTXOutputs (OutputOfContract txID scID iOutputs)
       txInputNonce <- use $ nonceAt iRealID . to (fmap snd) . defaultLens (-1)
-      return TXInputSummary {txInputTXID = txID, ..}
+      return TXInputSummary {txInputSCID = txID, ..}
 
 getTXOutputs :: OutputOf -> [(Int, ShortContractID)]
 getTXOutputs outs = outputsToList $ outputCIDs outs
