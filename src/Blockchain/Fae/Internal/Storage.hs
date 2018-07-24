@@ -32,14 +32,12 @@ import Data.Maybe
 import Data.Monoid hiding ((<>))
 import Data.Semigroup
 import Data.Serialize hiding (Result)
-import Data.Typeable (splitTyConApp)
+import Data.Typeable 
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
 import GHC.Generics (Generic)
-
-import Type.Reflection
 
 -- * Types
 
@@ -121,7 +119,7 @@ data Outputs =
   }
 
 -- | Convenient abbreviation
-type Types = Map ContractID SomeTypeRep
+type Types = Map ContractID TypeRep
 
 -- | Not only convenient, but also important for ensuring that the three
 -- different source trees using this type all have the same version of it.
@@ -321,7 +319,7 @@ getExportedValue txID scID = FaeStorageT $ do
   return (iRealID, modNames, show nameType, iExportedResult)
 
   where
-    listTyCons :: SomeTypeRep -> [TyCon]
+    listTyCons :: TypeRep -> [TyCon]
     listTyCons rep = con : (reps >>= listTyCons) where
       (con, reps) = splitTyConApp rep
 

@@ -25,17 +25,16 @@ import Control.Monad.Writer
 
 import Data.Char
 import Data.List
+import Data.Maybe
 import Data.String
 import Data.Traversable
-import Data.Type.Equality
+import Data.Typeable
 import Data.Void
 
 import GHC.Generics
 import GHC.TypeLits
 
 import Numeric.Natural
-
-import Type.Reflection
 
 -- * Types
 
@@ -163,19 +162,15 @@ bearer = BearsValue
 
 -- | Like 'fromDynamic'.
 unBearer :: forall a. (Typeable a) => BearsValue -> Maybe a
-unBearer (BearsValue x)
-  | Just HRefl <- typeOf x `eqTypeRep` typeRep @a = Just x
-  | otherwise = Nothing
+unBearer (BearsValue x) = cast x
 
 -- | Like 'fromDyn'.
 unBear :: (Typeable a) => BearsValue -> a -> a
-unBear (BearsValue x) x0 
-  | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
-  | otherwise = x0
+unBear (BearsValue x) x0 = fromMaybe x0 $ cast x
 
 -- | Like 'dynTypeRep'.
-bearerType :: BearsValue -> SomeTypeRep
-bearerType (BearsValue x) = someTypeRep (Just x)
+bearerType :: BearsValue -> TypeRep
+bearerType (BearsValue x) = typeRep (Just x)
 
 -- | For making empty instances of 'HasEscrowIDs'
 defaultTraverseEscrowIDs :: EscrowIDTraversal a

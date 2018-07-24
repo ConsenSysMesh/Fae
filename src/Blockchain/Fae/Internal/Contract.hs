@@ -33,6 +33,7 @@ import Data.Functor.Identity
 import Data.Map (Map)
 import Data.Maybe
 import Data.Proxy
+import Data.Typeable
 import Data.Void
 
 import qualified Data.Map as Map
@@ -40,8 +41,6 @@ import qualified Data.Map as Map
 import GHC.Generics
 
 import Text.Read (readMaybe)
-
-import Type.Reflection
 
 -- * Types
 -- ** Contract data
@@ -107,7 +106,7 @@ data TXData =
 -- ** Internal contract monads
 
 -- | Useful alias for a rather long term.
-type OutputsList = [(SomeTypeRep, AbstractGlobalContract)]
+type OutputsList = [(TypeRep, AbstractGlobalContract)]
 -- | Monad modifier; several of ours use escrows.
 type EscrowsT = StateT Escrows
 -- | The internal operational monad for Fae contracts.
@@ -288,7 +287,7 @@ newContract ::
 newContract values x = liftTX $ FaeTX $ do
   escrowMap <- getEscrowMap values
   contractF <- globalContract <$> hideEscrows escrowMap (theContract x)
-  tell [(someTypeRep $ Proxy @name, contractF)]
+  tell [(typeRep $ Proxy @name, contractF)]
 
 -- | Creates a new escrow endowed with a given list of valuables.
 newEscrow :: 
@@ -362,7 +361,7 @@ acceptLocal ::
   BearsValue -> FaeTXM (WithEscrows argType)
 acceptLocal xDyn = takeEscrows x where
   x = unBear xDyn $ 
-        throw $ BadArgType (someTypeRep $ Proxy @argType) (bearerType xDyn)
+        throw $ BadArgType (typeRep $ Proxy @argType) (bearerType xDyn)
 
 -- | Prepares a value-bearing result.
 returnLocal :: 
@@ -381,7 +380,7 @@ acceptGlobal (argS, vers) = takeEscrows x where
   -- nonetheless safe here because 'argS' is not provided by user code, and
   -- 'readMaybe' always returns a good value.
   x = maybe 
-    (throw $ BadInputParse argS $ someTypeRep $ Proxy @argType) 
+    (throw $ BadInputParse argS $ typeRep $ Proxy @argType) 
     (mapVersions vers) 
     (readMaybe argS)
 
@@ -402,7 +401,7 @@ acceptTyped = bearer
 -- | Prepares an abstract function's return value as typed.
 returnTyped :: forall valType. (HasEscrowIDs valType) => BearsValue -> valType
 returnTyped yDyn = unBear yDyn $
-  throw $ BadValType (someTypeRep $ Proxy @valType) (bearerType yDyn)
+  throw $ BadValType (typeRep $ Proxy @valType) (bearerType yDyn)
 
 -- ** Escrow manipulation
 
@@ -470,6 +469,7 @@ peekEscrow (EscrowID entID) = do
     Left c -> nameContract @name entID c `seq` x
     _ -> x
 
+-- | Gets the escrow version from a specific escrow storage map.
 lookupWithEscrows :: EscrowMap -> EntryID -> VersionID
 lookupWithEscrows escrowMap entID =
   maybe (throw $ BadEscrowID entID) escrowVersion $ Map.lookup entID escrowMap
@@ -479,27 +479,23 @@ lookupWithEscrows escrowMap entID =
 -- | Extracts the true type, if that is what is expected.
 nameContract :: 
   forall name. (Typeable name) => EntryID -> AnyNamedContract -> NamedContract name
-nameContract entID (AnyNamedContract c)
-  | Just HRefl <- typeOf c `eqTypeRep` typeRep @(NamedContract name) = c
-  | otherwise = 
-      throw $ BadEscrowName entID (someTypeRep $ Proxy @name) (contractNameRep c)
+nameContract entID (AnyNamedContract c) = fromMaybe err $ cast c where
+  err = throw $ BadEscrowName entID (typeRep $ Proxy @name) (contractNameRep c)
 
 -- | Just for neatness; gets the contract name of an escrow.
 contractNameRep :: 
-  forall name. (Typeable name) => NamedContract name -> SomeTypeRep
-contractNameRep _ = someTypeRep $ Proxy @name
+  forall name. (Typeable name) => NamedContract name -> TypeRep
+contractNameRep _ = typeRep $ Proxy @name
 
 -- ** 'ReturnValue' manipulation
 
 -- | Like 'unBear'.
 getReturnValue :: (Typeable a) => ReturnValue -> a -> a
-getReturnValue (ReturnValue x) x0 
-  | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
-  | otherwise = x0
+getReturnValue (ReturnValue x) x0 = fromMaybe x0 $ cast x
 
 -- | Like 'bearerType'.
-returnValueType :: ReturnValue -> SomeTypeRep
-returnValueType (ReturnValue x) = someTypeRep (Just x)
+returnValueType :: ReturnValue -> TypeRep
+returnValueType (ReturnValue x) = typeRep (Just x)
 
 -- | Taking advantage of the existential type
 exportReturnValue :: ReturnValue -> FaeTXM ByteString

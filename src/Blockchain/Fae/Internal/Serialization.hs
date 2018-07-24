@@ -64,14 +64,27 @@ type family ERep1 a :: * -> * where
   ERep1 U1 = U1
   ERep1 V1 = V1
 
-data EEnt name = EEnt (EscrowID name) EscrowEntry
+data EEnt name = EEnt EntryID VersionID name deriving (Generic)
 newtype SERep1 f = SERep1 (ERep1 f ())
 
-instance (Typeable name) => EGeneric (EscrowID name) where
-  eFrom eID = EEnt eID <$> peekEscrow eID
-  eTo (EEnt eID@EscrowID{..} entry) = do
+instance (Serialize name) => Serialize (EEnt name) 
+
+instance (ContractName name) => EGeneric (EscrowID name) where
+  eFrom eID@EscrowID{..} = do
+    EscrowEntry{..} <- peekEscrow eID
+    case escrowNameOrFunction of
+      Left c -> do
+        let nc@NamedContract{..} = nameContract @name entID c
+        unless (Map.null endowment) $ throw $ HoldsEscrows entID
+        return $ EEnt entID escrowVersion contractName
+      Right _ -> throw $ NotStartState entID escrowVersion
+
+  eTo (EEnt entID escrowVersion contractName) = do
+    let endowment = Map.empty
+        escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
+        entry = EscrowEntry{..}
     _escrowMap . at entID %= Just . fromMaybe entry
-    return eID
+    return $ EscrowID{..}
 
 instance EGeneric Char
 instance EGeneric Word
@@ -104,21 +117,6 @@ instance (EGeneric c) => EGeneric1 (K1 i c) where
 
 instance EGeneric1 U1
 instance EGeneric1 V1
-
-instance (ContractName name, Serialize name) => Serialize (EEnt name) where
-  put (EEnt EscrowID{entID} EscrowEntry{..}) = 
-    case escrowNameOrFunction of
-      Left c -> do
-        let NamedContract{..} = nameContract @name entID c
-        unless (Map.null endowment) $ throw $ HoldsEscrows entID
-        S.put (entID, escrowVersion, contractName)
-      Right _ -> throw $ NotStartState entID escrowVersion
-
-  get = do
-    (entID, escrowVersion, contractName :: name) <- S.get
-    let endowment = Map.empty
-        escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
-    return $ EEnt EscrowID{..} EscrowEntry{..}
 
 instance 
   (GSerializePut (ERep1 f), GSerializeGet (ERep1 f)) => Serialize (SERep1 f) where

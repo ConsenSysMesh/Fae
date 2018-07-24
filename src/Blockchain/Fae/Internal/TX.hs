@@ -50,6 +50,8 @@ import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
+import Data.Proxy
+import Data.Typeable
 
 import GHC.Generics
 
@@ -59,8 +61,6 @@ import Language.Haskell.Interpreter.Unsafe as Int
 
 import System.Environment
 import System.FilePath
-
-import Type.Reflection
 
 -- * Types
 
@@ -159,7 +159,7 @@ importValueThrow ::
   (Exportable a, MonadState Escrows m) => WrappedByteString -> m a
 importValueThrow (WrappedByteString bs) = 
   fromMaybe (throw $ CantImport bs rep) <$> importValue bs
-  where rep = someTypeRep $ typeRep @a
+  where rep = typeRep $ Proxy @a
 
 faeInterpret :: 
   (Typeable m, MonadMask m, MonadIO m, Typeable a) => 
