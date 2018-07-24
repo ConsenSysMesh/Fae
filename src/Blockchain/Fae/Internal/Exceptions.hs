@@ -71,7 +71,13 @@ data TransactionException =
   TooManyInputs |
   BadInput ContractID
 
+newtype TXFieldException = TXFieldException String
+
 -- * Instances
+
+-- | - 
+instance Show TXFieldException where
+  show (TXFieldException e) = show e
 
 -- | -
 instance Show IDException where
@@ -132,4 +138,5 @@ instance Exception StorageException
 instance Exception ContractException
 -- | -
 instance Exception TransactionException
-
+-- | -
+instance Exception TXFieldException
