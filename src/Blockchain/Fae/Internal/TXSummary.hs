@@ -62,12 +62,11 @@ data TXSummary = TXSummary {
   transactionID :: ShortContractID,
   txResult :: String,
   txOutputs:: [(Int, ShortContractID)],
-  txInputSummaries :: [TXInputSummary],
+  txInputSummaries :: [(ShortContractID, TXInputSummary)],
   signers :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
-  txInputSCID :: ShortContractID,
   txInputNonce :: Int,
   txInputOutputs :: [(Int, ShortContractID)],
   txInputVersions :: [(VersionID, TypeRep)]
@@ -84,19 +83,19 @@ instance Pretty ShortContractID where
 instance Pretty TXSummary where
    pPrint TXSummary{..} = prettyHeader header entry
     where header = labelHeader "Transaction" transactionID
-          result = prettyPair ("result", UnquotedString txResult)
-          inputs = vcat $ pPrint <$> txInputSummaries
-          outputs = prettyList "outputs" (over (traverse . _1) show txOutputs)
-          signers' = prettyList "signers" signers
-          entry = displayException $ vcat [ result, outputs, signers', inputs ]
+          result = prettyPair ("result", displayException $ text txResult)
+          outputs = displayException $ prettyList "outputs" $ over (traverse . _1) show txOutputs
+          signers' = prettyList "txSigners" signers
+          inputs = prettyPairs $ over (traverse . _1) show txInputSummaries
+            --vcat $ over (traverse . _2) (displayException . pPrint) $
+            --over (traverse . _1) show txInputSummaries
+          entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = prettyHeader header inputBody
-    where outputs = prettyPair ("outputs", txInputOutputs)
-          versions = prettyPair ("versions", txInputVersions)
-          nonce = prettyPair ("nonce", txInputNonce)
-          inputBody = displayException $ vcat [ nonce, outputs, versions ] 
-          header = labelHeader "input" txInputSCID
+  pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
+    where outputs = prettyPair ("outputs", displayException $ text $ show  txInputOutputs)
+          versions = prettyPair ("versions", displayException $ text $ show txInputVersions)
+          nonce = prettyPair ("nonce", displayException $ text $ show txInputNonce)
 
 -- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc
@@ -128,7 +127,7 @@ displayException doc =
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
 showException :: SomeException -> VDoc
-showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
+showException e = text (safeHead $ lines $ show e) where
   safeHead [] = []
   safeHead (x : _) = x
 
@@ -142,10 +141,11 @@ collectTransaction txID = do
       txInputSCIDs = nub inputOrder
       txResult = show result 
       txOutputs = getTXOutputs (OutputOfTransaction txID outputs)
-  txInputSummaries <- getInputSummary txID  txInputSCIDs inputOutputs
+  txInputSummaries <- getInputSummary txID txInputSCIDs inputOutputs
   return $ TXSummary{..}
 
-getInputSummary :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> [ShortContractID] -> Map.Map ShortContractID InputOutputVersions -> m [TXInputSummary]
+getInputSummary :: (MonadState Storage m, MonadCatch m, MonadIO m) =>
+ TransactionID -> [ShortContractID] -> Map.Map ShortContractID InputOutputVersions -> m [(TransactionID, TXInputSummary)]
 getInputSummary txID inputSCIDs inputMap = do
     forM (nub inputSCIDs) $ \scID -> do
       let 
@@ -154,7 +154,7 @@ getInputSummary txID inputSCIDs inputMap = do
         txInputVersions = Map.toList $ getVersionMap iVersions
         txInputOutputs = getTXOutputs (OutputOfContract txID scID iOutputs)
       txInputNonce <- use $ nonceAt iRealID . to (fmap snd) . defaultLens (-1)
-      return TXInputSummary {txInputSCID = txID, ..}
+      return (txID, TXInputSummary {..})
 
 getTXOutputs :: OutputOf -> [(Int, ShortContractID)]
 getTXOutputs outs = outputsToList $ outputCIDs outs

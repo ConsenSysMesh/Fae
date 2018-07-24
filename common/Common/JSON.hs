@@ -20,7 +20,9 @@ import Blockchain.Fae.FrontEnd
 
 import qualified Data.ByteString.Char8 as C8
 
+import Control.Applicative
 import Control.DeepSeq
+import Control.Lens hiding ((.=))
 
 import Data.Aeson (eitherDecode, FromJSON, ToJSON, Object, toJSON, parseJSON, object, Value(..), withText, withObject, (.=), (.:), (.:?))
 import qualified Data.Aeson as A
@@ -29,6 +31,7 @@ import qualified Data.ByteString.Lazy.Char8 as LC8
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as X
 import qualified Data.Text.Lazy.Encoding as D
+import qualified Data.Map.Lazy as M
 import Data.Maybe
 import Data.Text (Text)
 import Data.Typeable
@@ -54,20 +57,24 @@ showException e = "<exception> " ++ (safeHead $ lines $ show e) where
 
 -- handle any exception in any  field as a exception for txinputsummary
 instance ToJSON TXInputSummary where
-  toJSON TXInputSummary{..} = object [
-     -- should be moved up one level and used as
-    -- the field name in the json list of txinput summaries,
-    "txInputNonce" .= txInputNonce,
-    "txInputOutputs" .= txInputOutputs,
-    "txInputVersions" .= txInputVersions ]
+  toJSON TXInputSummary{..} = unsafePerformIO $ 
+    catchAll 
+      (do 
+        evalTXInputNonce <- evaluate $ txInputNonce
+        evaltxInputOutputs <- evaluate $ txInputOutputs
+        evalTXInputVersions <- evaluate $ txInputVersions
+        return $ object [
+          "txInputNonce" .= evalTXInputNonce,
+          "txInputOutputs" .= evaltxInputOutputs,
+          "txInputVersions" .= evalTXInputVersions ])
+      $ return . object . pure . (T.pack "exception",) . A.String . T.pack . show
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
     "transactionID" .= show transactionID,
     "txResult" .= (writeJSONField txResult),
-    "txOutputs" .= (object $ (\(ix, scid) -> (T.pack $ show ix, writeJSONField scid)) <$> txOutputs),
-    "txInputSummaries" .= ((\TXInputSummary{..} ->
-      object [ (T.pack $ show txInputSCID) .= writeJSONField TXInputSummary{..} ]) <$> txInputSummaries),
+    "txOutputs" .= (writeJSONField txOutputs),
+    "txInputSummaries" .= txInputSummaries,
     "signers" .= signers ]
 
 -- | If an exception is found then we tag the value as an exception.
@@ -80,20 +87,16 @@ writeJSONField val =
 
 -- | If parsing fails then we look for the tagged exception.
 readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
-readJSONField fieldName obj = do
-  valM <- obj .:? fieldName
-  case valM of
-    Just val -> return val
-    Nothing -> do
-      message <- obj .: "exception"
-      return $ throw $ userError message
+readJSONField fieldName obj = 
+  obj .: fieldName <|> do 
+    x <- obj .: fieldName
+    (throw . TXFieldException) <$> x .: "exception"
 
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     TXInputSummary
-      <$> o .: "txInputSCID"
-      <*> readJSONField "txInputNonce" o
-      <*> (return . read =<< readJSONField "txInputOutputs" o)
+      <$> readJSONField "txInputNonce" o
+      <*> readJSONField "txInputOutputs" o
       <*> readJSONField "txInputVersions" o
 
 instance FromJSON TXSummary where
