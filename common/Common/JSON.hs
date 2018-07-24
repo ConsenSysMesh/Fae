@@ -42,11 +42,6 @@ import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
 import Text.Read
-
---- | Flushes out all exceptions present in the input, returning a formatted
---- error message if one is found.
-forceEval a = 
-  unsafePerformIO $ catchAll (evaluate $ force a) (return . showException)
     
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
@@ -60,9 +55,9 @@ instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = unsafePerformIO $ 
     catchAll 
       (do 
-        evalTXInputNonce <- evaluate $ txInputNonce
-        evaltxInputOutputs <- evaluate $ txInputOutputs
-        evalTXInputVersions <- evaluate $ txInputVersions
+        evalTXInputNonce <- evaluate $ force $ txInputNonce
+        evaltxInputOutputs <- evaluate $ force $ txInputOutputs
+        evalTXInputVersions <- evaluate $ force $ txInputVersions
         return $ object [
           "txInputNonce" .= evalTXInputNonce,
           "txInputOutputs" .= evaltxInputOutputs,
@@ -94,10 +89,11 @@ readJSONField fieldName obj =
 
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
-    TXInputSummary
-      <$> readJSONField "txInputNonce" o
-      <*> readJSONField "txInputOutputs" o
-      <*> readJSONField "txInputVersions" o
+    (TXInputSummary
+      <$> o .: "txInputNonce"
+      <*> o .: "txInputOutputs"
+      <*> o .: "txInputVersions")
+      <|> (throw . TXFieldException) <$> o .: "exception"
 
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
@@ -105,7 +101,7 @@ instance FromJSON TXSummary where
       <$> o .: "transactionID"
       <*> readJSONField "txResult" o
       <*> readJSONField "txOutputs" o
-      <*> readJSONField "txInputSummaries" o
+      <*> o .: "txInputSummaries"
       <*> o .: "signers"
 
 --readWithFailure :: forall a. (Read a) => Text -> Object -> Parser a
