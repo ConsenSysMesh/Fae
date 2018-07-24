@@ -56,11 +56,11 @@ instance ToJSON TXInputSummary where
     catchAll 
       (do 
         evalTXInputNonce <- evaluate $ force $ txInputNonce
-        evaltxInputOutputs <- evaluate $ force $ txInputOutputs
+        evalTXInputOutputs <- evaluate $ force $ txInputOutputs
         evalTXInputVersions <- evaluate $ force $ txInputVersions
         return $ object [
           "txInputNonce" .= evalTXInputNonce,
-          "txInputOutputs" .= evaltxInputOutputs,
+          "txInputOutputs" .= evalTXInputOutputs,
           "txInputVersions" .= evalTXInputVersions ])
       $ return . object . pure . (T.pack "exception",) . A.String . T.pack . show
 
@@ -93,7 +93,7 @@ instance FromJSON TXInputSummary where
       <$> o .: "txInputNonce"
       <*> o .: "txInputOutputs"
       <*> o .: "txInputVersions")
-      <|> (throw . TXFieldException) <$> o .: "exception"
+      <|> (throw . TXFieldException <$> o .: "exception")
 
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
@@ -103,10 +103,6 @@ instance FromJSON TXSummary where
       <*> readJSONField "txOutputs" o
       <*> o .: "txInputSummaries"
       <*> o .: "signers"
-
---readWithFailure :: forall a. (Read a) => Text -> Object -> Parser a
---readWithFailure fieldName o = readJSONField fieldName o
---either fail return . readEither =<< 
 
 instance FromJSON PublicKey where
   parseJSON = withText "VersionID" $ \pKey -> do
