@@ -86,16 +86,14 @@ instance Pretty TXSummary where
           result = prettyPair ("result", displayException $ text txResult)
           outputs = displayException $ prettyList "outputs" $ over (traverse . _1) show txOutputs
           signers' = prettyList "txSigners" signers
-          inputs = prettyPairs $ over (traverse . _1) show txInputSummaries
-            --vcat $ over (traverse . _2) (displayException . pPrint) $
-            --over (traverse . _1) show txInputSummaries
+          inputs = prettyPairs $ over (traverse . _1) show $ txInputSummaries
           entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
-    where outputs = prettyPair ("outputs", displayException $ text $ show  txInputOutputs)
-          versions = prettyPair ("versions", displayException $ text $ show txInputVersions)
-          nonce = prettyPair ("nonce", displayException $ text $ show txInputNonce)
+  pPrint TXInputSummary{..} = displayException $ vcat [ nonce, outputs, versions ] 
+    where outputs = prettyPair ("outputs", text $ show txInputOutputs)
+          versions = prettyPair ("versions", text $ show txInputVersions)
+          nonce = prettyPair ("nonce", text $ show txInputNonce)
 
 -- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc

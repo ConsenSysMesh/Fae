@@ -55,14 +55,14 @@ instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = unsafePerformIO $ 
     catchAll 
       (do 
-        evalTXInputNonce <- evaluate $ force $ txInputNonce
-        evalTXInputOutputs <- evaluate $ force $ txInputOutputs
-        evalTXInputVersions <- evaluate $ force $ txInputVersions
+        evalTXInputNonce <- evaluate $ force $ toJSON txInputNonce
+        evalTXInputOutputs <- evaluate $ force $ toJSON txInputOutputs
+        evalTXInputVersions <- evaluate $ force $ toJSON txInputVersions
         return $ object [
           "txInputNonce" .= evalTXInputNonce,
           "txInputOutputs" .= evalTXInputOutputs,
           "txInputVersions" .= evalTXInputVersions ])
-      $ return . object . pure . (T.pack "exception",) . A.String . T.pack . show
+      $ return . object . pure . (T.pack "exception",) . A.String . T.pack . showException
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
@@ -78,7 +78,7 @@ instance ToJSON TXSummary where
 writeJSONField :: forall a. (ToJSON a) => a -> Value
 writeJSONField val = 
   unsafePerformIO $ catchAll (evaluate $ force $ toJSON val)
-    (return . object . pure . ("exception",) . A.String . T.pack . showException)
+    (return . object . pure . ("exception",) . A.String . T.pack . show)
 
 -- | If parsing fails then we look for the tagged exception.
 readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
@@ -89,12 +89,13 @@ readJSONField fieldName obj =
 
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
-    (TXInputSummary
-      <$> o .: "txInputNonce"
-      <*> o .: "txInputOutputs"
-      <*> o .: "txInputVersions")
-      <|> (throw . TXFieldException <$> o .: "exception")
-
+    TXInputSummary
+      <$> readWithFailure o "txInputNonce"
+      <*> readWithFailure o "txInputOutputs"
+      <*> readWithFailure o "txInputVersions"
+    where readWithFailure obj fieldName = obj .: fieldName 
+            <|> (throw . TXFieldException) <$> obj .: "exception"
+      
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
     TXSummary
