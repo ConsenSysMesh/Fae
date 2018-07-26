@@ -91,9 +91,9 @@ instance Pretty TXSummary where
           entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = displayException $ vcat [ nonce, outputs, versions' ] 
+  pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
     where outputs = prettyPair ("outputs", text $ show txInputOutputs)
-          versions' = prettyPair ("versions", text $ show txInputVersions)
+          versions = prettyPair ("versions", text $ show txInputVersions)
           nonce = prettyPair ("nonce", text $ show txInputNonce)
 
 -- | Constructs a header with a name and some other data.

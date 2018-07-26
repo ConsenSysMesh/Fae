@@ -48,9 +48,9 @@ instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = unsafePerformIO $ 
     catchAll 
       (do 
-        evalTXInputNonce <- evaluate $ force $ toJSON txInputNonce
-        evalTXInputOutputs <- evaluate $ force $ toJSON txInputOutputs
-        evalTXInputVersions <- evaluate $ force $ toJSON txInputVersions
+        evalTXInputNonce <- evaluate $ force $ txInputNonce
+        evalTXInputOutputs <- evaluate $ force $ txInputOutputs
+        evalTXInputVersions <- evaluate $ force $ txInputVersions
         return $ object [
           "txInputNonce" .= evalTXInputNonce,
           "txInputOutputs" .= evalTXInputOutputs,
