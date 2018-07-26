@@ -12,7 +12,6 @@ import Network.HTTP.Client
 
 import Text.PrettyPrint.HughesPJClass
 
-
 requestURL :: String -> Request
 requestURL host = fromMaybe (error $ "Bad host string: " ++ host) $ 
   parseRequest $ "http://" ++ host

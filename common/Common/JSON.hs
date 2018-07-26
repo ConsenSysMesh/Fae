@@ -42,13 +42,6 @@ import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
 import Text.Read
-    
--- | Actually prints the exception nicely.  Due to call stack cruft we only
--- take the first line.
-showException :: SomeException -> String
-showException e = "<exception> " ++ (safeHead $ lines $ show e) where
-  safeHead [] = []
-  safeHead (x : _) = x
 
 -- handle any exception in any  field as a exception for txinputsummary
 instance ToJSON TXInputSummary where
@@ -62,7 +55,7 @@ instance ToJSON TXInputSummary where
           "txInputNonce" .= evalTXInputNonce,
           "txInputOutputs" .= evalTXInputOutputs,
           "txInputVersions" .= evalTXInputVersions ])
-      $ return . object . pure . (T.pack "exception",) . A.String . T.pack . showException
+      $ return . object . pure . (T.pack "exception",) . A.String . T.pack . show
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [

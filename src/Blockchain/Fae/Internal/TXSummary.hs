@@ -86,13 +86,14 @@ instance Pretty TXSummary where
           result = prettyPair ("result", displayException $ text txResult)
           outputs = displayException $ prettyList "outputs" $ over (traverse . _1) show txOutputs
           signers' = prettyList "txSigners" signers
-          inputs = prettyPairs $ over (traverse . _1) show $ txInputSummaries
+          inputs = vcat $ (\(scid, inSummary) -> 
+            prettyHeader (text $ show scid) (displayException $ pPrint inSummary)) <$> txInputSummaries
           entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = displayException $ vcat [ nonce, outputs, versions ] 
+  pPrint TXInputSummary{..} = displayException $ vcat [ nonce, outputs, versions' ] 
     where outputs = prettyPair ("outputs", text $ show txInputOutputs)
-          versions = prettyPair ("versions", text $ show txInputVersions)
+          versions' = prettyPair ("versions", text $ show txInputVersions)
           nonce = prettyPair ("nonce", text $ show txInputNonce)
 
 -- | Constructs a header with a name and some other data.
@@ -114,20 +115,20 @@ prettyPairs = vcat . map prettyPair
 
 -- | Prints a key-value pair with a colon.
 prettyPair :: (Show v) => (String, v) -> Doc
-prettyPair (x, y) = text x <> colon <+> text (show y)
+prettyPair (x, y) = text x <> colon <+> (text $ show y)
+
+-- | Actually prints the exception nicely.  Due to call stack cruft we only
+-- take the first line.
+showException :: SomeException -> VDoc
+showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
+  safeHead [] = []
+  safeHead (x : _) = x
 
 --- | Flushes out all exceptions present in the input, returning a formatted
 --- error message if one is found.
 displayException :: VDoc -> VDoc
 displayException doc = 
   unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
-
--- | Actually prints the exception nicely.  Due to call stack cruft we only
--- take the first line.
-showException :: SomeException -> VDoc
-showException e = text (safeHead $ lines $ show e) where
-  safeHead [] = []
-  safeHead (x : _) = x
 
 -- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
