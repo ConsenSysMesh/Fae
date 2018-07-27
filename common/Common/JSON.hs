@@ -21,7 +21,9 @@ import Blockchain.Fae.FrontEnd
 import Control.Applicative
 import Control.DeepSeq
 
-import Data.Aeson (FromJSON, ToJSON, Object, toJSON, parseJSON, object, Value(..), withText, withObject, (.=), (.:))
+import Data.Aeson (FromJSON, ToJSON, Object, toJSON,
+   parseJSON, object, Value(..), withText,
+   withObject, (.=), (.:))
 import qualified Data.Aeson as A
 import Data.Aeson.Types
 import qualified Data.Text as T
@@ -30,7 +32,6 @@ import qualified Data.Text.Lazy.Encoding as D
 import Data.Text (Text)
 
 import System.IO.Unsafe
-
 
 import Text.Read
 
@@ -71,7 +72,6 @@ readJSONField fieldName obj =
     x <- obj .: fieldName
     (throw . TXFieldException) <$> x .: "exception"
 
--- here is the issue with the hanging!!!!
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     TXInputSummary
