@@ -87,9 +87,8 @@ instance Pretty TXSummary where
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
     where outputs = prettyPair ("outputs", text $ show txInputOutputs)
-          versions = prettyPair $ ("versions",) $
-            prettyPairs $ over (traverse . _1) show $ 
-            over (traverse . _2) UnquotedString txInputVersions
+          versions = prettyPair $ ("versions",) $ prettyPairs $
+            bimap show UnquotedString <$> txInputVersions
           nonce = prettyPair ("nonce", text $ show txInputNonce)
 
 -- | Constructs a header with a name and some other data.
