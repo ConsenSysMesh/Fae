@@ -69,7 +69,7 @@ data TXSummary = TXSummary {
 data TXInputSummary = TXInputSummary {
   txInputNonce :: Int,
   txInputOutputs :: [(Int, ShortContractID)],
-  txInputVersions :: [(VersionID, TypeRep)]
+  txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
 
 makeLenses ''TXSummary
@@ -86,14 +86,16 @@ instance Pretty TXSummary where
           result = prettyPair ("result", displayException $ text txResult)
           outputs = displayException $ prettyList "outputs" $ over (traverse . _1) show txOutputs
           signers' = prettyList "txSigners" signers
-          inputs = vcat $ (\(scid, inSummary) -> 
-            prettyHeader (text $ show scid) (displayException $ pPrint inSummary)) <$> txInputSummaries
+          inputs = vcat $ (\(scid, txInputSummary) -> 
+            prettyHeader (text $ show scid) (displayException $ pPrint txInputSummary)) <$> txInputSummaries
           entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
     where outputs = prettyPair ("outputs", text $ show txInputOutputs)
-          versions = prettyPair ("versions", text $ show txInputVersions)
+          versions = prettyPair $ ("versions",) $
+            prettyPairs $ over (traverse . _1) show $ 
+            over (traverse . _2) UnquotedString txInputVersions
           nonce = prettyPair ("nonce", text $ show txInputNonce)
 
 -- | Constructs a header with a name and some other data.
@@ -139,7 +141,7 @@ collectTransaction txID = do
       signers = Map.toList $ getSigners txSigners
       txInputSCIDs = nub inputOrder
       txResult = show result 
-      txOutputs = getTXOutputs (OutputOfTransaction txID outputs)
+      txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
   txInputSummaries <- getInputSummary txID txInputSCIDs inputOutputs
   return $ TXSummary{..}
 
@@ -150,7 +152,7 @@ getInputSummary txID inputSCIDs inputMap = do
       let 
         input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
         ~InputOutputVersions{..} = input
-        txInputVersions = Map.toList $ getVersionMap iVersions
+        txInputVersions = over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
         txInputOutputs = getTXOutputs (OutputOfContract txID scID iOutputs)
       txInputNonce <- use $ nonceAt iRealID . to (fmap snd) . defaultLens (-1)
       return (txID, TXInputSummary {..})

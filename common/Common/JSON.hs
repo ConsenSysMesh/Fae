@@ -86,7 +86,7 @@ instance FromJSON TXInputSummary where
     TXInputSummary
       <$> readJSONField' "txInputNonce" o
       <*> readJSONField' "txInputOutputs" o
-      <*> pure [] --readJSONField' "txInputVersions" o
+      <*> readJSONField' "txInputVersions" o
     where readJSONField' fieldName obj =
             obj .: fieldName <|> do 
               (throw . TXFieldException) <$> obj .: "exception"
@@ -115,14 +115,6 @@ instance FromJSON VersionID where
     either fail return $ readEither (T.unpack vID)
 
 instance ToJSON VersionID where
-  toJSON = toJSON . T.pack . show
-
-instance Read TypeRep
-
-instance FromJSON TypeRep where
-  parseJSON (A.String a) = either fail return $ readEither (T.unpack a)
-
-instance ToJSON TypeRep where
   toJSON = toJSON . T.pack . show
 
 instance FromJSON ShortContractID where
