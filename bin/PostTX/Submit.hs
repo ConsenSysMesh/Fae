@@ -11,18 +11,13 @@ import Data.Map (Map)
 import qualified Data.Serialize as S
 import Data.Serialize (Serialize)
 
-import Data.Maybe
 import qualified Data.Text as T
 
 import Network.HTTP.Client
 import Network.HTTP.Client.MultipartFormData
 
-import PostTX.EnvVars
 import PostTX.Network
 import PostTX.TXSpec
-
-import System.Directory
-import System.FilePath
 
 submit :: String -> String -> Bool -> Bool -> Bool -> TXSpec String -> IO ()
 submit txName host fake lazy isJson txSpec = 

@@ -48,14 +48,14 @@ instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = unsafePerformIO $ 
     catchAll 
       (do 
-        evalTXInputNonce <- evaluate $ force $ txInputNonce
-        evalTXInputOutputs <- evaluate $ force $ txInputOutputs
-        evalTXInputVersions <- evaluate $ force $ txInputVersions
+        evalTXInputNonce <- evaluate $ force $ toJSON txInputNonce
+        evalTXInputOutputs <- evaluate $ force $ toJSON txInputOutputs
+        evalTXInputVersions <- evaluate $ force $ toJSON txInputVersions
         return $ object [
           "txInputNonce" .= evalTXInputNonce,
           "txInputOutputs" .= evalTXInputOutputs,
           "txInputVersions" .= evalTXInputVersions ])
-      $ return . object . pure . (T.pack "exception",) . A.String . T.pack . show
+      $ (return . object . pure . ("exception",) . A.String . T.pack . show)
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
@@ -80,14 +80,16 @@ readJSONField fieldName obj =
     x <- obj .: fieldName
     (throw . TXFieldException) <$> x .: "exception"
 
+-- here is the issue with the hanging!!!!
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     TXInputSummary
-      <$> readWithFailure o "txInputNonce"
-      <*> readWithFailure o "txInputOutputs"
-      <*> readWithFailure o "txInputVersions"
-    where readWithFailure obj fieldName = obj .: fieldName 
-            <|> (throw . TXFieldException) <$> obj .: "exception"
+      <$> readJSONField' "txInputNonce" o
+      <*> readJSONField' "txInputOutputs" o
+      <*> pure [] --readJSONField' "txInputVersions" o
+    where readJSONField' fieldName obj =
+            obj .: fieldName <|> do 
+              (throw . TXFieldException) <$> obj .: "exception"
       
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o -> do
@@ -103,26 +105,25 @@ instance FromJSON PublicKey where
     either fail return $ readEither (T.unpack pKey)
 
 instance ToJSON PublicKey where
-  toJSON vID = toJSON $ T.pack $ show vID
+  toJSON = toJSON . T.pack . show
 
 instance ToJSON ShortContractID where
-  toJSON scid = toJSON $ T.pack $ show scid
+  toJSON = toJSON . T.pack . show
 
 instance FromJSON VersionID where
   parseJSON = withText "VersionID" $ \vID -> do
     either fail return $ readEither (T.unpack vID)
 
 instance ToJSON VersionID where
-  toJSON vID = toJSON $ T.pack $ show vID
+  toJSON = toJSON . T.pack . show
 
-instance Read TypeRep where
-  readsPrec = readsPrec
+instance Read TypeRep
 
 instance FromJSON TypeRep where
   parseJSON (A.String a) = either fail return $ readEither (T.unpack a)
 
 instance ToJSON TypeRep where
-  toJSON a = toJSON $ T.pack $ show a
+  toJSON = toJSON . T.pack . show
 
 instance FromJSON ShortContractID where
   parseJSON = withText "ShortContractID" $ \scid -> do

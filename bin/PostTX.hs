@@ -1,7 +1,5 @@
-import Common.ProtocolT
 
 import Control.Monad.Reader
-import Control.Monad.Trans
 
 import Data.Maybe
 
@@ -36,7 +34,7 @@ main = do
       else do
         txSpec <- txDataToTXSpec txData
         submit postArgTXName postArgHost postArgFake postArgLazy postArgJSON txSpec
-    x@OngoingFaethArgs{..} -> 
+    OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
     UsageArgs UsageSuccess -> do
