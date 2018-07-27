@@ -1,8 +1,5 @@
 module PostTX.Submit where
 
-import Control.Exception
-import Control.Lens hiding ((<.>))
-
 import qualified Data.ByteString.Char8 as C8
 
 import qualified Data.Map as Map

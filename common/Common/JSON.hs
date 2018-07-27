@@ -18,28 +18,19 @@ module Common.JSON where
 
 import Blockchain.Fae.FrontEnd
 
-import qualified Data.ByteString.Char8 as C8
-
 import Control.Applicative
 import Control.DeepSeq
-import Control.Lens hiding ((.=))
 
-import Data.Aeson (eitherDecode, FromJSON, ToJSON, Object, toJSON, parseJSON, object, Value(..), withText, withObject, (.=), (.:), (.:?))
+import Data.Aeson (FromJSON, ToJSON, Object, toJSON, parseJSON, object, Value(..), withText, withObject, (.=), (.:))
 import qualified Data.Aeson as A
 import Data.Aeson.Types
-import qualified Data.ByteString.Lazy.Char8 as LC8
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as X
 import qualified Data.Text.Lazy.Encoding as D
-import qualified Data.Map.Lazy as M
-import Data.Maybe
 import Data.Text (Text)
-import Data.Typeable
 
 import System.IO.Unsafe
 
-import Text.PrettyPrint
-import Text.PrettyPrint.HughesPJClass
 
 import Text.Read
 

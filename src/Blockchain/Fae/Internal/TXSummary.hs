@@ -26,7 +26,6 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
 import Blockchain.Fae.Internal.TX
 
-
 import Common.Lens hiding ((.=))
 
 import System.IO.Unsafe
@@ -36,15 +35,10 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State
 
-import qualified Data.Text.Lazy.Encoding as T
-
-import qualified Data.ByteString.Lazy.Char8 as C
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
 
 import Data.List
-import Data.Typeable
-import Data.Void
 
 import GHC.Generics hiding (to)
 

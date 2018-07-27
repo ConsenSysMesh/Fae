@@ -1,8 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.SpecParser where
 
-import Blockchain.Fae (ContractID, TransactionID)
-
 import Common.Lens hiding ((<.>))
 
 import qualified Data.ByteString.Char8 as C8

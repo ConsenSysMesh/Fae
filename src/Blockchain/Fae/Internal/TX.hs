@@ -38,12 +38,9 @@ import Blockchain.Fae.Internal.Transaction
 
 import Control.DeepSeq
 
-import Control.Monad 
 import Control.Monad.State
-import Control.Monad.Trans
 
 import Data.Functor.Identity
-import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 

@@ -10,14 +10,10 @@ import Control.Exception.Base
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
 
 import Common.JSON
 
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as L
-import qualified Data.Text.Lazy.Encoding as E
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.Serialize (Serialize)
@@ -31,10 +27,8 @@ import FaeServer.History
 import FaeServer.Modules
 
 import System.Directory
-import System.Exit
 import System.FilePath
 import System.IO
-import System.IO.Error
 
 runFae :: ThreadId -> Flags -> TXQueueT IO ()
 runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do

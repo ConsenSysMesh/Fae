@@ -6,7 +6,6 @@ import Blockchain.Fae (TransactionID)
 import Common.Lens hiding (view)
 import Common.ProtocolT
 
-import Data.Bool
 import Data.List
 import Data.Maybe
 

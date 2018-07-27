@@ -10,10 +10,7 @@ import Control.Concurrent.STM
 import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans
 import Control.Monad.Writer
-
-import qualified Data.ByteString.Char8 as C8
 
 import Data.Map (Map)
 

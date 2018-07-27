@@ -17,7 +17,7 @@ import Blockchain.Fae.Internal.Crypto
 import Common.Lens
 import Control.DeepSeq
 import Data.Map (Map)
-import Data.Serialize
+import Data.Serialize 
 import Data.String
 import GHC.Generics
 import Text.ParserCombinators.ReadP

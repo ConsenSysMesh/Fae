@@ -1,8 +1,8 @@
 module PostTX.Network where
 
-import Blockchain.Fae.FrontEnd (collectTransaction, TXSummary)
+import Blockchain.Fae.FrontEnd (TXSummary)
 
-import Common.JSON
+import Common.JSON()
 
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Lazy.Char8 as LC8

@@ -19,16 +19,9 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs.Types
 
-import Control.DeepSeq
-
 import Control.Monad.Writer
 
-import Data.Char
-import Data.List
-import Data.String
-import Data.Traversable
 import Data.Type.Equality
-import Data.Void
 
 import GHC.Generics
 import GHC.TypeLits
