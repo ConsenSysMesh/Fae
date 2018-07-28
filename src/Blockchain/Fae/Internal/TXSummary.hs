@@ -148,7 +148,7 @@ getInputSummary txID inputSCIDs inputMap = do
         txInputVersions = over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
         txInputOutputs = getTXOutputs (OutputOfContract txID scID iOutputs)
       txInputNonce <- use $ nonceAt iRealID . to (fmap snd) . defaultLens (-1)
-      return (txID, TXInputSummary {..})
+      return (scID, TXInputSummary {..})
 
 getTXOutputs :: OutputOf -> [(Int, ShortContractID)]
 getTXOutputs outs = outputsToList $ outputCIDs outs
