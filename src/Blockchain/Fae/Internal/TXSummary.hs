@@ -130,11 +130,11 @@ collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => Transac
 collectTransaction txID = do
   TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   let 
-      transactionID = txID
-      signers = Map.toList $ getSigners txSigners
-      txInputSCIDs = nub inputOrder
-      txResult = show result 
-      txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
+    transactionID = txID
+    signers = Map.toList $ getSigners txSigners
+    txInputSCIDs = nub inputOrder
+    txResult = show result 
+    txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
   txInputSummaries <- getInputSummary txID txInputSCIDs inputOutputs
   return $ TXSummary{..}
 
