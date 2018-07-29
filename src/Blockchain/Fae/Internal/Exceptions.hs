@@ -77,7 +77,7 @@ newtype TXFieldException = TXFieldException String
 
 -- | - 
 instance Show TXFieldException where
-  show (TXFieldException e) = show e
+  show (TXFieldException e) = e
 
 -- | -
 instance Show IDException where

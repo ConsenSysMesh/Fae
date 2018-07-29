@@ -35,7 +35,6 @@ import System.IO.Unsafe
 
 import Text.Read
 
--- handle any exception in any  field as a exception for txinputsummary
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = unsafePerformIO $ 
     catchAll 

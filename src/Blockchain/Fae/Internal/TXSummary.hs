@@ -45,7 +45,7 @@ import GHC.Generics hiding (to)
 import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
--- | Outputs decorated with what they were output from.  Sort of
+-- | Outputs decorated with what they were output from. Sort of
 -- a proto-ContractID.
 data OutputOf = 
   OutputOfTransaction TransactionID Outputs |
@@ -78,16 +78,17 @@ instance Pretty TXSummary where
    pPrint TXSummary{..} = prettyHeader header entry
     where header = labelHeader "Transaction" transactionID
           result = prettyPair ("result", displayException $ text txResult)
-          outputs = displayException $ prettyPair ("outputs", fst <$> txOutputs)
+          outputs = displayException $ prettyList "outputs" $ (_1 %~ show) <$> txOutputs
           signers' = prettyList "signers" signers
           inputs = vcat $ (\(scid, txInputSummary) -> 
-            prettyHeader (labelHeader "input" scid) (displayException $ pPrint txInputSummary)) <$> txInputSummaries
+            prettyHeader (labelHeader "input" scid) (displayException $ pPrint txInputSummary)) 
+              <$> txInputSummaries
           entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
     where outputs = prettyPair ("outputs", text $ show txInputOutputs)
-          versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
+          versions = prettyHeader (text "versions") $ prettyPairs $
             bimap show UnquotedString <$> txInputVersions
           nonce = prettyPair ("nonce", text $ show txInputNonce)
 
@@ -115,7 +116,7 @@ prettyPair (x, y) = text x <> colon <+> (text $ show y)
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
 showException :: SomeException -> VDoc
-showException e = text "<exception>" <+> text (safeHead $ lines $ show e) where
+showException e = text "<exception>" <+> text (safeHead $ lines $ show $ UnquotedString $ show e) where
   safeHead [] = []
   safeHead (x : _) = x
 
@@ -138,6 +139,7 @@ collectTransaction txID = do
   txInputSummaries <- getInputSummary txID txInputSCIDs inputOutputs
   return $ TXSummary{..}
 
+-- | Get the TXInputSummary for a gicen ShortContractID 
 getInputSummary :: (MonadState Storage m, MonadCatch m, MonadIO m) =>
  TransactionID -> [ShortContractID] -> Map.Map ShortContractID InputOutputVersions -> m [(TransactionID, TXInputSummary)]
 getInputSummary txID inputSCIDs inputMap = do
@@ -150,6 +152,7 @@ getInputSummary txID inputSCIDs inputMap = do
       txInputNonce <- use $ nonceAt iRealID . to (fmap snd) . defaultLens (-1)
       return (scID, TXInputSummary {..})
 
+-- | Gets the index of each output within faeStorage and the associated ShortContractID 
 getTXOutputs :: OutputOf -> [(Int, ShortContractID)]
 getTXOutputs outs = outputsToList $ outputCIDs outs
   where
