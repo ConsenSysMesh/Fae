@@ -72,22 +72,22 @@ makeLenses ''TXSummary
 type VDoc = Doc
 
 instance Pretty ShortContractID where 
-  pPrint scid = text (show scid)
+  pPrint scid = text $ show scid
 
 instance Pretty TXSummary where
    pPrint TXSummary{..} = prettyHeader header entry
     where header = labelHeader "Transaction" transactionID
           result = prettyPair ("result", displayException $ text txResult)
-          outputs = displayException $ prettyList "outputs" $ over (traverse . _1) show txOutputs
-          signers' = prettyList "txSigners" signers
+          outputs = displayException $ prettyPair ("outputs", fst <$> txOutputs)
+          signers' = prettyList "signers" signers
           inputs = vcat $ (\(scid, txInputSummary) -> 
-            prettyHeader (text $ show scid) (displayException $ pPrint txInputSummary)) <$> txInputSummaries
+            prettyHeader (labelHeader "input" scid) (displayException $ pPrint txInputSummary)) <$> txInputSummaries
           entry = vcat [ result, outputs, signers', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
     where outputs = prettyPair ("outputs", text $ show txInputOutputs)
-          versions = prettyPair $ ("versions",) $ prettyPairs $
+          versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
             bimap show UnquotedString <$> txInputVersions
           nonce = prettyPair ("nonce", text $ show txInputNonce)
 
@@ -97,12 +97,12 @@ labelHeader h l = text h <+> text (show l)
 
 -- | Formats a nice header with indented body.
 prettyHeader :: Doc -> Doc -> Doc
-prettyHeader header body = header <> colon $+$ nest 2 body 
+prettyHeader header body = header $+$ nest 2 body 
 
 -- | Converts a string and list of "lines" into a body with header.
 prettyList :: (Show v) => String -> [(String, v)] -> Doc
 prettyList headString bodyList = 
-  prettyHeader (text headString) (prettyPairs bodyList)
+  prettyHeader (text headString <> colon) (prettyPairs bodyList)
 
 -- | Converts a list of pairs into a display, without header.
 prettyPairs :: (Show v) => [(String, v)] -> Doc
