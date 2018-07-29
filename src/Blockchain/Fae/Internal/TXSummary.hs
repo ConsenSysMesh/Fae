@@ -88,7 +88,7 @@ instance Pretty TXSummary where
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
     where outputs = prettyPair ("outputs", text $ show txInputOutputs)
-          versions = prettyHeader (text "versions") $ prettyPairs $
+          versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
             bimap show UnquotedString <$> txInputVersions
           nonce = prettyPair ("nonce", text $ show txInputNonce)
 
