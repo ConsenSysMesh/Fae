@@ -91,12 +91,12 @@ twoPartySwap :: (ContractVal a, ContractVal b, MonadTX m) => a -> b -> m ()
 twoPartySwap x y = do
   partyA <- signer "partyA"
   partyB <- signer "partyB"
-  newContract [bearer x, bearer y] $ TwoPartySwap partyA partyB x y
+  newContract $ TwoPartySwap partyA partyB x y
 
 -- | Semantic labels
 data Stages = Stage1 | Stage2
 
-data TwoPartySwap a b = TwoPartySwap PublicKey PublicKey a b
+data TwoPartySwap a b = TwoPartySwap PublicKey PublicKey a b deriving (Generic)
 
 instance (ContractVal a, ContractVal b) => ContractName (TwoPartySwap a b) where
   type ArgType (TwoPartySwap a b) = Maybe Bool
@@ -195,9 +195,9 @@ sell ::
   forall a coin m.
   (ContractVal a, Currency coin, MonadTX m) =>
   a -> Valuation coin -> PublicKey -> m ()
-sell x price seller = newContract [bearer x] (Sell seller x price) where
+sell x price seller = newContract (Sell seller x price) where
 
-data Sell a coin = Sell PublicKey a (Valuation coin)
+data Sell a coin = Sell PublicKey a (Valuation coin) deriving (Generic)
 
 instance (ContractVal a, Currency coin) => ContractName (Sell a coin) where
   type ArgType (Sell a coin) = Versioned coin
@@ -222,9 +222,11 @@ redeem ::
   forall a b m m'.
   (ContractVal a, ContractVal b, ContractArg b, MonadTX m) =>
   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
-redeem x valid seller = newContract [bearer x] (Redeem seller x valid) where
+redeem x valid seller = newContract (Redeem seller x valid) where
 
-data Redeem a b = Redeem PublicKey a (b -> (Fae b (Either b a) Bool))
+data Redeem a b = 
+  Redeem PublicKey a (b -> (Fae b (Either b a) Bool))
+  deriving (Generic)
 
 instance 
   (ContractVal a, ContractVal b, ContractArg b) => 
@@ -267,9 +269,9 @@ instance Exception PossessionError
 -- arguments (that is, takes @()@) and checks that "self" is the owner, in
 -- which case it returns the value.
 signOver :: forall a m. (ContractVal a, MonadTX m) => a -> PublicKey -> m ()
-signOver x owner = newContract [bearer x] $ SignOver owner x where
+signOver x owner = newContract $ SignOver owner x where
 
-data SignOver a = SignOver PublicKey a
+data SignOver a = SignOver PublicKey a deriving (Generic)
 
 instance (ContractVal a) => ContractName (SignOver a) where
   type ArgType (SignOver a) = ()

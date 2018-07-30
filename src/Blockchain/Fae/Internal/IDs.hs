@@ -19,12 +19,19 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs.Types
 
+import Common.Lens
+
 import Control.DeepSeq
 
+import Control.Monad.State
 import Control.Monad.Writer
 
 import Data.Char
 import Data.List
+
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 import Data.Maybe
 import Data.String
 import Data.Traversable
@@ -84,9 +91,7 @@ class GHasEscrowIDs f where
 instance HasEscrowIDs BearsValue where
   traverseEscrowIDs f (BearsValue x) = BearsValue <$> traverseEscrowIDs f x
 
--- | Escrow IDs, of course, contain themselves.  A tricky special case is
--- that the transactional variants contain escrows in their argument or
--- value as well.
+-- | Escrow IDs, of course, contain themselves.
 instance (Typeable name) => HasEscrowIDs (EscrowID name) where
   -- Not point-free; we need to specialize the forall.
   traverseEscrowIDs f eID = f eID
@@ -114,6 +119,11 @@ instance HasEscrowIDs Natural where
   traverseEscrowIDs = defaultTraverseEscrowIDs
 -- | -
 instance HasEscrowIDs PublicKey where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | This is important because a value may have function types in it, and
+-- still hold escrows.  Functions are not 'Generic', so we have to bypass
+-- the generic instance here.
+instance (Typeable a, Typeable b) => HasEscrowIDs (a -> b) where
   traverseEscrowIDs = defaultTraverseEscrowIDs
 
 -- | Special case of the 'Generic' instance that is necessary in 'Contract'
@@ -187,3 +197,32 @@ withoutNonce :: ContractID -> ContractID
 withoutNonce (cID :# n) = cID
 withoutNonce cID = cID
 
+-- | Just accumulates all the entries in each of the objects as a map.
+-- Internally, this uses an imitation of the @lens@ function 'toList' for
+-- 'Traversal's, but since an 'EscrowIDTraversal' is not /exactly/
+-- a 'Traversal', we have to reproduce it.
+getEntIDMap :: 
+  forall a b m.
+  (HasEscrowIDs b, Monad m) => 
+  (forall name. (Typeable name) => EscrowID name -> m a) -> 
+  b -> m (Map EntryID a)
+getEntIDMap f = 
+  fmap Map.fromList . sequence . execWriter . traverseEscrowIDs tellEntry 
+  where 
+    tellEntry :: 
+      (Typeable name') => 
+      EscrowID name' -> Writer [m (EntryID, a)] (EscrowID name')
+    tellEntry eID@EscrowID{..} = tell [(entID,) <$> f eID] >> return eID
+
+-- | Finds an entry or throws an error.
+getEntry :: (MonadState (Map EntryID a) m) => EntryID -> m a
+getEntry entID = fromMaybe (throw idErr) <$> use (at entID) where
+  idErr = BadEscrowID entID
+
+-- | This function actually /takes/ the entries, not just copies them,
+-- because valuable things can't be copied.
+takeEntry :: (MonadState (Map EntryID a) m) => EntryID -> m a
+takeEntry entID = do
+  x <- getEntry entID
+  at entID .= Nothing
+  return x

@@ -1,10 +1,10 @@
 body :: Transaction Void ()
 body _ = do
-  newContract [] VersionC1
-  newContract [] VersionC2
+  newContract VersionC1
+  newContract VersionC2
 
-data VersionC1 = VersionC1
-data VersionC2 = VersionC2
+data VersionC1 = VersionC1 deriving (Generic)
+data VersionC2 = VersionC2 deriving (Generic)
 
 instance ContractName VersionC1 where
   type ArgType VersionC1 = ()

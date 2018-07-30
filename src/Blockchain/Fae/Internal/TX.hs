@@ -158,7 +158,7 @@ importValueThrow ::
   forall a m.
   (Exportable a, MonadState Escrows m) => WrappedByteString -> m a
 importValueThrow (WrappedByteString bs) = 
-  fromMaybe (throw $ CantImport bs rep) <$> importValue bs
+  fromMaybe (throw $ CantImport bs rep) <$> liftEscrowState (importValue bs)
   where rep = typeRep $ Proxy @a
 
 faeInterpret :: 

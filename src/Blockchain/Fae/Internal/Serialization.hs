@@ -10,12 +10,14 @@ import Common.Lens hiding (from, to)
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.State.Class
+import Control.Monad.State
 
 import Data.ByteString
 import Data.Maybe
 import Data.Proxy
+import Data.Typeable
 
+import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Data.Serialize (Serialize, GSerializePut, GSerializeGet)
@@ -26,22 +28,26 @@ import GHC.Generics
 import Numeric.Natural
 
 class EGeneric a where
-  eFrom :: (MonadState Escrows m) => a -> m (ERep a)
-  default eFrom :: (MonadState Escrows m, ERep a ~ a) => a -> m (ERep a)
+  eFrom :: (MonadState EscrowMap m) => a -> m (ERep a)
+  default eFrom :: (MonadState EscrowMap m, ERep a ~ a) => a -> m (ERep a)
   eFrom = return
 
-  eTo   :: (MonadState Escrows m) => ERep a -> m a
-  default eTo :: (MonadState Escrows m, ERep a ~ a) => ERep a -> m a
+  eTo   :: (MonadState EscrowMap m) => ERep a -> m a
+  default eTo :: (MonadState EscrowMap m, ERep a ~ a) => ERep a -> m a
   eTo = return
 
 class EGeneric1 f where
-  eFrom1 :: (MonadState Escrows m) => f p -> m (ERep1 f p)
-  default eFrom1 :: (MonadState Escrows m, ERep1 f ~ f) => f p -> m (ERep1 f p)
+  eFrom1 :: (MonadState EscrowMap m) => f p -> m (ERep1 f p)
+  default eFrom1 :: (MonadState EscrowMap m, ERep1 f ~ f) => f p -> m (ERep1 f p)
   eFrom1 = return
 
-  eTo1   :: (MonadState Escrows m) => ERep1 f p -> m (f p)
-  default eTo1   :: (MonadState Escrows m, ERep1 f ~ f) => ERep1 f p -> m (f p)
+  eTo1   :: (MonadState EscrowMap m) => ERep1 f p -> m (f p)
+  default eTo1   :: (MonadState EscrowMap m, ERep1 f ~ f) => ERep1 f p -> m (f p)
   eTo1 = return
+
+-- | This shrinks the signature of the constraint, allowing it to be used
+-- /without/ @UndecidableInstances@ elsewhere.
+class (Serialize (ERep a)) => ESerialize a where
 
 type family ERep c :: * where
   ERep (EscrowID name) = EEnt name
@@ -64,27 +70,39 @@ type family ERep1 a :: * -> * where
   ERep1 U1 = U1
   ERep1 V1 = V1
 
-data EEnt name = EEnt EntryID VersionID name deriving (Generic)
+data EEnt name = EEnt EntryID Digest VersionID (ERep name) deriving (Generic)
 newtype SERep1 f = SERep1 (ERep1 f ())
 
-instance (Serialize name) => Serialize (EEnt name) 
+instance (ESerialize name) => Serialize (EEnt name)
 
-instance (ContractName name) => EGeneric (EscrowID name) where
-  eFrom eID@EscrowID{..} = do
-    EscrowEntry{..} <- peekEscrow eID
-    case escrowNameOrFunction of
-      Left c -> do
-        let nc@NamedContract{..} = nameContract @name entID c
-        unless (Map.null endowment) $ throw $ HoldsEscrows entID
-        return $ EEnt entID escrowVersion contractName
-      Right _ -> throw $ NotStartState entID escrowVersion
+instance (Typeable name, EGeneric name) => EGeneric (EscrowID name) where
+  eFrom eID@EscrowID{..} = useNamedEscrow eID fromEscrowEntry
 
-  eTo (EEnt entID escrowVersion contractName) = do
-    let endowment = Map.empty
-        escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
-        entry = EscrowEntry{..}
-    _escrowMap . at entID %= Just . fromMaybe entry
-    return $ EscrowID{..}
+  eTo eEnt = do
+    at entID %= Just . fromMaybe eEntry
+    return eID
+    where (eID@EscrowID{..}, eEntry) = toEscrowEntry eEnt
+
+fromEscrowEntry :: 
+  (Typeable name, EGeneric name, Monad m) => 
+  EntryID -> 
+  VersionID -> 
+  Either (NamedContract name) AbstractLocalContract ->
+  m (EEnt name)
+fromEscrowEntry entID escrowVersion = either fromNamedContract (throw err) where
+  err = NotStartState entID escrowVersion
+  fromNamedContract NamedContract{..} = 
+    return $ EEnt entID contractNextID escrowVersion eRep
+    where eRep = evalState (eFrom contractName) endowment
+
+toEscrowEntry :: 
+  forall name. 
+  (Typeable name, EGeneric name) => 
+  EEnt name -> (EscrowID name, EscrowEntry)
+toEscrowEntry (EEnt entId contractNextID escrowVersion eRep) = 
+  (EscrowID entId, EscrowEntry{..}) where 
+    escrowNameOrFunction = Left $ AnyNamedContract @name NamedContract{..}
+    (contractName, endowment) = runState (eTo eRep) Map.empty
 
 instance EGeneric Char
 instance EGeneric Word

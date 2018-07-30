@@ -59,12 +59,13 @@ data NamedContract name =
   NamedContract
   {
     contractName :: !name,
+    contractNextID :: !Digest,
     endowment :: !EscrowMap
   }
   deriving (Generic)
 -- | The union of contract entry types for all possible names.
 data AnyNamedContract = 
-  forall name. (ContractName name) => AnyNamedContract (NamedContract name)
+  forall name. (Typeable name) => AnyNamedContract (NamedContract name)
 -- | Each escrow has a continually updated version that we need to track;
 -- this holds both for the escrow map of a contract and the escrows
 -- accompanying a returned value.
@@ -174,8 +175,8 @@ type Transaction a b = a -> FaeTX b
 -- | Instances of this class can be serialized, at least with the
 -- assistance of some Fae contextual data (namely, the escrow storage).
 class (Typeable a) => Exportable a where
-  exportValue :: (MonadState Escrows m) => a -> m ByteString
-  importValue :: (MonadState Escrows m) => ByteString -> m (Maybe a)
+  exportValue :: (MonadState EscrowMap m) => a -> m ByteString
+  importValue :: (MonadState EscrowMap m) => ByteString -> m (Maybe a)
 
 -- | Instances of 'ContractName' are always defined by contract authors,
 -- who will inevitably have to define 'theContract' to point to a global
@@ -184,7 +185,7 @@ class (Typeable a) => Exportable a where
 -- instances.
 class 
   (
-    Typeable a,
+    HasEscrowIDs a,
     Versionable (ArgType a), Versionable (ValType a),
     HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)
   ) => ContractName a where
@@ -283,19 +284,20 @@ newContract ::
     ContractName name, Read (ArgType name), Exportable (ValType name), 
     MonadTX m
   ) => 
-  [BearsValue] -> name -> m ()
-newContract values x = liftTX $ FaeTX $ do
-  escrowMap <- getEscrowMap values
-  contractF <- globalContract <$> hideEscrows escrowMap (theContract x)
+  name -> m ()
+newContract x = liftTX $ FaeTX $ do
+  (_, nextID) <- forkNextID
+  WithEscrows escrowMap _ <- takeEscrows x
+  let contractF = globalContract $ hideEscrows escrowMap nextID (theContract x)
   tell [(typeRep $ Proxy @name, contractF)]
 
 -- | Creates a new escrow endowed with a given list of valuables.
 newEscrow :: 
   (ContractName name, MonadTX m) =>
-  [BearsValue] -> name -> m (EscrowID name)
-newEscrow values contractName = liftTX $ FaeTX $ do
-  entID <- use _nextID
-  endowment <- getEscrowMap values
+  name -> m (EscrowID name)
+newEscrow contractName = liftTX $ FaeTX $ do
+  (entID, contractNextID) <- forkNextID
+  WithEscrows endowment _ <- takeEscrows contractName
   let escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
       escrowVersion = VersionID entID
   _escrowMap %= Map.insert entID EscrowEntry{..}
@@ -305,22 +307,20 @@ newEscrow values contractName = liftTX $ FaeTX $ do
 useEscrow :: 
   (ContractName name, MonadTX m) =>
   EscrowID name -> ArgType name -> m (ValType name)
-useEscrow EscrowID{..} x = liftTX $ FaeTX $ do
-  EscrowEntry{..} <-
-    use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
-  let makeLocalCF (AnyNamedContract NamedContract{..}) = 
-        localContract <$> hideEscrows endowment (theContract contractName)
-  localCF <- either makeLocalCF return escrowNameOrFunction
-  ~(y, resultCFM) <- typeify (callContract localCF) x
-  txID <- view _thisTXID
-  -- We hash with the transaction ID so that each new version reflects how
-  -- it was created.  If the transaction is a known quantity, then this
-  -- ensures that the version accurately reflects its effects and not those
-  -- of some other, hidden, transaction.
-  let newVer = mkVersionID (escrowVersion, txID)
-  _escrowMap . at entID .= fmap (EscrowEntry newVer . Right) resultCFM
-  return y
-
+useEscrow eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
+  \entID escrowVersion nameOrFunction -> return $ do
+    let makeLocalCF NamedContract{..} = localContract $ 
+          hideEscrows endowment contractNextID (theContract contractName)
+        localCF = either makeLocalCF id nameOrFunction
+    ~(y, resultCFM) <- typeify (callContract localCF) x
+    txID <- view _thisTXID
+    -- We hash with the transaction ID so that each new version reflects how
+    -- it was created.  If the transaction is a known quantity, then this
+    -- ensures that the version accurately reflects its effects and not those
+    -- of some other, hidden, transaction.
+    let newVer = mkVersionID (escrowVersion, txID)
+    _escrowMap . at entID .= fmap (EscrowEntry newVer . Right) resultCFM
+    return y
   where typeify f = fmap (_1 %~ returnTyped) . f . acceptTyped
 
 -- * Internal functions
@@ -408,16 +408,21 @@ returnTyped yDyn = unBear yDyn $
 -- | Sets up the contract function to accept an escrow-backed initial
 -- argument, then initializes its storage, removing it from scope.
 hideEscrows :: 
-  EscrowMap -> Contract argType valType -> 
-  FaeTXM (PreContractF argType valType)
-hideEscrows escrowMap f = do
+  EscrowMap -> Digest -> Contract argType valType -> PreContractF argType valType
+hideEscrows escrowMap nextID f = 
+  \xE -> evalStateT (putEscrows xE >>= getFae . f) Escrows{..} 
+
+-- | Computes the current next ID and the one that starts a new "branch",
+-- and bumps the next ID in the current "branch".
+forkNextID :: FaeTXM (Digest, Digest)
+forkNextID = do
   oldNextID <- use _nextID
   txID <- view _thisTXID
   -- It is less crucial that we start the ID chain at a place that reflects
   -- the transaction, but this is nicely uniform with 'useEscrow'.
-  let nextID = digest (oldNextID, txID)
   _nextID %= digest
-  return $ \xE -> evalStateT (putEscrows xE >>= getFae . f) Escrows{..} 
+  let forkedNextID = digest (oldNextID, txID)
+  return (oldNextID, forkedNextID)
 
 -- | Places the escrows backing a value into storage.
 putEscrows :: (MonadState Escrows m) => WithEscrows a -> m a
@@ -429,63 +434,45 @@ putEscrows ~(WithEscrows escrows a) = do
 takeEscrows :: 
   (HasEscrowIDs valType, MonadState Escrows m) => 
   valType -> m (WithEscrows valType)
-takeEscrows y = do
-  escrowMap <- getEscrowMap y
-  return $ WithEscrows escrowMap y
+takeEscrows x = do
+  escrowMap <- liftEscrowState $ getEntIDMap (takeEntry . entID) x
+  return $ WithEscrows escrowMap x
 
--- | Just concatenates the list of all escrows in each of the objects, then
--- turns it into a map.  Internally, this uses an imitation of the @lens@
--- function 'toList' for 'Traversal's, but since an 'EscrowIDTraversal' is
--- not /exactly/ a 'Traversal', we have to reproduce it.
-getEscrowMap :: 
-  forall m a.
-  (MonadState Escrows m, HasEscrowIDs a) => a -> m EscrowMap
-getEscrowMap = fmap Map.fromList . sequence . execWriter . traverseEscrowIDs f 
-  where 
-    f :: EscrowIDMap (Writer [m (EntryID, EscrowEntry)]) 
-    f eID = tell [takeEscrow eID] >> return eID
+-- | Gets an escrow entry, casting the contract name alternative to its
+-- correct type, and applies a well-typed function.
+useNamedEscrow :: 
+  (MonadState EscrowMap m, Typeable name) => 
+  EscrowID name -> 
+  (
+    EntryID -> 
+    VersionID -> 
+    Either (NamedContract name) AbstractLocalContract -> 
+    m a
+  ) ->
+  m a
+useNamedEscrow eID@EscrowID{..} f = checkApply =<< getEntry entID where
+  checkApply x@EscrowEntry{..} = f entID escrowVersion nameOrFunction where
+    nameOrFunction = bimap checkedCast id escrowNameOrFunction
+    checkedCast (AnyNamedContract c) =
+      fromMaybe (throw $ BadEscrowName entID (typeRep eID) (typeRep c)) $ cast c
 
--- | This function actually /takes/ the escrows, not just copies them,
--- because valuable things can't be copied.
-takeEscrow :: 
-  (MonadState Escrows m, Typeable name) => 
-  EscrowID name -> m (EntryID, EscrowEntry)
-takeEscrow eID = do
-  x <- peekEscrow eID
-  _escrowMap . at k .= Nothing
-  return (k, x)
-  where k = entID eID
+-- | Upgrades a computation using only the escrow map itself to one using
+-- the whole 'Escrows' object.
+liftEscrowState :: (MonadState Escrows m) => State EscrowMap a -> m a
+liftEscrowState xm = do
+  (y, newEscrowMap) <- runState xm <$> use _escrowMap
+  _escrowMap .= newEscrowMap
+  return y
 
--- | Actually looks up an escrow by ID, checking the contract name if the
--- escrow is still in its initial state where the name is known.
-peekEscrow :: 
-  forall m name.
-  (MonadState Escrows m, Typeable name) => 
-  EscrowID name -> m EscrowEntry
-peekEscrow (EscrowID entID) = do
-  x@EscrowEntry{..} <- 
-    use $ _escrowMap . at entID . defaultLens (throw $ BadEscrowID entID)
-  return $ case escrowNameOrFunction of
-    Left c -> nameContract @name entID c `seq` x
-    _ -> x
+-- | Helpful for encapsulating computations in 'useNamedEscrow' that
+-- require a full @MonadState Escrows@.
+joinEscrowState :: (MonadState Escrows m) => State EscrowMap (m a) -> m a
+joinEscrowState = join . liftEscrowState
 
 -- | Gets the escrow version from a specific escrow storage map.
 lookupWithEscrows :: EscrowMap -> EntryID -> VersionID
 lookupWithEscrows escrowMap entID =
   maybe (throw $ BadEscrowID entID) escrowVersion $ Map.lookup entID escrowMap
-
--- * 'ContractName' manipulation
-
--- | Extracts the true type, if that is what is expected.
-nameContract :: 
-  forall name. (Typeable name) => EntryID -> AnyNamedContract -> NamedContract name
-nameContract entID (AnyNamedContract c) = fromMaybe err $ cast c where
-  err = throw $ BadEscrowName entID (typeRep $ Proxy @name) (contractNameRep c)
-
--- | Just for neatness; gets the contract name of an escrow.
-contractNameRep :: 
-  forall name. (Typeable name) => NamedContract name -> TypeRep
-contractNameRep _ = typeRep $ Proxy @name
 
 -- ** 'ReturnValue' manipulation
 
@@ -499,4 +486,4 @@ returnValueType (ReturnValue x) = typeRep (Just x)
 
 -- | Taking advantage of the existential type
 exportReturnValue :: ReturnValue -> FaeTXM ByteString
-exportReturnValue (ReturnValue x) = exportValue x
+exportReturnValue (ReturnValue x) = liftEscrowState $ exportValue x

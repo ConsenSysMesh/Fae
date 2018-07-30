@@ -38,7 +38,13 @@ import Numeric.Natural
 
 -- | Interface for a currency type.
 class 
-  (Versionable coin, ContractVal coin, Integral (Valuation coin)) => 
+  (
+    Versionable coin, ContractVal coin, 
+    Integral (Valuation coin), 
+    -- This one is because it should be reasonably common to have
+    -- valuations inside of valuables, particularly 'ContractName's.
+    HasEscrowIDs (Valuation coin)
+  ) => 
   Currency coin where
 
   data Valuation coin
@@ -154,7 +160,7 @@ coinContract (MintCoin n) True = spend n
 
 -- | Helpful shortcut
 mint :: (MonadTX m) => Natural -> m Coin
-mint = newEscrow [] . MintCoin
+mint = newEscrow . MintCoin
 
 instance Serialize CoinName
 
@@ -165,7 +171,7 @@ instance ContractName CoinName where
 
 instance Currency Coin where
   newtype Valuation Coin = CoinValuation Natural
-    deriving (Eq, Ord, Num, Real, Enum, Integral)
+    deriving (Eq, Ord, Num, Real, Enum, Integral, Generic)
 
   zero = mint 0
 

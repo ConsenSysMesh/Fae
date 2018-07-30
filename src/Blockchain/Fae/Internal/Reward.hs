@@ -31,6 +31,8 @@ data Reward = RewardName deriving (Generic)
 -- | The escrow ID of a reward token provided by the system.
 type RewardEscrowID = EscrowID Reward
 
+instance Serialize RewardValue
+instance Serialize RewardToken
 instance Serialize Reward
 
 instance ContractName Reward where

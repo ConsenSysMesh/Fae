@@ -105,6 +105,10 @@ instance Read VersionID where
 instance Show VersionID where
   show (VersionID ver) = show ver
 
+-- | Useful for debugging
+instance Show (EscrowID name) where
+  show = show . entID
+
 -- * Template Haskell
 
 makeLenses ''Signers

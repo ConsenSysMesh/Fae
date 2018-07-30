@@ -64,11 +64,11 @@ module Blockchain.Fae
     Transaction, TransactionM, PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
     Contract, ContractM, ContractName(..), Exportable, EGeneric, 
-    Fae, MonadContract, WithEscrows, EscrowID, BearsValue, 
+    Fae, MonadContract, WithEscrows, EscrowID, 
     RewardEscrowID, Reward,
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
-    lookupSigner, signer, signers, claimReward, bearer, 
+    lookupSigner, signer, signers, claimReward, 
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
     -- the escrow-backed values they expect, contract outputs are
