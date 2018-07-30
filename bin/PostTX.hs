@@ -59,6 +59,8 @@ usage = do
       "where the available options are:",
       "  Help",
       "  --help        Print this usage",
+      "  --keys        View all stored public keys",
+      "  --key name    View a public key by name",
       "",
       "  Regular Fae operation:",
       "    with a (tx name)",
