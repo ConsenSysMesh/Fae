@@ -69,8 +69,8 @@ main = do
           Just file -> do
             keyBytes <- BS.readFile file
             case S.decode keyBytes of 
-              Left _ -> do 
-                print $ "Key file named " ++ name ++  " could not be decoded in " ++ faeHome
+              Left err -> do 
+                print $ "Key file named " ++ name ++  " could not be decoded in " ++ faeHome ++ " : " ++ err 
                 exitFailure
               Right key -> do
                 putStrLn $ takeBaseName file ++ ": " ++ show (key :: PublicKey)
