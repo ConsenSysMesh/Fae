@@ -58,7 +58,7 @@ main = do
     ViewKeysArgs ViewKeys -> do 
       storedKeys <- getHomeKeys faeHome
       if null storedKeys then print $ "No keys found at " ++ show faeHome else do
-        print storedKeys
+        putStrLn $ concatMap (\(a, b) -> a ++ ": " ++ show b ++ "\n") storedKeys
         exitSuccess
     ViewKeysArgs (ViewKey name) -> do
       maybeFile <- findFile [faeHome] name
@@ -70,10 +70,10 @@ main = do
             keyBytes <- BS.readFile file
             case S.decode keyBytes of 
               Left _ -> do 
-                print $ "Key bytestring " ++ name ++  " could not be decoded at " ++ faeHome
+                print $ "Key file named " ++ name ++  " could not be decoded in " ++ faeHome
                 exitFailure
               Right key -> do
-                print (takeBaseName file, key :: PublicKey)
+                putStrLn $ takeBaseName file ++ ": " ++ show (key :: PublicKey)
                 exitSuccess  
 
 getHomeKeys :: FilePath -> IO [(String, PublicKey)]
