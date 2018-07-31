@@ -1,9 +1,18 @@
+import Blockchain.Fae.FrontEnd (PublicKey)
+
 import Common.ProtocolT
 
 import Control.Monad.Reader
 import Control.Monad.Trans
+import Control.Lens hiding (view)
 
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
+import Data.ByteString (ByteString)
 import Data.Maybe
+import Data.Either
+import qualified Data.Serialize as S
+import Data.Traversable
 
 import PostTX.Args
 import PostTX.Faeth
@@ -46,6 +55,33 @@ main = do
       putStrLn err
       usage
       exitFailure
+    ViewKeysArgs ViewKeys -> do 
+      storedKeys <- getHomeKeys faeHome
+      if null storedKeys then print $ "No keys found at " ++ show faeHome else do
+        print storedKeys
+        exitSuccess
+    ViewKeysArgs (ViewKey name) -> do
+      maybeFile <- findFile [faeHome] name
+      case maybeFile of 
+          Nothing -> do 
+            print $ "Key: " ++ name ++  " not found at " ++ faeHome
+            exitFailure
+          Just file -> do
+            keyBytes <- BS.readFile file
+            case S.decode keyBytes of 
+              Left _ -> do 
+                print $ "Key bytestring " ++ name ++  " could not be decoded at " ++ faeHome
+                exitFailure
+              Right key -> do
+                print (takeBaseName file, key :: PublicKey)
+                exitSuccess  
+
+getHomeKeys :: FilePath -> IO [(String, PublicKey)]
+getHomeKeys path = do
+  dirList <- getDirectoryContents path
+  fileList <- filterM doesFileExist dirList
+  mapMaybe (_2 (preview _Right)) <$> 
+    traverse sequenceA [(takeBaseName a, S.decode <$> BS.readFile a) | a <- fileList]
 
 usage :: IO ()
 usage = do

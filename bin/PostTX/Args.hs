@@ -21,7 +21,8 @@ data PostTXArgs =
     argView :: Bool,
     argLazy :: Bool,
     argFaeth :: FaethArgs,
-    argUsage :: Maybe Usage
+    argUsage :: Maybe Usage,
+    argViewKeys :: Maybe ViewKeys
   }
 
 data FinalizedPostTXArgs =
@@ -44,11 +45,13 @@ data FinalizedPostTXArgs =
     viewArgTXID :: TransactionID,
     viewArgHost :: String
   } |
-  UsageArgs Usage
+  UsageArgs Usage | ViewKeysArgs ViewKeys
 
 data Usage =
   UsageFailure String |
   UsageSuccess
+
+data ViewKeys = ViewKeys | ViewKey String 
 
 data FaethArgs =
   FaethArgs
@@ -75,11 +78,16 @@ parseArgs = finalize . foldl argGetter
     argView = False,
     argLazy = False,
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
-    argUsage = Nothing
+    argUsage = Nothing,
+    argViewKeys = Nothing
   }
           
 argGetter :: PostTXArgs -> String -> PostTXArgs
-argGetter st "--help" = st & _argUsage .~ Just UsageSuccess 
+argGetter st "--help" = st & _argUsage .~ Just UsageSuccess
+argGetter st "--keys" = st & _argViewKeys .~ Just ViewKeys 
+argGetter st x 
+  | ("--key", '=' : name) <- break (== '=') x
+    = st & _argViewKeys .~ Just (ViewKey name)
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
@@ -120,6 +128,7 @@ argGetter st x
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | Just u <- argUsage = UsageArgs u
+  | Just u <- argViewKeys = ViewKeysArgs u
   | argFake && (argView || argLazy || useFaeth)
     = error $
         "--fake is incompatible with --view, --lazy, --faeth*, " ++
