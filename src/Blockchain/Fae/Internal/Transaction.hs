@@ -27,9 +27,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
-import Data.Bifunctor
 import Data.Foldable
-import Data.Functor.Identity
 
 import qualified Data.Map as Map
 

@@ -83,31 +83,16 @@ module Blockchain.Fae
 
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
-import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
-import Blockchain.Fae.Internal.Storage
-import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
-import qualified Control.DeepSeq as DS
-
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans.Class
-import Control.Monad.Writer.Class
-
-import Data.Dynamic
-import Data.Functor.Identity
-import Data.Maybe
-import Data.Sequence (Seq)
-
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 import Control.Exception (Exception, throw, evaluate)
 import Data.Typeable (Typeable)

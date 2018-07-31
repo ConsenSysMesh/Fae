@@ -12,24 +12,14 @@ This module provides types and associated functions for accessing the storage of
 module Blockchain.Fae.Internal.Storage where
 
 import Blockchain.Fae.Internal.Contract
-import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
-import Control.Monad.IO.Class
-import Control.Monad.State
-
-import Data.Dynamic
-import Data.Functor.Identity
 import Data.IntMap (IntMap)
-import Data.List
 import Data.Map (Map)
-import Data.Maybe
-import Data.Serialize hiding (Result)
-import Data.Typeable
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
