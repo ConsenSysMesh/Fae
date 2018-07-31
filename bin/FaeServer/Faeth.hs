@@ -14,7 +14,14 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Data.Aeson (FromJSON(..), ToJSON(..), (.:), (.:?))
+import FaeServer.Args
+
+import Data.Aeson 
+  (
+    FromJSON(..), ToJSON(..), 
+    genericToEncoding, Options(..), defaultOptions, 
+    (.:), (.:?)
+  )
 import qualified Data.Aeson as A
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -52,7 +59,7 @@ data PartialEthTransaction =
     ethTXFrom :: EthAddress,
     ethValue :: HexInteger,
     ethTXData :: EthArgFaeTX,
-    ethTXID :: EthTXID
+    ethTXID :: EthTXID 
   }
 
 data ParitySubscribe = ParitySubscribe
@@ -137,9 +144,9 @@ instance ToRequest ParitySubscribe where
 instance ToRequest EthGetBlockByHash where
   requestMethod = const "eth_getBlockByHash"
 
-runFaeth :: ThreadId -> TXQueueT IO ()
-runFaeth mainTID = reThrow mainTID $ do
-  fork $ runFaethWatcherM faethWatcher 
+runFaeth :: Flags -> ThreadId -> TXQueueT IO ()
+runFaeth flags mainTID = reThrow mainTID $ do
+  fork $ runFaethWatcherM flags faethWatcher 
   runFaeServer (Proxy @Salt) faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
@@ -227,12 +234,12 @@ runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
       "\n              in Ethereum transaction " ++ show ethTXID ++
       "\nError was: " ++ show e ++ "\n"
 
-runFaethWatcherM :: FaethWatcherM () -> TXQueueT IO ()
-runFaethWatcherM xFW = do
+runFaethWatcherM :: Flags -> FaethWatcherM () -> TXQueueT IO ()
+runFaethWatcherM Flags{..} xFW = do
   tID <- myThreadId
   blockTXIDs <- liftIO $ newTVarIO Map.empty
   forever $ handleAll waitRestart $ 
-    runProtocolT $ do
+    runProtocolT hostname port $ do
       subID <- sendReceiveProtocolT ParitySubscribe
       runReaderT (getFaethWatcherM xFW) (tID, subID, blockTXIDs) 
 
@@ -257,4 +264,3 @@ receiveSubscription = do
     "parity_subscribe notification has subscription ID " ++ show ethSubID ++
     "; expected " ++ show subID
   either (error . errMessage) return ethBlockE
-

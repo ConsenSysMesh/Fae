@@ -88,6 +88,8 @@ usage = do
       "                                  transaction",
       "    --faeth-eth-to address        Set the Ethereum 'to' address for a", 
       "                                  Faeth transaction",
+      "    --faeth-eth-argument          Set the input that the Ethereum contract",
+      "                                  will see, i.e. the contract argument",
       "",
       "Recognized environment variables:",
       "  FAE_HOME      Directory where keys are stored",
