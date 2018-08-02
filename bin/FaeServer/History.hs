@@ -41,16 +41,20 @@ recallHistory parentM = do
   return n
 
 updateHistory :: 
-  (Monad m) => TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
-updateHistory txID txCount = do
+  (Monad m) => Maybe TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
+updateHistory txIDM newCount = do
   TXHistory{..} <- get
   s <- lift get
-  let newCount = txCount + 1
+  let txID = fromMaybe bestTXID txIDM
       txStorageAndCounts' = Map.insert txID (s, newCount) txStorageAndCounts
       (bestTXID', bestTXCount')
-        | txCount == bestTXCount = (txID, newCount)
+        | newCount > bestTXCount = (txID, newCount)
         | otherwise = (bestTXID, bestTXCount)
   put $ TXHistory txStorageAndCounts' bestTXID' bestTXCount'
+
+incrementHistory :: 
+  (Monad m) => TransactionID -> Integer -> FaeInterpretWithHistoryT m ()
+incrementHistory txID n = updateHistory (Just txID) (n + 1)
 
 runFaeInterpretWithHistory :: 
   (MonadMask m, MonadIO m) => FaeInterpretWithHistoryT m () -> m ()
@@ -58,7 +62,8 @@ runFaeInterpretWithHistory = runFaeInterpret . flip evalStateT emptyTXHistory wh
   emptyTXHistory = 
     TXHistory
     {
-      txStorageAndCounts = Map.singleton nullID (Storage Map.empty, 1),
+      txStorageAndCounts = 
+        Map.singleton nullID (Storage Map.empty Map.empty Map.empty, 1),
       bestTXID = nullID,
       bestTXCount = 1
     }

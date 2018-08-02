@@ -2,7 +2,7 @@ module PostTX.View where
 
 import PostTX.Network
 
-import Blockchain.Fae (TransactionID)
+import Blockchain.Fae.FrontEnd (TransactionID)
 
 import qualified Data.ByteString.Lazy.Char8 as LC8
 
@@ -12,4 +12,4 @@ view :: TransactionID -> String -> IO ()
 view txID host = do
   request <- flip formDataBody (requestURL host) $ 
     [partLBS "view" $ LC8.pack $ show txID]
-  sendReceive request
+  sendReceiveString request >>= putStrLn

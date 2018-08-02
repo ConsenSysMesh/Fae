@@ -56,11 +56,16 @@ main = do
   args <- parseArgs <$> getArgs
 
   flip runReaderT txQueue $ case args of
-    ArgsServer{..} -> do
-      void $ fork $ runFae tID flags
+    ArgsServer args@ServerArgs{..} -> do
+      let portDir = "port-" ++ show faePort
+      liftIO $ do
+        createDirectoryIfMissing False portDir
+        setCurrentDirectory portDir
+      void $ fork $ runFae tID args
+      void $ fork $ runServer importExportPort importExportApp queueTXExecData
       case serverMode of
-        FaeMode -> runFaeServer (Proxy @String) queueTXExecData 
-        FaethMode -> runFaeth flags tID
+        FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData 
+        FaethMode -> runFaeth args tID
     (ArgsUsage xs) -> liftIO $ case xs of
       [] -> do
         usage
@@ -79,16 +84,25 @@ usage = do
       "       (with stack) stack exec " ++ self ++ " -- options",
       "",
       "where the available options are:",
-      "  --help            Print this message",
-      "  --faeth           Receive transactions via Ethereum from a Parity client",
-      "  --faeth-mode      Synonym for --faeth",
-      "  --hostname        Specify a specific Faeth hostname",
-      "  --normal-mode     Operate as standalone Fae",
-      "  --new-session     Deletes previous transaction history",
-      "  --port            Specify a specific Faeth port number",
-      "  --resume-session  Reloads previous transaction history,",
+      "  --help                         Print this message",
+      "  --normal-mode                  Operate as standalone Fae",
+      "  --faeth-mode                   Synonym for --faeth",
+      "  --faeth                        Receive transactions via Ethereum from",
+      "                                 a Parity client",
+      "  --faeth-hostname=string        Connect to Parity at a given hostname",
+      "                                 (default: 127.0.0.1)",
+      "  --faeth-port=number            Connect to Parity at a given port",
+      "                                 (default: 8546)",
+      "  --fae-port=number              Listen on a given port for normal-mode",
+      "                                 requests (default: 27182)",
+      "  --import-export-port=number,   Listen on a given port for import/export",
+      "                                 requests (default: 27183)",
+      "  --new-session                  Deletes previous transaction history",
+      "  --resume-session               Reloads previous transaction history,",
       "",
       "Later options shadow earlier ones when they have the same domain.",
+      "The Fae server listens on port 'fae-port' and accepts import/export data",
+      "on 'import-export-port'.",
       "",
       "Recognized environment variables:",
       "  FAE_HOME    Directory where transaction modules and history are stored"

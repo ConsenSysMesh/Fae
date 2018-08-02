@@ -16,9 +16,11 @@ module Blockchain.Fae.Internal.Exceptions
     T.Typeable
   ) where
 
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.IDs.Types
 import qualified Control.Exception as Ex
 import Control.Monad.Catch hiding (displayException)
+import Data.ByteString (ByteString)
 import Data.Typeable as T
 
 import System.IO.Unsafe
@@ -51,11 +53,15 @@ data VersionException =
 -- | Exceptions for storage-related errors.
 data StorageException =
   BadTransactionID TransactionID |
+  BadContractID ContractID |
   BadInputID TransactionID ShortContractID |
   BadNonce ContractID Int Int |
   InvalidNonceAt ContractID |
   ContractIDCollision ContractID ContractID ShortContractID |
-  MismatchedContractIDs ContractID ContractID
+  MismatchedContractIDs ContractID ContractID |
+  ContractOmitted TransactionID ShortContractID |
+  CantImport ByteString TypeRep |
+  ImportWithoutNonce ContractID
 
 -- | Exceptions for contract-related errors.
 data ContractException =
@@ -63,7 +69,10 @@ data ContractException =
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
   BadEscrowID EntryID |
-  MissingSigner String
+  BadEscrowName EntryID TypeRep TypeRep |
+  MissingSigner String |
+  NotStartState EntryID VersionID |
+  HoldsEscrows EntryID
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
@@ -92,6 +101,7 @@ instance Show VersionException where
 -- | -
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
+  show (BadContractID cID) = "Not a contract ID: " ++ show cID
   show (BadInputID txID sID) = 
     "No input contract with short ID " ++ show sID ++ 
     " for transaction " ++ show txID
@@ -104,6 +114,14 @@ instance Show StorageException where
   show (MismatchedContractIDs cID1 cID2) =
     "Attempted to combine contract outputs for contracts " ++ 
     show cID1 ++ " and " ++ show cID2 ++ " with different short contract IDs"
+  show (ContractOmitted txID scID) =
+    "Contract call " ++ show scID ++ 
+    " in transaction " ++ show txID ++ 
+    " was replaced with an imported return value."
+  show (CantImport bs ty) =
+    "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
+  show (ImportWithoutNonce cID) =
+    "Rejecting imported value for " ++ show cID ++ " that lacks a nonce value."
 
 -- | -
 instance Show ContractException where
@@ -114,7 +132,16 @@ instance Show ContractException where
   show (BadValType bad good) =
     "Expected value type: " ++ show good ++ "; got: " ++ show bad
   show (BadEscrowID eID) = "No escrow found in this contract with ID: " ++ show eID
+  show (BadEscrowName entID bad good) =
+    "Wrong contract name for escrow " ++ show entID ++ 
+    "; got " ++ show bad ++ "; expected " ++ show good
   show (MissingSigner name) = "No signer named " ++ show name
+  show (NotStartState entID vID) = 
+    "Escrow " ++ show entID ++ 
+    " with version " ++ show vID ++ 
+    " is not in its starting state"
+  show (HoldsEscrows entID) =
+    "Escrow " ++ show entID ++ " has a nonempty endowment"
 
 -- | -
 instance Show TransactionException where

@@ -8,6 +8,7 @@ Stability: experimental
 -}
 module Blockchain.Fae.Internal.GetInputValues where
 
+import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
@@ -31,8 +32,8 @@ import Numeric.Natural
 -- the moment, the member function is not exported, so you can't write your
 -- own implementations.
 class GetInputValues a where
-  getInputValues :: [BearsValue] -> a
-  default getInputValues :: (HasEscrowIDs a, Typeable a) => [BearsValue] -> a
+  getInputValues :: [ReturnValue] -> a
+  default getInputValues :: (Typeable a) => [ReturnValue] -> a
   -- Dangerous, ignores excess inputs
   getInputValues = fst . defaultGetInputValues
 
@@ -42,14 +43,13 @@ class GGetInputValues f where
   -- 'getInputValues', because we need to walk through the list of dynamic
   -- inputs and progressively remove values from it.  At the same time, we
   -- need to know if there were leftovers.
-  gGetInputValues :: StateT [BearsValue] Maybe (f p)
+  gGetInputValues :: StateT [ReturnValue] Maybe (f p)
 
 -- | Gets a single value from a single input
-defaultGetInputValues :: 
-  (HasEscrowIDs a, Typeable a) => [BearsValue] -> (a, [BearsValue])
+defaultGetInputValues :: (Typeable a) => [ReturnValue] -> (a, [ReturnValue])
 defaultGetInputValues [] = (throw NotEnoughInputs, [])
 defaultGetInputValues ~(xDyn : rest) = (x, rest) where
-  x = unBear xDyn $ throw $ BadArgType (bearerType xDyn) (typeOf x) 
+  x = getReturnValue xDyn $ throw $ BadArgType (returnValueType xDyn) (typeOf x) 
 
 {- Instances -}
 
@@ -70,12 +70,7 @@ instance GetInputValues Natural
 -- | Instance for non-Generic type
 instance GetInputValues PublicKey
 -- | Don't want the Generic instance
-instance 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) => 
-  GetInputValues (EscrowID argType valType)
+instance (Typeable name) => GetInputValues (EscrowID name)
 
 -- | Takes no values, but absorbs the entire list.  Useful for transactions
 -- that don't use their input contracts.

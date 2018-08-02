@@ -7,41 +7,42 @@ import Data.Maybe
 import Text.Read
 
 data Args =
-  ArgsServer
-  {
-    serverMode :: ServerMode,
-    flags :: Flags
-  } |
+  ArgsServer ServerArgs |
   ArgsUsage [String]
 
+data ServerArgs =
+  ServerArgs
+  {
+    serverMode :: ServerMode,
+    newSession :: Bool,
+    faePort :: Int,
+    importExportPort :: Int,
+    faethHostname :: String,
+    faethPort :: Int
+  }
+
 data ServerMode = FaeMode | FaethMode
+ 
+defaultFaethHost :: String
+defaultFaethHost = "127.0.0.1"
 
-data Flags = Flags
-  { newSession :: Bool,
-    hostname :: String,
-    port :: Int
-  } deriving Show
-  
-defaultHost :: String
-defaultHost = "127.0.0.1"
-
-defaultPort :: Int
-defaultPort = 8546  
+defaultFaethPort :: Int
+defaultFaethPort = 8546  
 
 makeLenses ''Args
-makeLenses ''Flags
+makePrisms ''Args
+makeLenses ''ServerArgs
 
 parseArgs :: [String] -> Args
-parseArgs = foldl addArg
-  ArgsServer
+parseArgs = foldl addArg $
+  ArgsServer ServerArgs
   {
     serverMode = FaeMode,
-    flags = Flags
-    { 
-      newSession = True,
-      hostname = defaultHost,
-      port = defaultPort
-    }
+    newSession = True,
+    faePort = 27182,
+    importExportPort = 27183,
+    faethHostname = defaultFaethHost,
+    faethPort = defaultFaethPort
   }
 
 addArg :: Args -> String -> Args
@@ -51,14 +52,26 @@ addArg args x = getArgAction x & case args of
     
 getArgAction :: String -> Maybe (Args -> Args)
 getArgAction = \case 
-  x | x == "--faeth" || x == "--faeth-mode" -> Just $ _serverMode .~ FaethMode
-  x | ("--hostname", '=' : hostnameArgument) <- break (== '=') x
-    -> Just $ _flags . _hostname .~ hostnameArgument
-  x | ("--port", '=' : portArgument) <- break (== '=') x
-      -> Just $ _flags . _port .~ (fromMaybe (error $ "Could not read port argument: " ++ portArgument) $ readMaybe portArgument)
-  "--normal-mode" -> Just $ _serverMode .~ FaeMode
-  "--resume-session" -> Just $ _flags . _newSession .~ False
-  "--new-session" -> Just $ _flags . _newSession .~ True
+  x | x == "--faeth" || x == "--faeth-mode" -> Just setFaeth
+    | ("--faeth-hostname", '=' : hostnameArgument) <- break (== '=') x ->
+      Just $ 
+       (_ArgsServer . _faethHostname .~ hostnameArgument) .
+       setFaeth
+    | ("--faeth-port", '=' : portArgument) <- break (== '=') x ->
+      let err = error $ "Could not read port argument: " ++ portArgument in  
+      Just $ 
+        (_ArgsServer . _faethPort .~ readErr err portArgument) .
+        setFaeth
+    | ("--fae-port", '=' : faePortArg) <- break (== '=') x ->
+      Just $ _ArgsServer . _faePort .~ read faePortArg
+    | ("--import-export-port", '=' : importExportPortArg) <- break (== '=') x ->
+      Just $ _ArgsServer . _importExportPort .~ read importExportPortArg
+  "--normal-mode" -> Just $ _ArgsServer . _serverMode .~ FaeMode
+  "--resume-session" -> Just $ _ArgsServer . _newSession .~ False
+  "--new-session" -> Just $ _ArgsServer . _newSession .~ True
   "--help" -> Just $ const $ ArgsUsage []
   _ -> Nothing
 
+  where 
+    readErr err = fromMaybe err . readMaybe
+    setFaeth = _ArgsServer . _serverMode .~ FaethMode

@@ -12,28 +12,23 @@ import System.Process
 gitInit :: IO ()
 gitInit = do
   removePathForcibly "git"
-  removePathForcibly "Blockchain"
-  removePathForcibly "txcache"
   runGitWithArgs "init" ["--quiet"]
   runGitWithArgs "config" ["user.name", "Fae"]
   runGitWithArgs "config" ["user.email", "fae"]
   runGitWithArgs "commit" ["-q", "--allow-empty", "-m", "Transaction " ++ show nullID]
-  runGitWithArgs "tag" [txGitTag nullID]
+  runGitWithArgs "tag" [mkTXIDName nullID]
 
 gitCommit :: TransactionID -> IO ()
 gitCommit txID = do
   runGitWithArgs "add" ["Blockchain"]
   runGitWithArgs "commit" ["-q", "-m", "Transaction " ++ show txID]
-  runGitWithArgs "tag" [txGitTag txID]
+  runGitWithArgs "tag" [mkTXIDName txID]
 
 gitReset :: TransactionID -> IO ()
-gitReset oldTXID = runGitWithArgs "reset" ["--hard", "-q", txGitTag oldTXID]
+gitReset oldTXID = runGitWithArgs "reset" ["--hard", "-q", mkTXIDName oldTXID]
 
 gitClean :: IO ()
-gitClean = runGitWithArgs "clean" ["-q", "-f", "./Blockchain"]
-
-txGitTag :: TransactionID -> String
-txGitTag txID = "TX" ++ show txID
+gitClean = runGitWithArgs "clean" ["-q", "-f", "Blockchain"]
 
 runGitWithArgs :: String -> [String] -> IO ()
 runGitWithArgs cmd args = do

@@ -158,13 +158,7 @@ instance (HasEscrowIDs a) => HasEscrowIDs (Versioned a) where
 
 -- | This key base case actually uses the function argument to 'versions'
 -- by applying it to the escrow ID.
-instance 
-  (
-    HasEscrowIDs argType, HasEscrowIDs valType,
-    Typeable argType, Typeable valType
-  ) => 
-  Versionable (EscrowID argType valType) where
-
+instance (HasEscrowIDs name) => Versionable (EscrowID name) where
   versions f eID@EscrowID{..} = (f entID, emptyVersionMap) 
   mapVersions _ eID = eID
 
@@ -331,3 +325,4 @@ mkVersionID = VersionID . digest
 addContractVersions :: ContractID -> VersionMap -> VersionMap' -> VersionMap'
 addContractVersions cID vMap (VersionMap' vers) =
   VersionMap' $ Map.insert (shorten cID) vMap vers
+

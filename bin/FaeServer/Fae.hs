@@ -31,15 +31,17 @@ import System.FilePath
 import System.IO
 import System.IO.Error
 
-runFae :: ThreadId -> Flags -> TXQueueT IO ()
-runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
-  if newSession
+runFae :: ThreadId -> ServerArgs -> TXQueueT IO ()
+runFae mainTID ServerArgs{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
+  if newSession 
   then liftIO $ do
-    gitInit
-    createDirectoryIfMissing True "txcache"
+    removePathForcibly "Blockchain"
+    removePathForcibly "txcache"
+    createDirectory "txcache"
+    gitInit 
   else forM_TXCache $ \tx@TX{..} parentM -> do
     txCount <- innerRun tx parentM gitReset
-    updateHistory txID txCount
+    incrementHistory txID txCount
     liftIO $ putStrLn $ 
       "Replayed transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
   forever $ do
@@ -47,7 +49,7 @@ runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
     reThrowExit mainTID (callerTID txExecData) $ runTXExecData txExecData
 
 runTXExecData :: 
-  (MonadIO m, MonadMask m) => 
+  (Typeable m, MonadIO m, MonadMask m) => 
   TXExecData -> FaeInterpretWithHistoryT m ()
 runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
   dup <- gets $ Map.member txID . txStorageAndCounts
@@ -59,9 +61,9 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
     then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
     else lift $ showTransaction txID
   if fake
-  then liftIO gitClean
+  then unless lazy $ liftIO gitClean 
   else do
-    updateHistory txID txCount
+    incrementHistory txID txCount
     extendTXCache tx parentM
     liftIO $ gitCommit txID
   ioAtomically $ putTMVar resultVar txResult
@@ -71,8 +73,19 @@ runTXExecData View{..} = do
   txResult <- lift $ showTransaction viewTXID
   ioAtomically $ putTMVar resultVar txResult
 
+runTXExecData ExportValue{..} = do
+  void $ recallHistory parentM
+  exportResult <- lift $ lift $ getExportedValue calledInTX shortCID
+  ioAtomically $ putTMVar exportResultVar exportResult
+
+runTXExecData ImportValue{..} = do
+  parentCount <- recallHistory parentM
+  lift $ interpretImportedValue exportData
+  updateHistory parentM parentCount
+  ioAtomically $ putTMVar signalVar ()
+
 innerRun :: 
-  (MonadIO m, MonadMask m) =>
+  (Typeable m, MonadIO m, MonadMask m) =>
   TX -> Maybe TransactionID -> (TransactionID -> IO ()) ->
   FaeInterpretWithHistoryT m Integer
 innerRun tx@TX{..} parentM placeModules = do

@@ -436,7 +436,9 @@ liftWS f = liftProtocolT ask >>= liftIO . f
 -- | Opens a websocket connection with whatever handshake that protocol
 -- uses (handled by @websockets@, not by us) and initializes the ID counter
 -- to 0.
-runProtocolT :: (MonadIO m, Commutes IO (Reader WS.Connection) m) => String -> Int -> ProtocolT m () -> m ()
+runProtocolT :: 
+  (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
+  String -> Int -> ProtocolT m () -> m ()
 runProtocolT host port x = do
   liftIO $ putStrLn $
     "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"

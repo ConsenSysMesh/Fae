@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.SpecParser where
 
-import Blockchain.Fae (ContractID, TransactionID)
+import Blockchain.Fae.FrontEnd (ContractID, TransactionID)
 
 import Common.Lens hiding ((<.>))
 

@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.Args where
 
-import Blockchain.Fae (TransactionID)
+import Blockchain.Fae.FrontEnd 
 
 import Common.Lens hiding (view)
 import Common.ProtocolT
@@ -20,6 +20,8 @@ data PostTXArgs =
     argFake :: Bool,
     argView :: Bool,
     argLazy :: Bool,
+    argResend :: Bool,
+    argImportExport :: (Maybe String, Maybe String),
     argFaeth :: FaethArgs,
     argUsage :: Maybe Usage
   }
@@ -27,7 +29,7 @@ data PostTXArgs =
 data FinalizedPostTXArgs =
   PostArgs  
   {
-    postArgTXName :: String,
+    postArgTXNameOrID :: Either TransactionID String,
     postArgHost :: String,
     postArgFake :: Bool,
     postArgLazy :: Bool,
@@ -43,6 +45,13 @@ data FinalizedPostTXArgs =
   {
     viewArgTXID :: TransactionID,
     viewArgHost :: String
+  } |
+  ImportExportArgs
+  {
+    exportTXID :: TransactionID,
+    exportSCID :: ShortContractID,
+    exportHost :: String,
+    importHost :: String
   } |
   UsageArgs Usage
 
@@ -74,6 +83,8 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
+    argResend = False,
+    argImportExport = (Nothing, Nothing),
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
     argUsage = Nothing
   }
@@ -83,8 +94,13 @@ argGetter st "--help" = st & _argUsage .~ Just UsageSuccess
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
+argGetter st "--resend" = st & _argResend .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
+  | ("--export-host", '=' : exportHostArg) <- break (== '=') x
+    = st & _argImportExport . _1 ?~ exportHostArg
+  | ("--import-host", '=' : importHostArg) <- break (== '=') x
+    = st & _argImportExport . _2 ?~ importHostArg
   | ("--faeth-eth-argument", '=' : ethArgumentArg) <- break (== '=') x
     = st
       & _argFaeth . _useFaeth .~ True
@@ -120,17 +136,26 @@ argGetter st x
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | Just u <- argUsage = UsageArgs u
-  | argFake && (argView || argLazy || useFaeth)
+  | (Just _, Just _) <- argImportExport, 
+    argView || argLazy || argFake || argResend || useFaeth
     = error $
-        "--fake is incompatible with --view, --lazy, --faeth*, " ++
-        "and --new-sender-account"
-  | argView && (argLazy || useFaeth)
-    = error
-        "--view is incompatible with --lazy, --faeth*, and --new-sender-account"
+        "--import-host and --export-host are incompatible with " ++
+        "--view, --lazy, --fake, --resend, and --faeth*"
+  | argFake && (argView || useFaeth)
+    = error "--fake is incompatible with --view, --faeth*, and --faeth*"
+  | argView && (argLazy || argResend || useFaeth)
+    = error "--view is incompatible with --lazy, --resend, and --faeth*"
   | not (null newSigners) && (isJust faethFee || isJust faethRecipient)
     = error $
       "--faeth-add-signature is incompatible with " ++
       "--faeth-fee and --faeth-recipient"
+  | argResend && 
+    (
+      not (null newSigners) || 
+      isJust faethFee || isJust faethValue || isJust faethArgument || 
+      isJust faethRecipient || isJust faethTo
+    )
+    = error "--resend is incompatible with --faeth-*"
   | argView, Nothing <- argDataM
     = UsageArgs $ UsageFailure "--view requires a transaction ID"
   | not (null newSigners), Just ethTXIDS <- argDataM =
@@ -150,10 +175,32 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
         readMaybe txIDS,
       viewArgHost = justHost argHostM
     }
+  | (exportHostM, importHostM) <- argImportExport,
+    Just argData <- argDataM,
+    (exportTXIDS, ':' : exportSCIDS) <- break (== ':') argData =
+    ImportExportArgs
+    {
+      exportTXID = 
+        fromMaybe (error $ "Couldn't parse transaction ID: " ++ exportTXIDS) $ 
+        readMaybe exportTXIDS,
+      exportSCID = 
+        fromMaybe (error $ "Couldn't parse short contract ID: " ++ exportSCIDS) $ 
+        readMaybe exportSCIDS,
+      exportHost = justHost exportHostM,
+      importHost = justHost importHostM
+    }
   | otherwise =
     PostArgs
     {
-      postArgTXName = fromMaybe "TX" argDataM,
+      postArgTXNameOrID = 
+        if argResend
+        then Left $
+          maybe (error $ "--resend requires a Fae transaction ID")
+            (\argData -> 
+              fromMaybe (error $ "Couldn't parse transaction ID: " ++ argData) $ 
+              readMaybe argData
+            ) argDataM
+        else Right $ fromMaybe "TX" argDataM,
       postArgHost = justHost argHostM,
       postArgFake = argFake,
       postArgLazy = argLazy,

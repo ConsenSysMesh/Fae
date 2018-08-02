@@ -13,6 +13,7 @@ import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Writer
 
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 
 import Data.Map (Map)
@@ -39,6 +40,21 @@ data TXExecData =
     parentM :: Maybe TransactionID,
     resultVar :: TMVar String,
     callerTID :: ThreadId
+  } |
+  ExportValue
+  {
+    parentM :: Maybe TransactionID,
+    calledInTX :: TransactionID,
+    shortCID :: ShortContractID,
+    exportResultVar :: TMVar ExportData,
+    callerTID :: ThreadId
+  } |
+  ImportValue
+  {
+    parentM :: Maybe TransactionID,
+    exportData :: ExportData,
+    signalVar :: TMVar (),
+    callerTID :: ThreadId
   }
 
 -- | Communications channel with the interpreter thread
@@ -59,6 +75,9 @@ instance (TXQueueM m) => TXQueueM (ReaderT r m) where
 instance (TXQueueM m, Monoid w) => TXQueueM (WriterT w m) where
   liftTXQueueT = lift . liftTXQueueT
 
+instance (TXQueueM m) => TXQueueM (FaeStorageT m) where
+  liftTXQueueT = FaeStorageT . liftTXQueueT
+
 instance (TXQueueM m) => TXQueueM (StateT s m) where
   liftTXQueueT = lift . liftTXQueueT
 
@@ -75,10 +94,12 @@ instance (TXQueueM m) => TXQueueM (ProtocolT m) where
 type SendTXExecData m = TXExecData -> m ()
 
 -- | Blocks on the result variable after sending off the TX.
-waitRunTXExecData :: (TXQueueM m) => SendTXExecData m -> TXExecData -> m String
-waitRunTXExecData sendOff txExecData = do
+waitRunTXExecData :: 
+  (TXQueueM m) => 
+  SendTXExecData m -> (TXExecData -> TMVar a) -> TXExecData -> m a
+waitRunTXExecData sendOff tmVar txExecData = do
   sendOff txExecData
-  ioAtomically $ takeTMVar $ resultVar txExecData
+  ioAtomically $ takeTMVar $ tmVar txExecData
 
 -- | Sends the TX by simply placing it in the queue.
 queueTXExecData :: (TXQueueM m) => SendTXExecData m

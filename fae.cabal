@@ -5,7 +5,7 @@ name:                fae
 --   *.*.c.* -> *.*.(c + 1).0 : Bugfixes that may change the (incorrect) behavior of existing code
 --                              or minor, compatible new features
 --   *.*.*.d -> *.*.*.(d + 1) : Adding omitted exports, GHC extensions, cosmetic stuff, demos ...
-version:             1.1.0.0
+version:             2.0.0.0
 -- synopsis:
 -- description:
 homepage:            https://github.com/Consensys/Fae
@@ -38,6 +38,7 @@ library
     Blockchain.Fae.Internal.Messages,
     Blockchain.Fae.Internal.PrettyFae
     Blockchain.Fae.Internal.Reward
+    Blockchain.Fae.Internal.Serialization
     Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Suspend
     Blockchain.Fae.Internal.Transaction
@@ -155,6 +156,7 @@ executable postTX
     PostTX.Args
     PostTX.EnvVars
     PostTX.Faeth
+    PostTX.ImportExport
     PostTX.Network
     PostTX.SpecParser
     PostTX.Submit

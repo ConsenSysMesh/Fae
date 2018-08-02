@@ -70,7 +70,7 @@ data PrivateKey = PrivateKey EdPublicKey EdSecretKey deriving (Generic)
 data Signature = Signature EdPublicKey EdSignature deriving (Generic, Eq)
 
 -- | A useful abstraction, again allowing semantic improvements in 'sign'.
-data Signed a = Signed {body :: a, sig :: Signature} deriving (Generic)
+data Signed a = Signed {unSigned :: a, sig :: Signature} deriving (Generic)
 
 -- * Type classes
 -- | This is probably a duplicate of some @Hashable@ class, but I want
@@ -258,7 +258,7 @@ instance IsString EdPublicKey where
 
 -- | Public keys 'show' as hex strings.
 instance Show EdPublicKey where
-  show = C8.unpack . B16.encode . Ser.encode
+  show = printHex
 
 -- | Digests 'show' as hex strings.
 instance Show Digest where
@@ -301,7 +301,7 @@ sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) =
   Signed
   {
     sig = Signature pubKey $ EdSignature $ Ed.sign secKey edPublicKey dig,
-    body = x
+    unSigned = x
   }
   where HashDigest dig = digest x
 
@@ -310,7 +310,7 @@ sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) =
 --
 -- prop> forall x. (Digestible x) => unsign . sign x = public
 unsign :: (Digestible a) => Signed a -> Maybe PublicKey
-unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig), body = msg}
+unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig), unSigned = msg}
   | Ed.verify edPublicKey dig sig = Just pubKey
   | otherwise = Nothing
   where HashDigest dig = digest msg
@@ -343,4 +343,12 @@ public :: PrivateKey -> Maybe PublicKey
 public (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey))
   | Ed.toPublic secKey == edPublicKey = Just pubKey
   | otherwise = Nothing
+
+-- | Useful function inexplicably missing from every library
+printHex :: (Serialize a) => a -> String
+printHex = C8.unpack . B16.encode . Ser.encode
+
+-- | The default for various things
+nullDigest :: Digest
+nullDigest = digest ()
 
