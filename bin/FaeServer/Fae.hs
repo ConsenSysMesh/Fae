@@ -10,8 +10,9 @@ import Control.Exception.Base
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Cont
+
+import Common.JSON
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -26,10 +27,8 @@ import FaeServer.History
 import FaeServer.Modules
 
 import System.Directory
-import System.Exit
 import System.FilePath
 import System.IO
-import System.IO.Error
 
 runFae :: ThreadId -> Flags -> TXQueueT IO ()
 runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
@@ -45,7 +44,7 @@ runFae mainTID Flags{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
   forever $ do
     txExecData <- readTXExecData
     reThrowExit mainTID (callerTID txExecData) $ runTXExecData txExecData
-
+  
 runTXExecData :: 
   (MonadIO m, MonadMask m) => 
   TXExecData -> FaeInterpretWithHistoryT m ()
@@ -57,7 +56,9 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
   txResult <-
     if lazy
     then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
-    else lift $ showTransaction txID
+    else do
+      txSummary <- lift $ collectTransaction txID
+      return $ encodeJSON txSummary
   if fake
   then liftIO gitClean
   else do
@@ -68,8 +69,8 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
 
 runTXExecData View{..} = do
   void $ recallHistory parentM
-  txResult <- lift $ showTransaction viewTXID
-  ioAtomically $ putTMVar resultVar txResult
+  txSummary <- lift $ collectTransaction viewTXID
+  ioAtomically $ putTMVar resultVar (encodeJSON txSummary)
 
 innerRun :: 
   (MonadIO m, MonadMask m) =>

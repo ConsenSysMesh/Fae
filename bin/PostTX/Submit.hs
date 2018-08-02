@@ -1,8 +1,5 @@
 module PostTX.Submit where
 
-import Control.Exception
-import Control.Lens hiding ((<.>))
-
 import qualified Data.ByteString.Char8 as C8
 
 import qualified Data.Map as Map
@@ -11,22 +8,17 @@ import Data.Map (Map)
 import qualified Data.Serialize as S
 import Data.Serialize (Serialize)
 
-import Data.Maybe
 import qualified Data.Text as T
 
 import Network.HTTP.Client
 import Network.HTTP.Client.MultipartFormData
 
-import PostTX.EnvVars
 import PostTX.Network
 import PostTX.TXSpec
 
-import System.Directory
-import System.FilePath
-
-submit :: String -> String -> Bool -> Bool-> TXSpec String -> IO ()
-submit txName host fake lazy txSpec = 
-  buildRequest txName host fake lazy txSpec >>= sendReceive
+submit :: String -> String -> Bool -> Bool -> Bool -> TXSpec String -> IO ()
+submit txName host fake lazy isJson txSpec = 
+  buildRequest txName host fake lazy txSpec >>= sendReceive isJson
 
 buildRequest :: String -> String -> Bool -> Bool -> TXSpec String -> IO Request
 buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =

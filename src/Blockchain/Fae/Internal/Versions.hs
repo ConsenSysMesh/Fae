@@ -15,9 +15,6 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 
-import Common.Lens
-
-import Control.Applicative
 import Control.Monad
 import Control.Monad.State
 
@@ -30,7 +27,6 @@ import Data.Maybe
 
 import Data.Proxy
 import Data.Typeable
-import Data.Void
 
 import qualified GHC.Generics as Gen (from, to)
 import GHC.Generics hiding (from, to)

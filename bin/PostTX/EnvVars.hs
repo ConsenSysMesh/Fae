@@ -1,7 +1,6 @@
 module PostTX.EnvVars where
 
 import Data.Char
-import Data.List
 
 import System.Environment
 

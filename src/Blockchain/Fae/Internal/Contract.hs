@@ -28,13 +28,9 @@ import Control.Monad.Writer
 
 import Control.DeepSeq
 
-import Data.Bifunctor
-import Data.Functor.Const
-import Data.Functor.Identity
 import Data.Map (Map)
 import Data.Maybe
 import Data.Typeable
-import Data.Void
 
 import qualified Data.Map as Map
 
