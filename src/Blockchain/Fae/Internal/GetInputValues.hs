@@ -12,7 +12,6 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Versions
 
 import Control.Applicative
 import Control.Monad.State

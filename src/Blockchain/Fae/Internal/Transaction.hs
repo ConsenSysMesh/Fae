@@ -27,11 +27,8 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
 
-import Data.Bifunctor
 import Data.Foldable
-import Data.Functor.Identity
-import Data.Monoid hiding ((<>))
-import Data.Semigroup
+import Data.Semigroup ((<>))
 
 import qualified Data.Map as Map
 

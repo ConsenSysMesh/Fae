@@ -21,22 +21,14 @@ import Blockchain.Fae.Internal.IDs.Types
 
 import Common.Lens
 
-import Control.DeepSeq
-
-import Control.Monad.State
+import Control.Monad.State.Class
 import Control.Monad.Writer
-
-import Data.Char
-import Data.List
 
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Data.Maybe
-import Data.String
-import Data.Traversable
 import Data.Typeable
-import Data.Void
 
 import GHC.Generics
 import GHC.TypeLits

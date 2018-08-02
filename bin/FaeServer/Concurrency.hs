@@ -10,7 +10,6 @@ import Control.Concurrent.STM
 import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans
 import Control.Monad.Writer
 
 import Data.ByteString (ByteString)

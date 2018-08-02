@@ -26,15 +26,13 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
 
-import Data.Bifunctor
-import Data.ByteString (ByteString)
-import Data.Functor.Const
-import Data.Functor.Identity
+import Control.DeepSeq
+
+import Data.ByteString
 import Data.Map (Map)
 import Data.Maybe
 import Data.Proxy
 import Data.Typeable
-import Data.Void
 
 import qualified Data.Map as Map
 

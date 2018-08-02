@@ -16,8 +16,6 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs
 
-import Data.Serialize (Serialize)
-
 import GHC.Generics
 
 -- * Types
@@ -30,10 +28,6 @@ data RewardToken = Token deriving (Generic)
 data Reward = RewardName deriving (Generic)
 -- | The escrow ID of a reward token provided by the system.
 type RewardEscrowID = EscrowID Reward
-
-instance Serialize RewardValue
-instance Serialize RewardToken
-instance Serialize Reward
 
 instance ContractName Reward where
   type ArgType Reward = RewardToken

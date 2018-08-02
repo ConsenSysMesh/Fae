@@ -8,8 +8,8 @@ import qualified Data.ByteString.Lazy.Char8 as LC8
 
 import Network.HTTP.Client.MultipartFormData
 
-view :: TransactionID -> String -> IO ()
-view txID host = do
+view :: TransactionID -> String -> Bool -> IO ()
+view txID host isJSON = do
   request <- flip formDataBody (requestURL host) $ 
     [partLBS "view" $ LC8.pack $ show txID]
-  sendReceiveString request >>= putStrLn
+  sendReceiveJSONString isJSON request >>= putStrLn

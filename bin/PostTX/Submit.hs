@@ -1,12 +1,8 @@
 module PostTX.Submit where
 
-import Control.Exception
-import Control.Lens hiding ((<.>))
-
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Serialize as S
-
-import Data.Maybe
+import qualified Data.Text as T
 
 import Network.HTTP.Client
 import Network.HTTP.Client.MultipartFormData
@@ -14,12 +10,11 @@ import Network.HTTP.Client.MultipartFormData
 import PostTX.Network
 import PostTX.TXSpec
 
-import System.Directory
-import System.FilePath
-
-submit :: String -> Bool -> Bool -> TXSpec String -> IO ()
-submit host fake lazy txSpec = 
-  buildRequest host fake lazy txSpec >>= sendReceiveString >>= putStrLn
+-- | If JSON formatting is not enabled through postTX CLI flag
+-- pretty print a summary of TX output.
+submit :: String -> Bool -> Bool -> Bool -> TXSpec String -> IO ()
+submit host fake lazy isJson txSpec = 
+  buildRequest host fake lazy txSpec >>= sendReceiveJSONString isJson >>= putStrLn
 
 buildRequest :: String -> Bool -> Bool -> TXSpec String -> IO Request
 buildRequest host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =

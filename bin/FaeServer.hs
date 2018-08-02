@@ -25,7 +25,6 @@ import Control.Concurrent.STM
 
 import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.Trans
 
 import Data.List
 import Data.Maybe

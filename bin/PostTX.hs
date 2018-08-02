@@ -1,7 +1,5 @@
-import Common.ProtocolT
 
 import Control.Monad.Reader
-import Control.Monad.Trans
 
 import Data.Maybe
 
@@ -49,10 +47,10 @@ main = do
         submitFaeth postArgHost faethValue faethTo txSpec
       else do
         txSpec <- buildTXSpec id
-        submit postArgHost postArgFake postArgLazy txSpec
+        submit postArgHost postArgFake postArgLazy postArgJSON txSpec
     OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
-    ViewArgs{..} -> view viewArgTXID viewArgHost
+    ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
     ImportExportArgs{..} -> 
       importExport exportTXID exportSCID exportHost importHost
     UsageArgs UsageSuccess -> do
@@ -84,6 +82,9 @@ usage = do
       "    with data = (Fae tx ID)",
       "    --view      Display the results of a previously submitted transaction",
       "    --resend    Post a previous, signed transaction to a new host",
+      "",
+      "    with a (tx name | Fae tx ID)",
+      "    --json      Format the output of a transaction in JSON",
       "",
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",

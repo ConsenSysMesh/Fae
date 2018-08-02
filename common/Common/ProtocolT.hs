@@ -23,10 +23,8 @@ import Codec.Compression.Zlib
 
 import Common.Lens hiding ((.=))
 
-import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans
 import Control.Monad.Writer
 
 import Data.Aeson (FromJSON(..), ToJSON(..), (.:), (.:?), (.=))
@@ -37,9 +35,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.List as L
 import Data.Maybe
-import Data.Monoid
 import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
 import Data.Text (Text)
@@ -47,7 +43,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Read as T
 
 import GHC.Generics as G
-import GHC.IO.Unsafe
 
 import qualified Network.WebSockets as WS
 
@@ -55,10 +50,6 @@ import Numeric
 
 import qualified Text.Read as R
 import qualified Text.ParserCombinators.ReadP as RP
-import qualified Text.ParserCombinators.ReadPrec as R
-
-import System.Directory
-import System.FilePath
 
 import Text.Read hiding (lift, get)
 

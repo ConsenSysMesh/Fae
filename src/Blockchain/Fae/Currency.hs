@@ -25,16 +25,9 @@ import Blockchain.Fae
 
 import Control.Applicative
 
-import Control.Monad.Reader.Class
 import Control.Monad.State
 
-import Data.Function
 import Data.Maybe
-import Data.Ord
-import Data.Serialize
-import Data.Typeable
-
-import Numeric.Natural
 
 -- | Interface for a currency type.
 class 
@@ -161,8 +154,6 @@ coinContract (MintCoin n) True = spend n
 -- | Helpful shortcut
 mint :: (MonadTX m) => Natural -> m Coin
 mint = newEscrow . MintCoin
-
-instance Serialize CoinName
 
 instance ContractName CoinName where
   type ArgType CoinName = Bool

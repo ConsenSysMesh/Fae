@@ -71,8 +71,7 @@ data ContractException =
   BadEscrowID EntryID |
   BadEscrowName EntryID TypeRep TypeRep |
   MissingSigner String |
-  NotStartState EntryID VersionID |
-  HoldsEscrows EntryID
+  NotStartState EntryID VersionID
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
@@ -80,7 +79,13 @@ data TransactionException =
   TooManyInputs |
   BadInput ContractID
 
+newtype TXFieldException = TXFieldException String
+
 -- * Instances
+
+-- | - 
+instance Show TXFieldException where
+  show (TXFieldException e) = e
 
 -- | -
 instance Show IDException where
@@ -140,8 +145,6 @@ instance Show ContractException where
     "Escrow " ++ show entID ++ 
     " with version " ++ show vID ++ 
     " is not in its starting state"
-  show (HoldsEscrows entID) =
-    "Escrow " ++ show entID ++ " has a nonempty endowment"
 
 -- | -
 instance Show TransactionException where
@@ -159,4 +162,5 @@ instance Exception StorageException
 instance Exception ContractException
 -- | -
 instance Exception TransactionException
-
+-- | -
+instance Exception TXFieldException

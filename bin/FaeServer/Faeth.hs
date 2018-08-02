@@ -13,8 +13,6 @@ import Control.Concurrent.STM.TVar
 import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans
-import Control.Monad.Trans.Cont
 
 import FaeServer.Args
 
@@ -30,15 +28,9 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Proxy
 
-import Data.Aeson.Parser
-import Data.Monoid
-
 import FaeServer.App
-import FaeServer.Fae
 import FaeServer.Concurrency
 import FaeServer.Modules
-
-import GHC.Generics
 
 import System.IO
 

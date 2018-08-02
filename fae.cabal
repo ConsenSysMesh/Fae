@@ -36,7 +36,7 @@ library
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
     Blockchain.Fae.Internal.Messages,
-    Blockchain.Fae.Internal.PrettyFae
+    Blockchain.Fae.Internal.TXSummary
     Blockchain.Fae.Internal.Reward
     Blockchain.Fae.Internal.Serialization
     Blockchain.Fae.Internal.Storage
@@ -95,6 +95,7 @@ executable faeServer
   main-is:             FaeServer.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   other-modules:
+    Common.JSON
     Common.Lens
     Common.ProtocolT
     FaeServer.App
@@ -120,6 +121,7 @@ executable faeServer
     lens,
     lifted-base,
     mtl,
+    pretty,
     process,
     stm,
     template-haskell,
@@ -151,6 +153,7 @@ executable postTX
   hs-source-dirs: bin, common
   main-is: PostTX.hs
   other-modules:
+    Common.JSON
     Common.Lens
     Common.ProtocolT
     PostTX.Args
@@ -177,6 +180,7 @@ executable postTX
     http-client,
     lens,
     mtl,
+    pretty,
     process,
     template-haskell,
     text,
@@ -194,6 +198,7 @@ executable postTX
     MultiParamTypeClasses
     NamedFieldPuns
     OverloadedStrings
+    ScopedTypeVariables
     TupleSections
     TypeApplications
 
@@ -225,4 +230,3 @@ executable collectPackage
     NamedFieldPuns
     RankNTypes
     RecordWildCards
-

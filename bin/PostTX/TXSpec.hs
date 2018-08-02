@@ -7,11 +7,9 @@ import Common.Lens hiding ((<.>))
 import Common.ProtocolT
 
 import Control.Monad.Reader
-import Control.Monad.Trans
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-import Data.ByteString (ByteString)
 
 import qualified Data.Map as Map
 import Data.Map (Map)
@@ -27,7 +25,6 @@ import GHC.Generics
 import PostTX.Args
 
 import System.Directory
-import System.Environment
 
 import Text.Read
 

@@ -19,20 +19,14 @@ import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
-import Control.Monad.IO.Class
 import Control.Monad.State
+import Control.Monad.Trans
 
 import Data.ByteString (ByteString)
-import Data.Dynamic
-import Data.Functor.Identity
 import Data.IntMap (IntMap)
-import Data.List
 import Data.Map (Map)
-import Data.Maybe
-import Data.Monoid hiding ((<>))
 import Data.Semigroup
-import Data.Serialize hiding (Result)
-import Data.Typeable 
+import Data.Typeable
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
