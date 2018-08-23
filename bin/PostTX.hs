@@ -1,7 +1,9 @@
+import Common.ProtocolT (Salt)
 
 import Control.Monad.Reader
 
 import Data.Maybe
+import Data.Serialize (Serialize)
 
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Serialize as S
@@ -41,13 +43,19 @@ main = do
               let txID = getTXID $ txMessage txSpec
               C8.writeFile ("txspecs" </> show txID) $ S.encode txSpec
               return txSpec
-      if useFaeth 
-      then do
-        txSpec <- buildTXSpec $ flip runReaderT postArgFaeth
-        submitFaeth postArgHost faethValue faethTo txSpec
-      else do
-        txSpec <- buildTXSpec id
-        submit postArgHost postArgFake postArgLazy postArgJSON txSpec
+
+          normalSubmit :: (Serialize a) => TXSpec a -> IO ()
+          normalSubmit = submit postArgHost postArgFake postArgLazy postArgJSON 
+      case (useFaeth, postArgFake) of
+        (True, False) -> do
+          txSpec <- buildTXSpec $ flip runReaderT postArgFaeth
+          submitFaeth postArgHost faethValue faethTo txSpec
+        (True, True) -> do
+          txSpec <- buildTXSpec $ flip runReaderT postArgFaeth
+          normalSubmit @Salt txSpec
+        (False, _) -> do
+          txSpec <- buildTXSpec id
+          normalSubmit @String txSpec
     OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
@@ -88,6 +96,7 @@ usage = do
       "",
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",
+      "                With --fake, connects to faeServer rather than Parity",
       "                Also implied by any of the following options",
       "",
       "    with data = (tx name)",

@@ -145,12 +145,11 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     = error $
         "--import-host and --export-host are incompatible with " ++
         "--view, --lazy, --fake, --resend, and --faeth*"
-  | argFake && (argView || useFaeth)
-    = error "--fake is incompatible with --view, --faeth*, and --faeth*"
+  | argFake && argView 
+    = error "--fake is incompatible with --view"
   | argView && (argLazy || argResend || useFaeth)
     = error $
-        "--fake is incompatible with --view, --lazy, --faeth*, " ++
-        "and --new-sender-account"
+        "--view is incompatible with --lazy, --resend, and --faeth"
   | argJSON && (argLazy || useFaeth)
     = error $
         "--json is incompatible with --lazy, --faeth*"
