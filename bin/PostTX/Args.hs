@@ -124,9 +124,9 @@ argGetter st x
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | Just u <- argUsage = UsageArgs u
-  | argFake && (argView || argLazy || useFaeth)
+  | argFake && (argView || argLazy)
     = error $
-        "--fake is incompatible with --view, --lazy, --faeth*, " ++
+        "--fake is incompatible with --view, --lazy, " ++
         "and --new-sender-account"
   | argJSON && (argLazy || useFaeth)
     = error $

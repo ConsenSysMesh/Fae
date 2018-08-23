@@ -1,7 +1,9 @@
+import Common.ProtocolT (Salt)
 
 import Control.Monad.Reader
 
 import Data.Maybe
+import Data.Serialize (Serialize)
 
 import PostTX.Args
 import PostTX.Faeth
@@ -26,14 +28,20 @@ main = do
   args <- getArgs
   case parseArgs args of
     PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
+      let normalSubmit :: (Serialize a) => TXSpec a -> IO ()
+          normalSubmit = 
+            submit postArgTXName postArgHost postArgFake postArgLazy postArgJSON 
       txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
-      if useFaeth 
-      then do
-        txSpec <- runReaderT (txDataToTXSpec txData) postArgFaeth
-        submitFaeth postArgHost faethValue faethTo txSpec
-      else do
-        txSpec <- txDataToTXSpec txData
-        submit postArgTXName postArgHost postArgFake postArgLazy postArgJSON txSpec
+      case (useFaeth, postArgFake) of
+        (True, False) -> do
+          txSpec <- runReaderT (txDataToTXSpec txData) postArgFaeth
+          submitFaeth postArgHost faethValue faethTo txSpec
+        (True, True) -> do
+          txSpec <- runReaderT (txDataToTXSpec txData) postArgFaeth
+          normalSubmit @Salt txSpec
+        (False, _) -> do
+          txSpec <- txDataToTXSpec txData
+          normalSubmit @String txSpec
     OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
@@ -71,6 +79,7 @@ usage = do
       "",
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",
+      "                With --fake, connects to faeServer rather than Parity",
       "                Also implied by any of the following options",
       "",
       "    with a (tx name)",

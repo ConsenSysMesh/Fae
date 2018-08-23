@@ -16,11 +16,15 @@ import Network.HTTP.Client.MultipartFormData
 import PostTX.Network
 import PostTX.TXSpec
 
-submit :: String -> String -> Bool -> Bool -> Bool -> TXSpec String -> IO ()
+submit :: 
+  (Serialize a) => 
+  String -> String -> Bool -> Bool -> Bool -> TXSpec a -> IO ()
 submit txName host fake lazy isJson txSpec = 
   buildRequest txName host fake lazy txSpec >>= sendReceive isJson
 
-buildRequest :: String -> String -> Bool -> Bool -> TXSpec String -> IO Request
+buildRequest :: 
+  (Serialize a) => 
+  String -> String -> Bool -> Bool -> TXSpec a -> IO Request
 buildRequest txName host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
   flip formDataBody (requestURL host) $
     modulePart "message" txName (S.encode txMessage) : 
