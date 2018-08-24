@@ -33,7 +33,10 @@ main = do
   args <- getArgs
   case parseArgs args of
     PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
-      let buildTXSpec f = case postArgTXNameOrID of
+      let buildTXSpec :: 
+            (MakesTXSpec m a) => 
+            (m (TXSpec a) -> IO (TXSpec a)) -> IO (TXSpec a)
+          buildTXSpec f = case postArgTXNameOrID of
             Left txID ->
               either (error $ "Bad transaction file: " ++ show txID) id .
                 S.decode <$> (C8.readFile $ "txspecs" </> show txID)
