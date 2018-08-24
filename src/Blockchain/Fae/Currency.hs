@@ -15,9 +15,7 @@ module Blockchain.Fae.Currency
     -- * The currency typeclass
     Currency(..),
     -- * Basic numeric currency
-    -- | This is a nearly featureless currency that most likely suffers
-    -- from the effects of inflation, since its reward function creates one
-    CoinName(..), Coin, reward
+    Coin, reward
   )
 where
 
@@ -59,6 +57,16 @@ class
     coin -> Valuation coin -> m (f (coin, f' coin))
 
   -- | Partition the value into the given proportions and the remainder.
+  --
+  -- Note that @split [a0 * b, a1 * b, ..]@ is not equivalent to @split
+  -- [a0, a1, ..]@ despite the proportions being the same: each portion is
+  -- given the designated number of integral "parts", so the former
+  -- produces a list of multiples of @b@ and the latter need not.
+  --
+  -- In any case, the value being split is first rounded down to the
+  -- nearest multiple of the sum of the portions, the difference being
+  -- returned as the remainder.  If this rounding is all that is desired,
+  -- use 'round' instead.
   split :: 
     (Traversable t, Alternative f, MonadTX m) =>
     coin -> t Natural -> m (t coin, f coin)
@@ -106,7 +114,7 @@ class
   lessThan :: (MonadTX m) => coin -> Valuation coin -> m Bool
   lessThan c n = (== LT) <$> valCompare c n
 
-  -- | A pure 'Eq'-style comparison
+  -- | A pure 'Ord'-style comparison
   coinCompare :: (MonadTX m) => coin -> coin -> m Ordering
   coinCompare c1 c2 = do
     n <- value c2
@@ -136,52 +144,54 @@ class
 
 -- | Convenience type so that type signatures can say they accept the
 -- semantically-meaningful 'Coin' rather than some escrow ID.
-type Coin = EscrowID CoinName
+newtype Coin = Coin (EscrowID CoinName) deriving (Generic)
 -- | Only for this module; it's not exported so it doesn't matter in
 -- regular usage.
 data CoinName = MintCoin Natural deriving (Generic)
 
--- | The coin has two modes: report ('False') and withdraw ('True').
--- Obviously this entire function is unsafe for users of 'Coin', because it
--- allows them to create a new coin of any value.  It is, however, okay for
--- them to have the type signature of the escrow function itself, because
--- simply having an escrow of that signature is not enough to have
--- a 'Coin'; the 'CoinName' is also required, and that is hidden.
-coinContract :: CoinName -> Contract Bool Natural
-coinContract name@(MintCoin n) False = release n >>= coinContract name
-coinContract (MintCoin n) True = spend n
-
--- | Helpful shortcut
+-- | DRY shortcut, purely internal
 mint :: (MonadTX m) => Natural -> m Coin
-mint = newEscrow . MintCoin
+mint = fmap Coin . newEscrow . MintCoin
 
 instance ContractName CoinName where
   type ArgType CoinName = Bool
   type ValType CoinName = Natural
-  theContract = coinContract
+
+  -- | The coin has two modes: report ('False') and withdraw ('True').
+  -- Obviously this entire function is unsafe for users of 'Coin', because it
+  -- allows them to create a new coin of any value.  It is, however, okay for
+  -- them to have the type signature of the escrow function itself, because
+  -- simply having an escrow of that signature is not enough to have
+  -- a 'Coin'; the 'CoinName' is also required, and that is hidden.
+  theContract name@(MintCoin n) False = release n >>= theContract name
+  theContract (MintCoin n) True = spend n
 
 instance Currency Coin where
+  -- | The constructor isn't exported because using it is equivalent to
+  -- using 'toInteger' and 'fromInteger', methods of 'Integral' and 'Num'
+  -- respectively.  These operations are useful to construct a valuation of
+  -- a particular "denonination", or extract the raw numerical value.
   newtype Valuation Coin = CoinValuation Natural
     deriving (Eq, Ord, Num, Real, Enum, Integral, Generic)
 
   zero = mint 0
 
-  value eID = CoinValuation <$> useEscrow eID False
+  value (Coin eID) = CoinValuation <$> useEscrow eID False
 
-  add eID1 eID2 = do
+  add (Coin eID1) (Coin eID2) = do
     n1 <- useEscrow eID1 True
     n2 <- useEscrow eID2 True
     mint $ n1 + n2
 
-  change eID nV@(CoinValuation n) = do
-    ord <- valCompare eID nV
+  change c@(Coin eID) nV@(CoinValuation n) = do
+    ord <- valCompare c nV
     case ord of
-      EQ -> return $ pure (eID, empty)
+      EQ -> return $ pure (c, empty)
       GT -> do
         m <- useEscrow eID True
-        amtID <- mint n
-        remID <- mint $ m - n
-        return $ pure (amtID, pure remID)
+        amt <- mint n
+        rem <- mint $ m - n
+        return $ pure (amt, pure rem)
       LT -> return empty
 
 instance Show (Valuation Coin) where
