@@ -42,7 +42,7 @@ data TXMessage a =
     otherModulePreviews :: Map String ModulePreview,
     inputCalls :: Inputs,
     fallbackFunctions :: [String],
-    signatures :: Map String (Either PublicKey Signature)
+    signatures :: Map String (PublicKey, Maybe Signature)
   }
   deriving (Generic)
 
@@ -82,23 +82,29 @@ makeLenses ''ModulePreview
 
 -- | Gets the "base" transaction message without validation
 unsignedTXMessage :: TXMessage a -> TXMessage a
-unsignedTXMessage = over _signatures $ fmap (either (Left . id) (Left . getSigner))
+unsignedTXMessage = over _signatures $ fmap (_2 .~ Nothing)
 
 -- | Adds a single signature, overwriting one that's already there
-signTXMessage :: (Serialize a) => String -> PrivateKey -> TXMessage a -> TXMessage a
-signTXMessage name privKey txm = txm & _signatures . at name ?~ Right sig where
-  Signed{sig} = sign (unsignedTXMessage txm) privKey
+signTXMessage :: 
+  (Serialize a) => String -> PrivateKey -> TXMessage a -> Maybe (TXMessage a)
+signTXMessage name privKey txm = do
+  p <- Map.lookup name $ signatures txm
+  let p' = p & _2 ?~ sig (sign utxm privKey)
+  return (txm & _signatures . at name ?~ p')
+
+  where utxm = unsignedTXMessage txm
   
 -- | Validates a message (all signatures present, correct, and the right
 -- identity) and returns the base message
 unsignTXMessage :: (Serialize a) => TXMessage a -> Maybe (TXMessage a)
 unsignTXMessage txm = do
-  signedPubKeys <- mapM getTXSigner $ signatures txm
-  guard $ not (Map.null signedPubKeys) && signedPubKeys == actualPubKeys
+  checked <- traverse (uncurry checkSignature) $ signatures txm 
+  guard $ and checked
   return utxm
-  where
-    getTXSigner = either (const Nothing) (fmap Left . unsign . Signed utxm)
-    actualPubKeys = signatures utxm
+
+  where 
+    checkSignature pubKey sigM = (pubKey ==) <$> signerKeyM sigM 
+    signerKeyM sigM = (Signed utxm <$> sigM) >>= unsign
     utxm = unsignedTXMessage txm
 
 -- | The transaction ID is its hash.  This has to be the hash of the
@@ -117,9 +123,7 @@ txMessageToTX isReward txm = do
   TXMessage{..} <- unsignTXMessage txm
   let 
     txID = getTXID txm
-    -- This is guaranteed to match because we have used 'unsignTXMessage',
-    -- so every signer is now 'Left'.
-    pubKeys = Signers $ fmap (\(Left pk) -> pk) signatures
+    pubKeys = Signers $ fst <$> signatures
     fallback = fallbackFunctions
     inputs = inputCalls
   return TX{..}
