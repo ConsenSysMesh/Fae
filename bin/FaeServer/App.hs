@@ -74,7 +74,7 @@ serverApp _ sendTXExecData = \request respond -> do
             either (error "Couldn't decode transaction message") id $ 
             S.decode @(TXMessage a) $ getFile files "message"
           (tx, mainFile, modules) =
-            makeFilesMap txMessage mainFile0 modules0 reward
+            makeFilesMap txMessage mainFile0 modules0 reward fake
       in  send $ \callerTID resultVar -> TXExecData{..} 
 
 importExportApp :: TXExecApplication
