@@ -27,23 +27,9 @@ module Blockchain.Fae.Contracts
 import Blockchain.Fae
 import Blockchain.Fae.Currency
 
-import Control.Exception
 import Control.Monad
-import Control.Monad.State
-
-import Control.Monad.Reader.Class
-
-import Data.Bool
-
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 import Data.Maybe
-import Data.Typeable
-
-import GHC.Generics
-
-import Numeric.Natural
 
 -- $twopartyswap
 -- The two-party swap is a fully manual exchange of values between two

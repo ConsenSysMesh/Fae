@@ -1,8 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.SpecParser where
 
-import Blockchain.Fae (ContractID, TransactionID)
-
 import Common.Lens hiding ((<.>))
 
 import qualified Data.ByteString.Char8 as C8
@@ -16,6 +14,7 @@ import PostTX.TXSpec
 
 import Prelude hiding (readList)
 
+import Text.Read(readMaybe)
 import System.FilePath
 
 buildTXData :: String -> IO (TXData LoadedModules)
@@ -91,8 +90,9 @@ readList name listLens lines txData
 
 readInputs :: [String] -> TXData ParsedModules -> IO (TXData ParsedModules)
 readInputs lines txData@TXData{..} = do
-  (pairs, rest) <- readEqualsSpec (null inputs) "inputs" read lines
+  (pairs, rest) <- readEqualsSpec (null inputs) "inputs" readWithFailure lines
   readData rest txData{inputs = pairs} 
+  where readWithFailure input = fromMaybe (error $ "Failed to parse TX input" ++ input) (readMaybe input)
 
 readKeys :: [String] -> (TXData ParsedModules) -> IO (TXData ParsedModules)
 readKeys lines txData@TXData{..} = do

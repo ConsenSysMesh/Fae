@@ -23,10 +23,8 @@ import Codec.Compression.Zlib
 
 import Common.Lens hiding ((.=))
 
-import Control.DeepSeq
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans
 import Control.Monad.Writer
 
 import Data.Aeson (FromJSON(..), ToJSON(..), (.:), (.:?), (.=))
@@ -37,9 +35,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.List as L
 import Data.Maybe
-import Data.Monoid
 import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
 import Data.Text (Text)
@@ -47,7 +43,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Read as T
 
 import GHC.Generics as G
-import GHC.IO.Unsafe
 
 import qualified Network.WebSockets as WS
 
@@ -55,10 +50,6 @@ import Numeric
 
 import qualified Text.Read as R
 import qualified Text.ParserCombinators.ReadP as RP
-import qualified Text.ParserCombinators.ReadPrec as R
-
-import System.Directory
-import System.FilePath
 
 import Text.Read hiding (lift, get)
 
@@ -435,11 +426,9 @@ liftWS f = liftProtocolT ask >>= liftIO . f
 
 -- | Opens a websocket connection with whatever handshake that protocol
 -- uses (handled by @websockets@, not by us) and initializes the ID counter
--- to 0.  The host is currently hard-coded.
-runProtocolT :: 
-  (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
-  ProtocolT m () -> m ()
-runProtocolT x = do
+-- to 0.
+runProtocolT :: (MonadIO m, Commutes IO (Reader WS.Connection) m) => String -> Int -> ProtocolT m () -> m ()
+runProtocolT host port x = do
   liftIO $ putStrLn $
     "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"
   xWS <- 
@@ -449,10 +438,6 @@ runProtocolT x = do
     flip evalStateT 0 $
     getProtocolT x
   liftIO $ WS.runClient host port "" $ runReader xWS
-
-  where
-    host = "localhost"
-    port = 8546
 
 -- | Sends a JSON-RPC message over a websocket.
 sendProtocolT :: (ToJSON a, ToRequest a, MonadProtocol m) => a -> m Int

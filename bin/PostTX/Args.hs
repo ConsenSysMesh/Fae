@@ -6,7 +6,6 @@ import Blockchain.Fae (TransactionID)
 import Common.Lens hiding (view)
 import Common.ProtocolT
 
-import Data.Bool
 import Data.List
 import Data.Maybe
 
@@ -20,6 +19,7 @@ data PostTXArgs =
     argFake :: Bool,
     argView :: Bool,
     argLazy :: Bool,
+    argJSON :: Bool,
     argFaeth :: FaethArgs,
     argUsage :: Maybe Usage,
     argViewKeys :: Maybe ViewKeys
@@ -32,6 +32,7 @@ data FinalizedPostTXArgs =
     postArgHost :: String,
     postArgFake :: Bool,
     postArgLazy :: Bool,
+    postArgJSON :: Bool,
     postArgFaeth :: FaethArgs
   } |
   OngoingFaethArgs
@@ -43,6 +44,7 @@ data FinalizedPostTXArgs =
   ViewArgs
   {
     viewArgTXID :: TransactionID,
+    viewArgJSON :: Bool,
     viewArgHost :: String
   } |
   UsageArgs Usage | ViewKeysArgs ViewKeys
@@ -77,6 +79,7 @@ parseArgs = finalize . foldl argGetter
     argFake = False,
     argView = False,
     argLazy = False,
+    argJSON = False,
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
     argUsage = Nothing,
     argViewKeys = Nothing
@@ -91,6 +94,7 @@ argGetter st x
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
+argGetter st "--json" = st & _argJSON .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x 
   | ("--faeth-eth-argument", '=' : ethArgumentArg) <- break (== '=') x
@@ -133,6 +137,9 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     = error $
         "--fake is incompatible with --view, --lazy, --faeth*, " ++
         "and --new-sender-account"
+  | argJSON && (argLazy || useFaeth)
+    = error $
+        "--json is incompatible with --lazy, --faeth*"
   | argView && (argLazy || useFaeth)
     = error
         "--view is incompatible with --lazy, --faeth*, and --new-sender-account"
@@ -157,7 +164,8 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       viewArgTXID = 
         fromMaybe (error $ "Couldn't parse transaction ID: " ++ txIDS) $ 
         readMaybe txIDS,
-      viewArgHost = justHost argHostM
+      viewArgHost = justHost argHostM,
+      viewArgJSON = argJSON
     }
   | otherwise =
     PostArgs
@@ -166,6 +174,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       postArgHost = justHost argHostM,
       postArgFake = argFake,
       postArgLazy = argLazy,
+      postArgJSON = argJSON,
       postArgFaeth = argFaeth
     }
 

@@ -28,13 +28,9 @@ import Control.Monad.Writer
 
 import Control.DeepSeq
 
-import Data.Bifunctor
-import Data.Functor.Const
-import Data.Functor.Identity
 import Data.Map (Map)
 import Data.Maybe
 import Data.Typeable
-import Data.Void
 
 import qualified Data.Map as Map
 
@@ -385,18 +381,9 @@ takeEscrows y = do
 -- turns it into a map.  Internally, this uses an imitation of the @lens@
 -- function 'toList' for 'Traversal's, but since an 'EscrowIDTraversal' is
 -- not /exactly/ a 'Traversal', we have to reproduce it.
-getEscrowMap :: forall m. (MonadState Escrows m) => [BearsValue] -> m EscrowMap
-getEscrowMap xs = do
-  -- This redundant construction exploits the laziness of the underlying
-  -- monad (which it hopefully has) to keep the final monadic object
-  -- defined, with the exceptions buried in the return value.
-  result <- fmap (Map.fromList . join) $ mapM (sequence . getTakers) xs
-  return result
-  where
-    getTakers (BearsValue x) = execWriter $ traverseEscrowIDs f x
-
-    f :: EscrowIDMap (Writer [m (EntryID, (AbstractLocalContract, VersionID))])
-    f eID = tell [takeEscrow eID] >> return eID
+getEscrowMap :: (MonadState Escrows m, HasEscrowIDs a) => a -> m EscrowMap
+getEscrowMap = fmap Map.fromList . sequence . execWriter . traverseEscrowIDs f 
+  where f eID = tell [takeEscrow eID] >> return eID
 
 -- | Actually looks up an escrow by ID.  This function actually
 -- /takes/ the escrows, not just copies them, because valuable things can't

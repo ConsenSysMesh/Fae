@@ -44,10 +44,10 @@ main = do
         submitFaeth postArgHost faethValue faethTo txSpec
       else do
         txSpec <- txDataToTXSpec txData
-        submit postArgTXName postArgHost postArgFake postArgLazy txSpec
-    x@OngoingFaethArgs{..} -> 
+        submit postArgTXName postArgHost postArgFake postArgLazy postArgJSON txSpec
+    OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
-    ViewArgs{..} -> view viewArgTXID viewArgHost
+    ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess
@@ -106,6 +106,9 @@ usage = do
       "    with a (Fae tx ID)",
       "    --view      Display the results of a previously submitted transaction",
       "",
+      "    with a (tx name | Fae tx ID)",
+      "    --json      Format the output of a transaction in JSON",
+      "",
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",
       "                Also implied by any of the following options",
@@ -125,6 +128,8 @@ usage = do
       "                                  transaction",
       "    --faeth-eth-to address        Set the Ethereum 'to' address for a", 
       "                                  Faeth transaction",
+      "    --faeth-eth-argument          Set the input that the Ethereum contract",
+      "                                  will see, i.e. the contract argument",
       "",
       "Recognized environment variables:",
       "  FAE_HOME      Directory where keys are stored",

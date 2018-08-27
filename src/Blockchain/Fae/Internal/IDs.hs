@@ -19,16 +19,9 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs.Types
 
-import Control.DeepSeq
-
 import Control.Monad.Writer
 
-import Data.Char
-import Data.List
-import Data.String
-import Data.Traversable
 import Data.Type.Equality
-import Data.Void
 
 import GHC.Generics
 import GHC.TypeLits
@@ -58,7 +51,7 @@ type EscrowIDMap f =
 -- to some Fae-specific constraints, this is a little different from
 -- a @lens@ 'Traversal'.
 type EscrowIDTraversal a = 
-  forall f. (Monad f) => EscrowIDMap f -> a -> f a
+  forall m. (Monad m) => EscrowIDMap m -> a -> m a
 
 -- * Typeclasses
 
@@ -81,6 +74,11 @@ class GHasEscrowIDs f where
   gTraverseEscrowIDs :: EscrowIDTraversal (f p)
 
 {- Instances -}
+
+-- | Even though 'BearsValue' hides the true type, it still has
+-- a 'HasEscrowIDs' constraint, so we can traverse the anonymous contents.
+instance HasEscrowIDs BearsValue where
+  traverseEscrowIDs f (BearsValue x) = BearsValue <$> traverseEscrowIDs f x
 
 -- | Escrow IDs, of course, contain themselves.  A tricky special case is
 -- that the transactional variants contain escrows in their argument or

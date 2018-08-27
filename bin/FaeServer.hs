@@ -25,7 +25,6 @@ import Control.Concurrent.STM
 
 import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.Trans
 
 import Data.List
 import Data.Maybe
@@ -60,7 +59,7 @@ main = do
       void $ fork $ runFae tID flags
       case serverMode of
         FaeMode -> runFaeServer (Proxy @String) queueTXExecData 
-        FaethMode -> runFaeth tID
+        FaethMode -> runFaeth flags tID
     (ArgsUsage xs) -> liftIO $ case xs of
       [] -> do
         usage
@@ -82,8 +81,10 @@ usage = do
       "  --help            Print this message",
       "  --faeth           Receive transactions via Ethereum from a Parity client",
       "  --faeth-mode      Synonym for --faeth",
+      "  --hostname        Specify a specific Faeth hostname",
       "  --normal-mode     Operate as standalone Fae",
       "  --new-session     Deletes previous transaction history",
+      "  --port            Specify a specific Faeth port number",
       "  --resume-session  Reloads previous transaction history,",
       "",
       "Later options shadow earlier ones when they have the same domain.",

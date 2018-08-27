@@ -26,15 +26,9 @@ import Blockchain.Fae
 
 import Control.Applicative
 
-import Control.Monad.Reader.Class
 import Control.Monad.State
 
-import Data.Function
 import Data.Maybe
-import Data.Ord
-import Data.Typeable
-
-import Numeric.Natural
 
 -- | Interface for a currency type.
 class 

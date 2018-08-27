@@ -28,7 +28,7 @@ data AuctionState coin =
   RemitState (Map PublicKey (Maybe coin))
 
 auction :: 
-  (NFData a, Versionable a, HasEscrowIDs a, Currency coin, MonadTX m) =>
+  (Versionable a, HasEscrowIDs a, Currency coin, MonadTX m) =>
   a -> Valuation coin -> Natural -> m ()
 auction _ _ 0 = throw NoBids
 auction x bid0 maxBids = do
