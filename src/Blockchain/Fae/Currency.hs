@@ -15,7 +15,9 @@ module Blockchain.Fae.Currency
     -- * The currency typeclass
     Currency(..),
     -- * Basic numeric currency
-    Coin, reward
+    -- The type 'CoinName' is exported to enable import/export of 'Coin'
+    -- values, but its constructor is not, for obvious reasons.
+    Coin, CoinName, reward
   )
 where
 
@@ -142,7 +144,8 @@ class
 
 {- The basic example -}
 
--- | Convenience type so that type signatures can say they accept the
+-- | The newtype both hides the escrow ID (important for contract safety)
+-- and makes it so that type signatures can say they accept the
 -- semantically-meaningful 'Coin' rather than some escrow ID.
 newtype Coin = Coin (EscrowID CoinName) deriving (Generic)
 -- | Only for this module; it's not exported so it doesn't matter in
