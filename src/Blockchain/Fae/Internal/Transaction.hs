@@ -31,11 +31,13 @@ import Data.Foldable
 import Data.Semigroup ((<>))
 
 import qualified Data.Map as Map
+import Data.Map (Map)
 
 -- * Types
 
--- | How inputs are provided to transactions.
-type Inputs = [(ContractID, String)]
+-- | How inputs are provided to transactions.  The contract with a given ID
+-- gets an argument and a (possibly empty) remapping of signer names.
+type Inputs = [(ContractID, String, Map String String)]
 
 -- | Transaction monad with storage access, for executing contracts and
 -- saving the results.
@@ -71,7 +73,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
   where 
     txStorage = _getStorage . at txID
 
-    inputIDs = map fst inputArgs
+    inputIDs = map (view _1) inputArgs
     defaultIOs = flip map inputIDs $ \cID ->
       (
         shorten cID, 
@@ -135,7 +137,7 @@ callTX g x f = do
 runInputContracts :: Inputs -> TXStorageM [ReturnValue]
 runInputContracts = fmap fst .
   foldl' (>>=) (return ([], emptyVersionMap')) .
-  map (uncurry nextInput) 
+  map nextInput
 
 -- | If the contract function is available, run it as a monadic state
 -- update, adding the result to the ongoing list and updating the map of
@@ -143,14 +145,15 @@ runInputContracts = fmap fst .
 -- that.  Otherwise, this input is exceptional (and so, probably, is the
 -- transaction result).
 nextInput ::
-  ContractID -> String ->
+  (ContractID, String, Map String String) -> 
   ([ReturnValue], VersionMap') -> TXStorageM ([ReturnValue], VersionMap')
-nextInput cID arg (results, vers) = do
+nextInput (cID, arg, renames) (results, vers) = do
   valE <- use $ at cID . defaultLens (throw $ BadContractID cID)
 
   (iR, vers') <- case valE of
     Right fAbs -> do 
-      ~(iR, vers', gAbsM, types) <- lift $ runContract cID vers fAbs arg
+      ~(iR, vers', gAbsM, types) <- lift $ 
+        remapSigners renames $ runContract cID vers fAbs arg
 
       -- We don't update the contract if it didn't return cleanly
       let successful = unsafeIsDefined iR

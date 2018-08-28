@@ -43,6 +43,10 @@ import Text.Read (readMaybe)
 -- * Types
 -- ** Contract data
 
+-- | Infix synonym for a pair to make the argument of 'withRoles' clearer.
+type a := b = (a, b)
+
+-- | Another dynamic type, this time including 'Exportable'.
 data ReturnValue =
   forall a. (Versionable a, HasEscrowIDs a, Exportable a) => ReturnValue a
 
@@ -304,13 +308,13 @@ newEscrow contractName = liftTX $ FaeTX $ do
 -- | Calls an escrow by ID, which must exist in the present context.
 useEscrow :: 
   (ContractName name, MonadTX m) =>
-  EscrowID name -> ArgType name -> m (ValType name)
-useEscrow eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
+  [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)
+useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
   \entID escrowVersion nameOrFunction -> return $ do
     let makeLocalCF NamedContract{..} = localContract $ 
           hideEscrows endowment contractNextID (theContract contractName)
         localCF = either makeLocalCF id nameOrFunction
-    ~(y, resultCFM) <- typeify (callContract localCF) x
+    ~(y, resultCFM) <- remapSigners renames $ typeify (callContract localCF) x
     txID <- view _thisTXID
     -- We hash with the transaction ID so that each new version reflects how
     -- it was created.  If the transaction is a known quantity, then this
@@ -320,8 +324,17 @@ useEscrow eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
     _escrowMap . at entID .= fmap (EscrowEntry newVer . Right) resultCFM
     return y
   where typeify f = fmap (_1 %~ returnTyped) . f . acceptTyped
+        renames = Map.fromList rolePairs
 
 -- * Internal functions
+
+-- ** Signers
+
+-- | Temporarily changes the map of signers according to its first argument.
+remapSigners :: Map String String -> FaeTXM a -> FaeTXM a
+remapSigners renames = local (_thisTXSigners . _getSigners %~ applyRenames) where
+  applyRenames keyMap = fmap (flip renameKey keyMap) renames `Map.union` keyMap
+  renameKey oldName = Map.findWithDefault (throw $ MissingSigner oldName) oldName
 
 -- ** Contract function converters
 

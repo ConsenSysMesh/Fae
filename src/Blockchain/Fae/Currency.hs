@@ -179,11 +179,11 @@ instance Currency Coin where
 
   zero = mint 0
 
-  value (Coin eID) = CoinValuation <$> useEscrow eID False
+  value (Coin eID) = CoinValuation <$> useEscrow [] eID False
 
   add (Coin eID1) (Coin eID2) = do
-    n1 <- useEscrow eID1 True
-    n2 <- useEscrow eID2 True
+    n1 <- useEscrow [] eID1 True
+    n2 <- useEscrow [] eID2 True
     mint $ n1 + n2
 
   change c@(Coin eID) nV@(CoinValuation n) = do
@@ -191,7 +191,7 @@ instance Currency Coin where
     case ord of
       EQ -> return $ pure (c, empty)
       GT -> do
-        m <- useEscrow eID True
+        m <- useEscrow [] eID True
         amt <- mint n
         rem <- mint $ m - n
         return $ pure (amt, pure rem)
