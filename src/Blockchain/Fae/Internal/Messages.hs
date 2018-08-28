@@ -124,8 +124,8 @@ getTXID = ShortContractID . digest . unsignedTXMessage
 -- been validated. Whereas a Right signals a complete TX which
 -- contains validated keys.
 txMessageToTX :: (Serialize a) => Bool -> TXMessage a -> Bool -> Maybe TX
-txMessageToTX isReward txm unchecked = do
-  TXMessage{..} <- unsignTXMessage txm unchecked
+txMessageToTX isReward txm@TXMessage{..} unchecked = do
+  --TXMessage{..} <- unsignTXMessage txm unchecked
   let 
     txID = getTXID txm
     pubKeys = Signers $ fst <$> signatures
