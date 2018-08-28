@@ -94,11 +94,10 @@ signTXMessage name privKey txm = do
 
   where utxm = unsignedTXMessage txm
   
-
 -- | Validates a message (all signatures present, correct, and the right
 -- identity) and returns the base message
-unsignTXMessage :: (Serialize a) => TXMessage a -> Bool -> Maybe (TXMessage a)
-unsignTXMessage txm unchecked = if unchecked then Just utxm else do 
+unsignTXMessage :: (Serialize a) => TXMessage a -> Maybe (TXMessage a)
+unsignTXMessage txm = do
   checked <- traverse (uncurry checkSignature) $ signatures txm 
   guard $ and checked
   return utxm
@@ -119,20 +118,17 @@ getTXID = ShortContractID . digest . unsignedTXMessage
 -- | Extracts the portion of the transaction that is useful for
 -- constructing the transaction call.  Modules must be placed in the
 -- appropriate directory structure by the client.
---
--- A Left represents an incomplete TX which has keys which have not 
--- been validated. Whereas a Right signals a complete TX which
--- contains validated keys.
 txMessageToTX :: (Serialize a) => Bool -> TXMessage a -> Bool -> Maybe TX
 txMessageToTX isReward txm@TXMessage{..} unchecked = do
-  TXMessage{..} <- unsignTXMessage txm unchecked
+  TXMessage{..} <- unsign txm
   let 
     txID = getTXID txm
     pubKeys = Signers $ fst <$> signatures
     fallback = fallbackFunctions
     inputs = inputCalls
   return TX{..}
-
+  where unsign | unchecked = Just . unsignedTXMessage
+               | otherwise = unsignTXMessage
 
 -- | Checks the hashes of the received module files against the ones
 -- promised in the transaction.  This does /not/ validate the modules as

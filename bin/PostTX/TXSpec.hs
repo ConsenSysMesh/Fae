@@ -156,12 +156,9 @@ addSigner name (Right privKey) =
   fromMaybe (error $ "Not a signer role in this transaction: " ++ name) .
   signTXMessage name privKey
 
--- Anything other than a public key given as a 64-bit hex string,
--- that appears on the right side of a `keys` line is taken to be 
--- the name of a private key file.
--- 
--- In the case of a file name being assumed an attempt will be made 
--- to read the file containing the key from the faeHome directory.
+-- | If the key "name" parses as a public key, then that is the result and
+-- the message will not be signed (by this key).  Otherwise, it is looked
+-- up in @faeHome@ as a file containing a private key.
 resolveKeyName :: String -> IO (Either PublicKey PrivateKey)
 resolveKeyName pubKeyS | Just pubKey <- readMaybe pubKeyS = return $ Left pubKey
 resolveKeyName name = do

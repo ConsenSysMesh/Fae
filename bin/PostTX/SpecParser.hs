@@ -94,6 +94,9 @@ readInputs lines txData@TXData{..} = do
   readData rest txData{inputs = pairs} 
   where readWithFailure input = fromMaybe (error $ "Failed to parse TX input" ++ input) (readMaybe input)
 
+-- | Anything other than a public key given as a 64-bit hex string,
+-- that appears on the right side of a `keys` line is taken to be
+-- the name of a private key file.
 readKeys :: [String] -> (TXData ParsedModules) -> IO (TXData ParsedModules)
 readKeys lines txData@TXData{..} = do
   (pairs, rest) <- readEqualsSpec (null keys) "keys" id lines
