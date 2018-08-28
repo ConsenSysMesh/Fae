@@ -125,7 +125,7 @@ getTXID = ShortContractID . digest . unsignedTXMessage
 -- contains validated keys.
 txMessageToTX :: (Serialize a) => Bool -> TXMessage a -> Bool -> Maybe TX
 txMessageToTX isReward txm@TXMessage{..} unchecked = do
-  --TXMessage{..} <- unsignTXMessage txm unchecked
+  TXMessage{..} <- unsignTXMessage txm unchecked
   let 
     txID = getTXID txm
     pubKeys = Signers $ fst <$> signatures
