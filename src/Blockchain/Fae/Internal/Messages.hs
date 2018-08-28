@@ -118,15 +118,17 @@ getTXID = ShortContractID . digest . unsignedTXMessage
 -- | Extracts the portion of the transaction that is useful for
 -- constructing the transaction call.  Modules must be placed in the
 -- appropriate directory structure by the client.
-txMessageToTX :: (Serialize a) => Bool -> TXMessage a -> Maybe TX
-txMessageToTX isReward txm = do
-  TXMessage{..} <- unsignTXMessage txm
+txMessageToTX :: (Serialize a) => Bool -> TXMessage a -> Bool -> Maybe TX
+txMessageToTX isReward txm@TXMessage{..} unchecked = do
+  TXMessage{..} <- unsign txm
   let 
     txID = getTXID txm
     pubKeys = Signers $ fst <$> signatures
     fallback = fallbackFunctions
     inputs = inputCalls
   return TX{..}
+  where unsign | unchecked = Just . unsignedTXMessage
+               | otherwise = unsignTXMessage
 
 -- | Checks the hashes of the received module files against the ones
 -- promised in the transaction.  This does /not/ validate the modules as

@@ -211,7 +211,7 @@ runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
 runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
   let
     (tx, mainFile, modules) = 
-      makeFilesMap txMessage mainFile0 modules0 False
+      makeFilesMap txMessage mainFile0 modules0 False False
     thisTXID = txID tx
     execError txID e = liftIO . putStrLn $
       "\nError while executing Fae transaction " ++ show txID ++
