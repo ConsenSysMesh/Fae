@@ -34,15 +34,15 @@ import Network.Wai.Parse
 
 import Text.Read (readMaybe)
 
-type ApplicationT m = 
+type ApplicationT m =
   Request -> (Response -> IO ResponseReceived) -> m ResponseReceived
 type TXExecApplicationT m = SendTXExecData m -> ApplicationT m
 type TXExecApplication = TXExecApplicationT (TXQueueT IO)
 
-runServer :: 
+runServer ::
   Int -> TXExecApplication -> SendTXExecData (TXQueueT IO) -> TXQueueT IO ()
 runServer port makeApp sendTXExecData = do
-  app <- bringOut $ makeApp sendTXExecData 
+  app <- bringOut $ makeApp sendTXExecData
   liftIO $ runSettings (faeSettings port) app
 
 faeSettings :: Int -> Settings
@@ -53,40 +53,54 @@ faeSettings port = defaultSettings &
 serverApp :: forall a. (Serialize a) => Proxy a -> TXExecApplication
 serverApp _ sendTXExecData = \request respond -> do
   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
-  let 
+  let
     getParams = getParameters params
-    parentM = getLast Nothing Just $ getParams "parent" 
-    viewM = getLast Nothing Just $ getParams "view" 
-    lazy = getLast False id $ getParams "lazy" 
-    fake = getLast False id $ getParams "fake" 
-    reward = getLast False id $ getParams "reward" 
-
+    parentM = getLast Nothing Just $ getParams "parent"
+    viewM = getLast Nothing Just $ getParams "view"
+    postM = getLast Nothing Just $ getParams "post"
+    lazy = getLast False id $ getParams "lazy"
+    fake = getLast False id $ getParams "fake"
+    reward = getLast False id $ getParams "reward"
   let send = waitResponse respond stringHeaders stringUtf8 sendTXExecData resultVar
   case viewM of
-    Just viewTXID 
-      | fake -> error "'fake' and 'view' are incompatible parameters"
-      | lazy -> error "'lazy and 'view' are incompatible parameters"
+    Just viewTXID
+      | fake -> error "'fake' and 'view' are incompatible parameters with 'view'"
+      | lazy -> error "'lazy and 'view' are incompatible parameters with 'view'"
       | otherwise -> send $ \callerTID resultVar -> View{..}
-    Nothing -> 
+    Nothing ->
       let mainFile0 = getFile files "body"
           modules0 = Map.fromList $ getFiles files "other"
-          txMessage = 
-            either (error "Couldn't decode transaction message") id $ 
+          txMessage =
+            either (error "Couldn't decode transaction message") id $
             S.decode @(TXMessage a) $ getFile files "message"
           (tx, mainFile, modules) =
             makeFilesMap txMessage mainFile0 modules0 reward
-      in  send $ \callerTID resultVar -> TXExecData{..} 
+      in  send $ \callerTID resultVar -> TXExecData{..}
+  case postM of
+    Just postTXID
+      | fake -> error "'fake' and 'view' are incompatible parameters with 'post'"
+      | lazy -> error "'lazy and 'view' are incompatible parameters with 'post'"
+      | otherwise -> send $ \callerTID resultVar -> PostTXData{..}
+    Nothing ->
+      let mainFile0 = getFile files "body"
+          modules0 = Map.fromList $ getFiles files "other"
+          txMessage =
+            either (error "Couldn't decode transaction message") id $
+            S.decode @(TXMessage a) $ getFile files "message"
+          (tx, mainFile, modules) =
+            makeFilesMap txMessage mainFile0 modules0 reward
+      in  send $ \callerTID resultVar -> TXExecData{..}
 
 importExportApp :: TXExecApplication
 importExportApp sendTXExecData = \request respond -> do
   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
   let
-    send :: 
-      (Serialize a) => 
+    send ::
+      (Serialize a) =>
       (TXExecData -> TMVar a) ->
-      (ThreadId -> TMVar a -> TXExecData) -> 
+      (ThreadId -> TMVar a -> TXExecData) ->
       TXQueueT IO ResponseReceived
-    send = waitResponse respond dataHeaders (byteString . S.encode) sendTXExecData 
+    send = waitResponse respond dataHeaders (byteString . S.encode) sendTXExecData
     getParams = getParameters params
     parentM = getLast Nothing Just $ getParams "parent"
     importDataM = either error id . S.decode <$> getFileMaybe files "import"
@@ -98,7 +112,7 @@ importExportApp sendTXExecData = \request respond -> do
       in send signalVar $ \callerTID signalVar -> ImportValue{..}
     (Nothing, Just (calledInTX, shortCID)) ->
       send exportResultVar $ \callerTID exportResultVar -> ExportValue{..}
-    (Nothing, Nothing) -> 
+    (Nothing, Nothing) ->
         error "Must specify either 'import' or 'export' parameter"
     _ -> error "Can't specify both 'import' and 'export' parameters"
 
@@ -106,14 +120,14 @@ bringOut :: ApplicationT (ReaderT r IO) -> ReaderT r IO Application
 bringOut txqApp =
   ReaderT $ \txq -> return $ \req resp -> runReaderT (txqApp req resp) txq
 
-waitResponse :: 
+waitResponse ::
   (TXQueueM m) =>
-  (Response -> IO ResponseReceived) -> 
+  (Response -> IO ResponseReceived) ->
   ResponseHeaders ->
   (a -> Builder) ->
-  SendTXExecData m -> 
+  SendTXExecData m ->
   (TXExecData -> TMVar a) ->
-  (ThreadId -> TMVar a -> TXExecData) -> 
+  (ThreadId -> TMVar a -> TXExecData) ->
   m ResponseReceived
 waitResponse respond headers build sendTXExecData tmVarField constr = do
   callerTID <- liftIO myThreadId
@@ -123,7 +137,7 @@ waitResponse respond headers build sendTXExecData tmVarField constr = do
   liftIO $ respond $ responseBuilder ok200 headers $ build result
 
 getParameters :: [(C8.ByteString, C8.ByteString)] -> C8.ByteString -> [String]
-getParameters params paramName = 
+getParameters params paramName =
   [ C8.unpack s | (pName, s) <- params, pName == paramName]
 
 getLast :: (Read b) => a -> (b -> a) -> [String] -> a
@@ -133,7 +147,7 @@ exceptionResponse :: SomeException -> Response
 exceptionResponse = responseBuilder badRequest400 stringHeaders . stringUtf8 . show
 
 stringHeaders :: ResponseHeaders
-stringHeaders = 
+stringHeaders =
   [
     (hContentEncoding, "utf8"),
     (hContentType, "text/plain")

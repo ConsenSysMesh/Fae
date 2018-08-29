@@ -63,8 +63,16 @@ main = do
       void $ fork $ runFae tID args
       void $ fork $ runServer importExportPort importExportApp queueTXExecData
       case serverMode of
-        FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData 
-        FaethMode -> runFaeth args tID
+        FaeMode -> do
+          liftIO $ putStrLn $ "Starting Fae\n" ++ "Mode: FaeMode\n" ++ "Port: " ++ show faePort
+          runServer faePort (serverApp $ Proxy @String) queueTXExecData
+        PostTXMode -> do
+          liftIO $ putStrLn $ "Starting Fae\n" ++ "Mode: PostTXMode\n" ++ "Port: " ++ show postTXPort
+          runServer postTXPort (serverApp $ Proxy @String) queueTXExecData
+        FaethMode -> do
+          liftIO $ putStrLn $ "Starting Fae\n" ++ "Mode: FaethMode\n Port: 27183"
+          runFaeth args tID
+
     (ArgsUsage xs) -> liftIO $ case xs of
       [] -> do
         usage
@@ -85,6 +93,7 @@ usage = do
       "where the available options are:",
       "  --help                         Print this message",
       "  --normal-mode                  Operate as standalone Fae",
+      "  --posttx-mode                  Operate as standalone postTX server",
       "  --faeth-mode                   Synonym for --faeth",
       "  --faeth                        Receive transactions via Ethereum from",
       "                                 a Parity client",
@@ -94,6 +103,8 @@ usage = do
       "                                 (default: 8546)",
       "  --fae-port=number              Listen on a given port for normal-mode",
       "                                 requests (default: 27182)",
+      "  --posttx-port=number           Listen on a given port for posttx-mode",
+      "                                 requests (default: 27184)",
       "  --import-export-port=number,   Listen on a given port for import/export",
       "                                 requests (default: 27183)",
       "  --new-session                  Deletes previous transaction history",
