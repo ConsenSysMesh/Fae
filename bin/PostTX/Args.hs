@@ -3,7 +3,7 @@ module PostTX.Args where
 
 import Blockchain.Fae (TransactionID)
 
-import Common.Lens hiding (view)
+import Common.Lens
 import Common.ProtocolT
 
 import Data.List
@@ -22,7 +22,7 @@ data PostTXArgs =
     argJSON :: Bool,
     argFaeth :: FaethArgs,
     argUsage :: Maybe Usage,
-    argShowKeys :: Maybe ShowKeys
+    argShowKeys :: Maybe [String]
   }
 
 data FinalizedPostTXArgs =
@@ -47,17 +47,12 @@ data FinalizedPostTXArgs =
     viewArgJSON :: Bool,
     viewArgHost :: String
   } |
-  UsageArgs 
-    Usage |
-    ShowKeysArgs ShowKeys
+  UsageArgs Usage |
+  ShowKeysArgs [String]
 
 data Usage =
   UsageFailure String |
   UsageSuccess
-
-data ShowKeys = 
-  ShowKeys |
-  ShowKey String 
 
 data FaethArgs =
   FaethArgs
@@ -90,11 +85,10 @@ parseArgs = finalize . foldl argGetter
   }
           
 argGetter :: PostTXArgs -> String -> PostTXArgs
-argGetter st "--help" = st & _argUsage .~ Just UsageSuccess
-argGetter st "--show-keys" = st & _argShowKeys .~ Just ShowKeys 
+argGetter st "--help" = st & (_argUsage ?~ UsageSuccess)
 argGetter st x 
-  | ("--show-key", '=' : name) <- break (== '=') x
-    = st & _argShowKeys .~ Just (ShowKey name)
+  | ("--show-keys", '=' : keysList) <- break (== '=') x
+    = st & _argShowKeys ?~ [keysList]
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
@@ -127,11 +121,13 @@ argGetter st x
       & _argFaeth . _useFaeth .~ True
       & _argFaeth . _faethRecipient .~ readMaybe faethRecipArg
   | "--" `isPrefixOf` x
-    = st & _argUsage .~ Just (UsageFailure $ "Unrecognized option: " ++ x)
+    = st & (_argUsage ?~ (UsageFailure $ "Unrecognized option: " ++ x))
   | Nothing <- st ^. _argDataM = st & _argDataM ?~ x
   | Nothing <- st ^. _argHostM = st & _argHostM ?~ x
-  | otherwise = st & _argUsage .~ Just (UsageFailure $ unlines
-      ["Unknown argument: " ++ x, "TX name and host already given"])
+  | otherwise = st & (_argUsage ?~
+  (UsageFailure $
+     unlines
+       ["Unknown argument: " ++ x, "TX name and host already given"]))
 
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 

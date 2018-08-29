@@ -50,30 +50,35 @@ main = do
       putStrLn err
       usage
       exitFailure
-    ShowKeysArgs ShowKeys -> do 
+    ShowKeysArgs [] -> do
+      -- Empty list denotes that all keys should be shown 
       storedKeys <- getHomeKeys faeHome
       if null storedKeys then print $ "No keys found at " ++ show faeHome else do
         putStrLn $ concatMap (\(keyName, privKey) ->
           keyName ++ ": " ++ show (fromMaybe (couldNotValidateErr keyName faeHome) (public privKey)) ++ "\n") storedKeys
         exitSuccess
-    ShowKeysArgs (ShowKey name) -> do
-      maybeFile <- findFile [faeHome] name
-      case maybeFile of 
-          Nothing -> do 
-            print $ "Key: " ++ name ++  " not found at " ++ faeHome
+    ShowKeysArgs keysList -> do
+      sequence_ $ getHomeKey faeHome <$> keysList
+      exitSuccess  
+
+couldNotValidateErr name faeHome = error $ "Key file named " ++ name ++  " could not be validated in " ++ faeHome
+
+getHomeKey faeHome keyName = do
+  maybeFile <- findFile [faeHome] keyName
+  case maybeFile of 
+      Nothing -> do 
+        print $ "Key: " ++ keyName ++  " not found at " ++ faeHome
+        exitFailure
+      Just file -> do
+        keyBytes <- BS.readFile file
+        case S.decode keyBytes of 
+          Left err -> do 
+            print $ "Key file named " ++ keyName ++  " could not be decoded in " ++ faeHome ++ " : " ++ err 
             exitFailure
-          Just file -> do
-            keyBytes <- BS.readFile file
-            case S.decode keyBytes of 
-              Left err -> do 
-                print $ "Key file named " ++ name ++  " could not be decoded in " ++ faeHome ++ " : " ++ err 
-                exitFailure
-              Right key ->
-                let pubKey = fromMaybe (couldNotValidateErr name faeHome) (public (key :: PrivateKey))
-                in do
-                  putStrLn $ takeBaseName file ++ ": " ++ show pubKey
-                  exitSuccess  
-  where couldNotValidateErr name faeHome = error $ "Key file named " ++ name ++  " could not be validated in " ++ faeHome
+          Right key ->
+            let pubKey = fromMaybe (couldNotValidateErr keyName faeHome) (public (key :: PrivateKey))
+            in do
+              putStrLn $ takeBaseName file ++ ": " ++ show pubKey
 
 getHomeKeys :: FilePath -> IO [(String, PrivateKey)]
 getHomeKeys path = do
@@ -95,9 +100,8 @@ usage = do
       "  Help",
       "  --help           Print this usage",
       "",
-      "  Viewing Stored Keys:",
-      "  --show-keys      View all stored public keys",
-      "  --show-key=name  View a public key by name",
+      "  Viewing Stored Public Keys:",
+      "  --show-keys=[key1, key2] Show one or more keys. Use [] to show all keys.",
       "",
       "  Regular Fae operation:",
       "    with a (tx name)",
