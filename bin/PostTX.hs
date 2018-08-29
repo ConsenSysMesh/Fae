@@ -1,18 +1,13 @@
 import Blockchain.Fae.FrontEnd (PublicKey)
 
-import Common.ProtocolT
-
 import Control.Monad.Reader
 import Control.Monad.Trans
 import Control.Lens hiding (view)
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-import Data.ByteString (ByteString)
-import Data.Maybe
-import Data.Either
 import qualified Data.Serialize as S
-import Data.Traversable
+import Data.Maybe
 
 import PostTX.Args
 import PostTX.Faeth
