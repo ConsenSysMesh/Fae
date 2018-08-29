@@ -47,13 +47,17 @@ data FinalizedPostTXArgs =
     viewArgJSON :: Bool,
     viewArgHost :: String
   } |
-  UsageArgs Usage | ShowKeysArgs ShowKeys
+  UsageArgs 
+    Usage |
+    ShowKeysArgs ShowKeys
 
 data Usage =
   UsageFailure String |
   UsageSuccess
 
-data ShowKeys = ShowKeys | ShowKey String 
+data ShowKeys = 
+  ShowKeys |
+  ShowKey String 
 
 data FaethArgs =
   FaethArgs
