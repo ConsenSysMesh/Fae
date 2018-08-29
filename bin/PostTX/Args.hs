@@ -22,7 +22,7 @@ data PostTXArgs =
     argJSON :: Bool,
     argFaeth :: FaethArgs,
     argUsage :: Maybe Usage,
-    argViewKeys :: Maybe ViewKeys
+    argShowKeys :: Maybe ShowKeys
   }
 
 data FinalizedPostTXArgs =
@@ -47,13 +47,13 @@ data FinalizedPostTXArgs =
     viewArgJSON :: Bool,
     viewArgHost :: String
   } |
-  UsageArgs Usage | ViewKeysArgs ViewKeys
+  UsageArgs Usage | ShowKeysArgs ShowKeys
 
 data Usage =
   UsageFailure String |
   UsageSuccess
 
-data ViewKeys = ViewKeys | ViewKey String 
+data ShowKeys = ShowKeys | ShowKey String 
 
 data FaethArgs =
   FaethArgs
@@ -82,15 +82,15 @@ parseArgs = finalize . foldl argGetter
     argJSON = False,
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
     argUsage = Nothing,
-    argViewKeys = Nothing
+    argShowKeys = Nothing
   }
           
 argGetter :: PostTXArgs -> String -> PostTXArgs
 argGetter st "--help" = st & _argUsage .~ Just UsageSuccess
-argGetter st "--keys" = st & _argViewKeys .~ Just ViewKeys 
+argGetter st "--show-keys" = st & _argShowKeys .~ Just ShowKeys 
 argGetter st x 
-  | ("--key", '=' : name) <- break (== '=') x
-    = st & _argViewKeys .~ Just (ViewKey name)
+  | ("--show-key", '=' : name) <- break (== '=') x
+    = st & _argShowKeys .~ Just (ShowKey name)
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
@@ -132,7 +132,7 @@ argGetter st x
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | Just u <- argUsage = UsageArgs u
-  | Just u <- argViewKeys = ViewKeysArgs u
+  | Just u <- argShowKeys = ShowKeysArgs u
   | argFake && (argView || argLazy || useFaeth)
     = error $
         "--fake is incompatible with --view, --lazy, --faeth*, " ++

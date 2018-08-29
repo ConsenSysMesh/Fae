@@ -50,13 +50,13 @@ main = do
       putStrLn err
       usage
       exitFailure
-    ViewKeysArgs ViewKeys -> do 
+    ShowKeysArgs ShowKeys -> do 
       storedKeys <- getHomeKeys faeHome
       if null storedKeys then print $ "No keys found at " ++ show faeHome else do
         putStrLn $ concatMap (\(keyName, privKey) ->
           keyName ++ ": " ++ show (fromMaybe (couldNotValidateErr keyName faeHome) (public privKey)) ++ "\n") storedKeys
         exitSuccess
-    ViewKeysArgs (ViewKey name) -> do
+    ShowKeysArgs (ShowKey name) -> do
       maybeFile <- findFile [faeHome] name
       case maybeFile of 
           Nothing -> do 
@@ -93,9 +93,11 @@ usage = do
       "where args = (tx name | Fae tx ID | Eth tx ID) [host[:port]] [options]",
       "where the available options are:",
       "  Help",
-      "  --help        Print this usage",
-      "  --keys        View all stored public keys",
-      "  --key name    View a public key by name",
+      "  --help           Print this usage",
+      "",
+      "  Viewing Stored Keys:",
+      "  --show-keys      View all stored public keys",
+      "  --show-key=name  View a public key by name",
       "",
       "  Regular Fae operation:",
       "    with a (tx name)",
