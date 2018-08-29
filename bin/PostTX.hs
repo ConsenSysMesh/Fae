@@ -1,4 +1,4 @@
-import Blockchain.Fae.FrontEnd (PublicKey)
+import Blockchain.Fae.FrontEnd (PublicKey, PrivateKey, public)
 
 import Control.Monad.Reader
 import Control.Monad.Trans
@@ -67,9 +67,12 @@ main = do
               Left err -> do 
                 print $ "Key file named " ++ name ++  " could not be decoded in " ++ faeHome ++ " : " ++ err 
                 exitFailure
-              Right key -> do
-                putStrLn $ takeBaseName file ++ ": " ++ show (key :: PublicKey)
-                exitSuccess  
+              Right key ->
+                let pubKey = fromMaybe couldNotValidateErr (public (key :: PrivateKey))
+                in do
+                  putStrLn $ takeBaseName file ++ ": " ++ show pubKey
+                  exitSuccess  
+              where couldNotValidateErr = error $ "Key file named " ++ name ++  " could not be validated in " ++ faeHome
 
 getHomeKeys :: FilePath -> IO [(String, PublicKey)]
 getHomeKeys path = do
