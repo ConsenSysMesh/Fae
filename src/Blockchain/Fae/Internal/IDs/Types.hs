@@ -54,6 +54,11 @@ newtype ShortContractID = ShortContractID Digest
 newtype Signers = Signers { getSigners :: Map String PublicKey }
   deriving (Serialize, NFData)
 
+-- | Contract calls may also declare local renaming of signatories, which
+-- this records in the structure @newName -> oldName@.
+newtype Renames = Renames { getRenames :: Map String String }
+  deriving (Serialize, NFData) 
+
 -- | For simplicity
 type TransactionID = ShortContractID
 -- | For simplicity

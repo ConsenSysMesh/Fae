@@ -37,7 +37,7 @@ import Data.Map (Map)
 
 -- | How inputs are provided to transactions.  The contract with a given ID
 -- gets an argument and a (possibly empty) remapping of signer names.
-type Inputs = [(ContractID, String, Map String String)]
+type Inputs = [(ContractID, String, Renames)]
 
 -- | Transaction monad with storage access, for executing contracts and
 -- saving the results.
@@ -145,9 +145,9 @@ runInputContracts = fmap fst .
 -- that.  Otherwise, this input is exceptional (and so, probably, is the
 -- transaction result).
 nextInput ::
-  (ContractID, String, Map String String) -> 
+  (ContractID, String, Renames) -> 
   ([ReturnValue], VersionMap') -> TXStorageM ([ReturnValue], VersionMap')
-nextInput (cID, arg, renames) (results, vers) = do
+nextInput (cID, arg, Renames renames) (results, vers) = do
   valE <- use $ at cID . defaultLens (throw $ BadContractID cID)
 
   (iR, vers') <- case valE of
