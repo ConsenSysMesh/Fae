@@ -74,11 +74,6 @@ resubmitFaeth host ethTXID FaethArgs{..} = do
 
   where (newNames, newKeyNames) = unzip newSigners
 
-addSigner :: 
-  String -> Either PublicKey PrivateKey -> TXMessage Salt -> TXMessage Salt
-addSigner _ (Left _) = id
-addSigner name (Right privKey) = signTXMessage name privKey
-
 inputAccount :: IO EthAccount
 inputAccount = runInputT defaultSettings $ 
   EthAccount <$> inputAddress <*> inputPassphrase

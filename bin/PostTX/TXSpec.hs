@@ -127,7 +127,7 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
       {
         mainModulePreview = uncurry makePreview mainModule,
         otherModulePreviews = Map.mapWithKey makePreview otherModules,
-        signatures = Left . either id (fromMaybe keyErr . public) <$> keys,
+        signatures = (,Nothing) . either id (fromMaybe keyErr . public) <$> keys,
         ..
       },
     ..
@@ -146,11 +146,19 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
       }
 
     addSignatures :: (Serialize a) => Keys -> TXMessage a -> TXMessage a
-    addSignatures keys m = Map.foldrWithKey signPrivate m keys
+    addSignatures keys m = Map.foldrWithKey addSigner m keys
 
-    signPrivate _ (Left k) m = m
-    signPrivate s (Right k) m = signTXMessage s k m
+addSigner :: 
+  (Serialize a) =>
+  String -> Either PublicKey PrivateKey -> TXMessage a -> TXMessage a
+addSigner _ (Left _) = id
+addSigner name (Right privKey) = 
+  fromMaybe (error $ "Not a signer role in this transaction: " ++ name) .
+  signTXMessage name privKey
 
+-- | If the key "name" parses as a public key, then that is the result and
+-- the message will not be signed (by this key).  Otherwise, it is looked
+-- up in @faeHome@ as a file containing a private key.
 resolveKeyName :: String -> IO (Either PublicKey PrivateKey)
 resolveKeyName pubKeyS | Just pubKey <- readMaybe pubKeyS = return $ Left pubKey
 resolveKeyName name = do
@@ -162,4 +170,3 @@ resolveKeyName name = do
     privKey <- newPrivateKey
     BS.writeFile name $ S.encode privKey
     return $ Right privKey
-

@@ -26,13 +26,13 @@ type RequestFiles = [(Module, FileInfo LC8.ByteString)]
 
 makeFilesMap :: 
   (Serialize a) => 
-  TXMessage a -> Module -> ModuleMap -> Bool -> (TX, Module, ModuleMap)
-makeFilesMap txMessage mainFile0 modules0 reward = (tx, mainFile, modules) where
+  TXMessage a -> Module -> ModuleMap -> Bool -> Bool -> (TX, Module, ModuleMap)
+makeFilesMap txMessage mainFile0 modules0 reward isFake = (tx, mainFile, modules) where
   mainFile = addHeader txID mainFile0
   modules = Map.mapWithKey (fixHeader txID . dropExtension) modules0
   tx@TX{..} = 
     maybe (error "Invalid transaction message") force $
-    txMessageToTX reward txMessage
+    txMessageToTX reward txMessage isFake
 
 getFile :: RequestFiles -> String -> Module
 getFile files name = fromMaybe (error $ "Missing " ++ name) $ 

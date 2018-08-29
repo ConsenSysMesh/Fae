@@ -1,6 +1,7 @@
 module PostTX.Submit where
 
 import qualified Data.ByteString.Char8 as C8
+import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
 import qualified Data.Text as T
 
@@ -12,11 +13,15 @@ import PostTX.TXSpec
 
 -- | If JSON formatting is not enabled through postTX CLI flag
 -- pretty print a summary of TX output.
-submit :: String -> Bool -> Bool -> Bool -> TXSpec String -> IO ()
+submit :: 
+  (Serialize a) => 
+  String -> Bool -> Bool -> Bool -> TXSpec a -> IO ()
 submit host fake lazy isJson txSpec = 
   buildRequest host fake lazy txSpec >>= sendReceiveJSONString isJson >>= putStrLn
 
-buildRequest :: String -> Bool -> Bool -> TXSpec String -> IO Request
+buildRequest :: 
+  (Serialize a) => 
+  String -> Bool -> Bool -> TXSpec a -> IO Request
 buildRequest host fake lazy TXSpec{specModules = LoadedModules{..}, ..} =
   flip formDataBody (requestURL host) $
     modulePart "message" txName (S.encode txMessage) : 

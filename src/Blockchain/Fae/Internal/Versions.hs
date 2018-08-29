@@ -93,6 +93,10 @@ class GRecords f where
   -- | Like 'mapVersions'
   gRMapVersions :: VersionMap' -> f p -> (f p)
 
+-- | For applying a conditional to a type-level bool
+class IfK (b :: Bool) where
+  ifK :: Proxy b -> a -> a -> a
+
 {- Instances -}
 
 -- | Like 'Maybe'.
@@ -225,13 +229,16 @@ instance
   gMapVersions vMap (R1 x) = R1 $ gMapVersions vMap x
 
 -- | Data type version is the hash of the module and type names with the
--- constructor version.
+-- constructor version.  For newtypes, we act as though we have
+-- a 'Versioned' and ignore the version map of the inner type, the
+-- principle being that a newtype should have a completely fresh interface
+-- attached to an existing data representation.
 instance 
-  (GVersionable f, KnownSymbol tSym, KnownSymbol mSym) => 
+  (GVersionable f, KnownSymbol tSym, KnownSymbol mSym, IfK nt) => 
   GVersionable (M1 D (MetaData tSym mSym p nt) f) where
 
   -- Same comment as for @M1 C@
-  gVersions f (M1 x) = (vID, vers) where
+  gVersions f m@(M1 x) = (vID, ifK (Proxy @nt) emptyVersionMap vers) where
     (ver, vers) = gVersions f x
     vID = mkVersionID (mName, tName, ver)
     mName = symbolVal (Proxy @mSym)
@@ -289,6 +296,14 @@ instance (Versionable c) => GRecords (K1 i c) where
     return $ VersionMap $ Map.insert vID (bearer x) vers
 
   gRMapVersions vMap (K1 x) = K1 $ mapVersions vMap x
+
+-- |
+instance IfK False where
+  ifK _ _ x = x
+
+-- |
+instance IfK True where
+  ifK _ x _ = x
 
 -- * Functions
 -- | For default instances of 'Versionable'
