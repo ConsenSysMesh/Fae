@@ -1,4 +1,4 @@
-import Blockchain.Fae.FrontEnd (PublicKey, PrivateKey, public)
+import Blockchain.Fae.FrontEnd (PrivateKey, PublicKey, public)
 
 import Control.Monad.Reader
 import Control.Monad.Trans
@@ -53,7 +53,8 @@ main = do
     ViewKeysArgs ViewKeys -> do 
       storedKeys <- getHomeKeys faeHome
       if null storedKeys then print $ "No keys found at " ++ show faeHome else do
-        putStrLn $ concatMap (\(a, b) -> a ++ ": " ++ show b ++ "\n") storedKeys
+        putStrLn $ concatMap (\(keyName, privKey) ->
+          keyName ++ ": " ++ show (fromMaybe (couldNotValidateErr keyName faeHome) (public privKey)) ++ "\n") storedKeys
         exitSuccess
     ViewKeysArgs (ViewKey name) -> do
       maybeFile <- findFile [faeHome] name
@@ -68,13 +69,13 @@ main = do
                 print $ "Key file named " ++ name ++  " could not be decoded in " ++ faeHome ++ " : " ++ err 
                 exitFailure
               Right key ->
-                let pubKey = fromMaybe couldNotValidateErr (public (key :: PrivateKey))
+                let pubKey = fromMaybe (couldNotValidateErr name faeHome) (public (key :: PrivateKey))
                 in do
                   putStrLn $ takeBaseName file ++ ": " ++ show pubKey
                   exitSuccess  
-              where couldNotValidateErr = error $ "Key file named " ++ name ++  " could not be validated in " ++ faeHome
+  where couldNotValidateErr name faeHome = error $ "Key file named " ++ name ++  " could not be validated in " ++ faeHome
 
-getHomeKeys :: FilePath -> IO [(String, PublicKey)]
+getHomeKeys :: FilePath -> IO [(String, PrivateKey)]
 getHomeKeys path = do
   dirList <- getDirectoryContents path
   fileList <- filterM doesFileExist dirList
