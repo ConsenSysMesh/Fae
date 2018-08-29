@@ -1,5 +1,3 @@
-import Blockchain.Fae.FrontEnd (PrivateKey, PublicKey, public)
-
 import Control.Monad.Reader
 import Control.Monad.Trans
 import Control.Lens hiding (view)
@@ -11,6 +9,7 @@ import Data.Maybe
 
 import PostTX.Args
 import PostTX.Faeth
+import PostTX.Keys
 import PostTX.SpecParser
 import PostTX.Submit
 import PostTX.TXSpec
@@ -50,42 +49,9 @@ main = do
       putStrLn err
       usage
       exitFailure
-    ShowKeysArgs [] -> do
-      -- Empty list denotes that all keys should be shown 
-      storedKeys <- getHomeKeys faeHome
-      if null storedKeys then print $ "No keys found at " ++ show faeHome else do
-        putStrLn $ concatMap (\(keyName, privKey) ->
-          keyName ++ ": " ++ show (fromMaybe (couldNotValidateErr keyName faeHome) (public privKey)) ++ "\n") storedKeys
-        exitSuccess
     ShowKeysArgs keysList -> do
-      sequence_ $ getHomeKey faeHome <$> keysList
-      exitSuccess  
-
-couldNotValidateErr name faeHome = error $ "Key file named " ++ name ++  " could not be validated in " ++ faeHome
-
-getHomeKey faeHome keyName = do
-  maybeFile <- findFile [faeHome] keyName
-  case maybeFile of 
-      Nothing -> do 
-        print $ "Key: " ++ keyName ++  " not found at " ++ faeHome
-        exitFailure
-      Just file -> do
-        keyBytes <- BS.readFile file
-        case S.decode keyBytes of 
-          Left err -> do 
-            print $ "Key file named " ++ keyName ++  " could not be decoded in " ++ faeHome ++ " : " ++ err 
-            exitFailure
-          Right key ->
-            let pubKey = fromMaybe (couldNotValidateErr keyName faeHome) (public (key :: PrivateKey))
-            in do
-              putStrLn $ takeBaseName file ++ ": " ++ show pubKey
-
-getHomeKeys :: FilePath -> IO [(String, PrivateKey)]
-getHomeKeys path = do
-  dirList <- getDirectoryContents path
-  fileList <- filterM doesFileExist dirList
-  mapMaybe (_2 (preview _Right)) <$> 
-    traverse sequenceA [(takeBaseName a, S.decode <$> BS.readFile a) | a <- fileList]
+      showKeys faeHome keysList
+      exitSuccess
 
 usage :: IO ()
 usage = do
