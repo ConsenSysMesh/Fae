@@ -1,0 +1,10 @@
+body = TwoDeposits2
+keys
+  me = $me
+  you = $you
+inputs
+  TransactionOutput $txID 0 = ()
+    self = me
+
+  TransactionOutput $txID 1 = ()
+    self = you
