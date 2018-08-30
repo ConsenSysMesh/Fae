@@ -157,11 +157,10 @@ executable postTX
     Common.Lens
     Common.ProtocolT
     PostTX.Args
-    PostTX.EnvVars
     PostTX.Faeth
     PostTX.ImportExport
     PostTX.Network
-    PostTX.SpecParser
+    PostTX.Parser
     PostTX.Submit
     PostTX.TXSpec
     PostTX.View
@@ -179,6 +178,7 @@ executable postTX
     haskeline,
     http-client,
     lens,
+    megaparsec,
     mtl,
     pretty,
     process,

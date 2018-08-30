@@ -43,6 +43,6 @@ rewardContract Token = spend Reward
 -- contract that intends to accept rewards as payment.
 claimReward :: (MonadTX m) => RewardEscrowID -> m ()
 claimReward eID = do
-  Reward <- useEscrow eID Token
+  Reward <- useEscrow [] eID Token
   return ()
 

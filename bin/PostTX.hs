@@ -11,7 +11,7 @@ import qualified Data.Serialize as S
 import PostTX.Args
 import PostTX.Faeth
 import PostTX.ImportExport
-import PostTX.SpecParser
+import PostTX.Parser
 import PostTX.Submit
 import PostTX.TXSpec
 import PostTX.View
