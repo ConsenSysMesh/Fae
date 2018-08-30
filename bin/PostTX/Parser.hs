@@ -1,7 +1,7 @@
 module PostTX.Parser where
 
-import Control.Applicative
-import Control.Exception
+import Control.Applicative hiding (some)
+import Control.Monad
 import Control.Monad.Trans
 
 import Data.Char
@@ -36,7 +36,7 @@ type SpecParser = ParsecT Void String IO
 -- ** Interface
 buildTXData :: String -> IO TXData 
 buildTXData txName = 
-  either err return =<< runParserT specFile txName =<< readFile txName
+  either err return =<< runParserT (specFile <* eof) txName =<< readFile txName
   where err = die . parseErrorPretty
 
 -- ** Top-level parsers
@@ -50,7 +50,7 @@ specFile = makePermParser $
   <|?> ([], noIndent keys)
   <|?> (False, noIndent reward)
   <|?> (Nothing, Just <$> noIndent parent)
-  where noIndent = L.nonIndented blank
+  where noIndent = L.nonIndented $ multilineBlank
 
 body :: SpecParser (String, Module)
 body = equalsName "body" readModule
@@ -79,11 +79,11 @@ parent = equalsName "parent" readWord
 -- ** Structural parsers
 
 equalsName :: String -> SpecParser a -> SpecParser a
-equalsName name = fmap snd . equalsItem (symbol name <*)
+equalsName name p = fmap snd $ equalsItem (symbol name <*) p <* multilineBlank
 
 equalsItem :: 
   (SpecParser String -> SpecParser a) -> SpecParser b -> SpecParser (a,b)
-equalsItem lhsEnd = liftA2 (,) $ lhsEnd (symbol "=")
+equalsItem lhsEnd = liftA2 (,) $ lhsEnd (lineBlank *> symbol "=")
 
 listItem ::  SpecParser a -> SpecParser a
 listItem p = symbol "-" >> p
@@ -93,34 +93,43 @@ titledList name = fmap snd . headedList (symbol name)
 
 headedList :: SpecParser header -> SpecParser a -> SpecParser (header, [a])
 headedList header p = 
-  L.indentBlock blank $ do
+  L.indentBlock multilineBlank $ do
     h <- header
     return $ L.IndentMany Nothing (return . (h,)) p
 
 -- ** Lexical parsers
 
 readWord :: (Read a) => SpecParser a
-readWord = readEnd eol
+readWord = readEnd endl
 
 literal :: SpecParser String
-literal = literalEnd eol
+literal = literalEnd endl
 
 literalEnd :: SpecParser end -> SpecParser String
-literalEnd end = lexeme $ resolveLine =<< someTill printChar end
+literalEnd end = resolveLine =<< someTill printChar (try end)
 
 readEnd :: (Read a) => SpecParser end -> SpecParser a
 readEnd end = either fail return . readEither =<< literalEnd end
 
+endl :: SpecParser Char
+endl = lookAhead eol *> return '\n'
+
 symbol :: String -> SpecParser String
-symbol = L.symbol blank
+symbol = L.symbol lineBlank
 
-lexeme :: SpecParser a -> SpecParser a
-lexeme = L.lexeme blank
+lineBlank :: SpecParser ()
+lineBlank = blank lineSpace1
 
-blank :: SpecParser ()
-blank = L.space space1 lineComment blockComment where
+multilineBlank :: SpecParser ()
+multilineBlank = blank space1
+
+blank :: SpecParser () -> SpecParser ()
+blank sp = L.space sp lineComment blockComment where
   lineComment = L.skipLineComment "--"
   blockComment = L.skipBlockCommentNested "{-" "-}"
+
+lineSpace1 :: SpecParser ()
+lineSpace1 = void $ some (notFollowedBy eol *> spaceChar)
 
 -- ** Modules and environment variable substitution
 

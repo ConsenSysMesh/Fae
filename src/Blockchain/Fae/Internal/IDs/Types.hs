@@ -117,6 +117,7 @@ instance Show (EscrowID name) where
 -- * Template Haskell
 
 makeLenses ''Signers
+makeLenses ''Renames
 
 -- * Functions
 
