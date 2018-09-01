@@ -161,6 +161,9 @@ importValueThrow (WrappedByteString bs) =
   fromMaybe (throw $ CantImport bs rep) <$> liftEscrowState (importValue bs)
   where rep = typeRep $ Proxy @a
 
+-- | The inner interpretation function that appropriately loads modules,
+-- sets imports, and uses the result both for 'interpretTX' and
+-- 'interpretImportedValue'.
 faeInterpret :: 
   (Typeable m, MonadMask m, MonadIO m, Typeable a) => 
   [String] -> 

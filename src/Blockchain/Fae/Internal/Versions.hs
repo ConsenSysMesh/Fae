@@ -297,11 +297,11 @@ instance (Versionable c) => GRecords (K1 i c) where
 
   gRMapVersions vMap (K1 x) = K1 $ mapVersions vMap x
 
--- |
+-- | -
 instance IfK False where
   ifK _ _ x = x
 
--- |
+-- | -
 instance IfK True where
   ifK _ x _ = x
 

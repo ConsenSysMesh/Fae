@@ -148,8 +148,10 @@ class
 -- and makes it so that type signatures can say they accept the
 -- semantically-meaningful 'Coin' rather than some escrow ID.
 newtype Coin = Coin (EscrowID CoinName) deriving (Generic)
--- | Only for this module; it's not exported so it doesn't matter in
--- regular usage.
+-- | The type name itself is exported so that it can be visible for
+-- imported values containing a 'Coin', which are interpreted as @ValType
+-- Coin@.  The constructor is /not/ exported so that the interface remains
+-- secure.
 data CoinName = MintCoin Natural deriving (Generic)
 
 -- | DRY shortcut, purely internal

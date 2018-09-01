@@ -57,12 +57,15 @@ module Blockchain.Fae
     -- * Transactions
     -- | Transactions are handled outside of Fae's Haskell API, but their
     -- definitions are still within it.  When processed, a transaction must
-    -- be accompanied by a list of @(ContractID, String)@ pairs denoting
-    -- the literal arguments passed to the contracts with the given IDs.
-    -- These are then 'read' into Haskell types, to prevent malicious
-    -- authors from inserting nonterminating code into the contract calls.
+    -- be accompanied by a list of @('ContractID', String, Map String
+    -- String)@ pairs denoting the literal arguments passed to the
+    -- contracts with the given IDs, and the role renaming established
+    -- during the call (see 'signers').  These are then 'read' into Haskell
+    -- types, to prevent malicious authors from inserting nonterminating
+    -- code into the contract calls.
     Transaction, TransactionM, PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
+    -- ** Types
     Contract, ContractM, ContractName(..), Exportable, EGeneric, 
     Fae, MonadContract, WithEscrows, EscrowID, 
     RewardEscrowID, Reward,
@@ -115,14 +118,29 @@ type TransactionArg a = (HasEscrowIDs a, GetInputValues a)
 -- | Constraint collection synonym
 type TransactionVal a = (Typeable a, Show a)
 
--- | A contract transformer to apply effects to 'Fae'
+-- | A contract transformer to apply effects to 'Fae'.  To demystify the
+-- kind signature, it is used like
+--
+-- >>> type StateContract argType valType = ContractM StateT argType valType
+--
+-- with the first component being a monad /transformer/.  This can then be
+-- evaluated back down to a 'Contract argType valType' via 'usingState'.
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =
   ContractT (t (Fae argType valType)) argType valType
--- | A transaction transformer like 'ContractM'
+
+-- | A transaction transformer to apply effects to 'FaeTX'.  To demystify the
+-- kind signature, it is used like
+--
+-- >>> type StateTransaction a b = TransactionM StateT a b
+--
+-- with the first component being a monad /transformer/.  This can then be
+-- evaluated back down to a 'Transaction a b' via 'usingState'.
 type TransactionM (t :: (* -> *) -> (* -> *)) a b = a -> t FaeTX b
 
 -- | A simple utility for adding mutable state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
+-- The second argument should be a 'ContractM StateT' or 'TransactionM
+-- StateT'.
 usingState ::
   (Monad m) =>
   s ->
@@ -132,6 +150,8 @@ usingState s f = flip evalStateT s . f
 
 -- | A simple utility for adding constant state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
+-- The second argument should be a 'ContractM StateT' or 'TransactionM
+-- ReaderT'.
 usingReader ::
   (Monad m) =>
   r ->

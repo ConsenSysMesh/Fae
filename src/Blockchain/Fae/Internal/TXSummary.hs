@@ -60,6 +60,7 @@ data TXSummary = TXSummary {
   signers :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
+-- | Summarizes a single input contract call.
 data TXInputSummary = TXInputSummary {
   txInputNonce :: Int,
   txInputOutputs :: [(Int, ShortContractID)],

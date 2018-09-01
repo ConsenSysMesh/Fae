@@ -82,8 +82,10 @@ twoPartySwap x y = do
 -- | Semantic labels
 data Stages = Stage1 | Stage2
 
+-- | The swap needs to know the two parties and their two offerings.
 data TwoPartySwap a b = TwoPartySwap PublicKey PublicKey a b deriving (Generic)
 
+-- | _
 instance (ContractVal a, ContractVal b) => ContractName (TwoPartySwap a b) where
   type ArgType (TwoPartySwap a b) = Maybe Bool
   type ValType (TwoPartySwap a b) = Maybe (Either a b)
@@ -183,8 +185,10 @@ sell ::
   a -> Valuation coin -> PublicKey -> m ()
 sell x price seller = newContract (Sell seller x price) where
 
+-- | A sales contract needs to know the seller, the item, and the price.
 data Sell a coin = Sell PublicKey a (Valuation coin) deriving (Generic)
 
+-- | -
 instance (ContractVal a, Currency coin) => ContractName (Sell a coin) where
   type ArgType (Sell a coin) = Versioned coin
   type ValType (Sell a coin) = Either coin (a, Maybe coin)
@@ -210,10 +214,14 @@ redeem ::
   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
 redeem x valid seller = newContract (Redeem seller x valid) where
 
+-- | A redemption contract needs to know the seller, the item, and the
+-- validation function.  This is /not/ an instance of 'Exportable' because
+-- the function is not.
 data Redeem a b = 
   Redeem PublicKey a (b -> (Fae b (Either b a) Bool))
   deriving (Generic)
 
+-- | -
 instance 
   (ContractVal a, ContractVal b, ContractArg b) => 
   ContractName (Redeem a b) where
@@ -257,8 +265,10 @@ instance Exception PossessionError
 signOver :: forall a m. (ContractVal a, MonadTX m) => a -> PublicKey -> m ()
 signOver x owner = newContract $ SignOver owner x where
 
+-- | A possession contract needs the owner and the value.
 data SignOver a = SignOver PublicKey a deriving (Generic)
 
+-- | -
 instance (ContractVal a) => ContractName (SignOver a) where
   type ArgType (SignOver a) = ()
   type ValType (SignOver a) = a

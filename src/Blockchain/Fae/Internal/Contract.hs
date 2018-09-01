@@ -177,14 +177,23 @@ type Transaction a b = a -> FaeTX b
 -- | Instances of this class can be serialized, at least with the
 -- assistance of some Fae contextual data (namely, the escrow storage).
 class (Typeable a) => Exportable a where
+  -- | A lousy imitation of the 'put' function from 'Serialize' that
+  -- doesn't use a builder but goes straight to bytes.
   exportValue :: (MonadState EscrowMap m) => a -> m ByteString
+  -- | A lousy imitation of the 'get' function from 'Serialize' that
+  -- doesn't use a parser but takes straight from bytes.
   importValue :: (MonadState EscrowMap m) => ByteString -> m (Maybe a)
 
 -- | Instances of 'ContractName' are always defined by contract authors,
--- who will inevitably have to define 'theContract' to point to a global
--- function.  Since it's global, it is still present when we deserialize,
--- so this is effectively a contract that is portable between Fae
--- instances.
+-- making 'theContract' a global function.  Since it's global, it is still
+-- present when we deserialize, so this is effectively a contract that is
+-- portable between Fae instances (provided that both instances have the
+-- module with the instance; it need not be run, just interpreted).
+--
+-- A 'ContractName' is the only way to pass data into a new contract, so
+-- the type should have fields for all the parameters of the contract,
+-- /including/ valuables that it is supposed to "own".  Their escrows are
+-- deposited at the beginning of the contract.
 class 
   (
     HasEscrowIDs a,
@@ -256,30 +265,38 @@ instance {-# OVERLAPPABLE #-}
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
 lookupSigner s = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners . at s
 
--- | Looks up a named signatory, or throws if not found.
+-- | Looks up a named signatory, or throws a 'MissingSigner' if not found.
 signer :: (MonadTX m) => String -> m PublicKey
 signer s = fromMaybe (throw $ MissingSigner s) <$> lookupSigner s
 
--- | Returns the map of all signatories.
+-- | Returns the map of all signatories.  This map is immutable within
+-- a single transaction, but when descending into a contract or escrow
+-- call, may be modified by "renamings" that reassign old roles' public
+-- keys to new role names.
 signers :: (MonadTX m) => m (Map String PublicKey)
 signers = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners
 
--- | Terminates the contract entirely, transferring escrows backing the
--- return value.
+-- | Terminates the contract entirely, returning its argument and
+-- automatically transferring escrows backing the return value.
 spend :: 
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m (WithEscrows valType)
 spend = liftContract . Fae . (takeEscrows >=> lift . terminate)
 
--- | Terminates the current contract call, transferring escrows backing the
--- return value to the caller and awaiting an argument, depositing its
--- escrows.
+-- | Terminates the current contract call, returning its argument and
+-- automatically transferring escrows backing the return value to the
+-- caller.  A 'release' expression evaluates to the argument of the
+-- subsequent contract call, whose escrows are automatically deposited into
+-- the contract at that point.
 release :: 
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m argType
 release = liftContract . Fae . (takeEscrows >=> lift . suspend >=> putEscrows)
 
--- | Emits a new output contract endowed with a given list of valuables.
+-- | Emits a new output contract with a given 'ContractName', whose backing
+-- escrows are deposited into the contract's context at the first call.
+-- Unlike 'newEscrow', this returns nothing rather than the 'ContractID',
+-- because there is no use for contract IDs within contract code.
 newContract :: 
   forall name m.
   (
@@ -293,7 +310,8 @@ newContract x = liftTX $ FaeTX $ do
   let contractF = globalContract $ hideEscrows escrowMap nextID (theContract x)
   tell [(typeRep $ Proxy @name, contractF)]
 
--- | Creates a new escrow endowed with a given list of valuables.
+-- | Creates a new escrow with a given 'ContractName', whose backing
+-- escrows are deposited into the escrow's context at the first call.
 newEscrow :: 
   (ContractName name, MonadTX m) =>
   name -> m (EscrowID name)
@@ -305,7 +323,9 @@ newEscrow contractName = liftTX $ FaeTX $ do
   _escrowMap %= Map.insert entID EscrowEntry{..}
   return $ EscrowID entID
 
--- | Calls an escrow by ID, which must exist in the present context.
+-- | Calls an escrow by ID, which must exist in the present context.  The
+-- first argument is a list @[newName '<-|' oldName, ..]@ that specifies new
+-- role names and the corresponding existing roles they duplicate.
 useEscrow :: 
   (ContractName name, MonadTX m) =>
   [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)

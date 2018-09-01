@@ -79,6 +79,7 @@ data TransactionException =
   TooManyInputs |
   BadInput ContractID
 
+-- | Exceptions for formatting transaction summaries
 newtype TXFieldException = TXFieldException String
 
 -- * Instances

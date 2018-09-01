@@ -125,9 +125,9 @@ makeLenses ''Renames
 nullID :: TransactionID
 nullID = ShortContractID nullDigest
 
+-- | Extracts the transaction in which the given contract originated.
 parentTX :: ContractID -> TransactionID
 parentTX (TransactionOutput txID _) = txID
 parentTX (InputOutput txID _ _) = txID
 parentTX (cID :# _) = parentTX cID
-
 
