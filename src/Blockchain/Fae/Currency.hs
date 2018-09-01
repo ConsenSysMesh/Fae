@@ -94,6 +94,14 @@ class
         (a -> b -> m (c, a)) -> m a -> t b -> m (t c, a)
       mapMAccumL g y0 xs = runStateT (mapM (StateT . flip g) xs) =<< y0
 
+  -- | Rounds a coin down to the nearest multiple of some number, returning
+  -- this rounded coin and the remainder.
+  round :: (MonadTX m) => 
+    coin -> Natural -> m (Maybe coin, coin)
+  round c n = do
+    (l, rM) <- split c [n]
+    return (listToMaybe l, fromMaybe c rM)
+
   -- | A mixed 'Ord'-style comparison
   valCompare :: (MonadTX m) => coin -> Valuation coin -> m Ordering
   valCompare c v = do
@@ -133,14 +141,6 @@ class
   -- | A reversed strict pure 'Eq'-style comparison
   losesTo :: (MonadTX m) => coin -> coin -> m Bool
   losesTo c1 c2 = (== LT) <$> coinCompare c1 c2
-
-  -- | Rounds a coin down to the nearest multiple of some number, returning
-  -- this rounded coin and the remainder.
-  round :: (MonadTX m) => 
-    coin -> Natural -> m (Maybe coin, coin)
-  round c n = do
-    (l, rM) <- split c [n]
-    return (listToMaybe l, fromMaybe c rM)
 
 {- The basic example -}
 
@@ -210,7 +210,7 @@ instance Show (Valuation Coin) where
 -- destroys the reward token.  So this function can be seen as reifying
 -- rewards as a true currency, albeit one that cannot necessarily be used
 -- to claim rewards from anywhere else.
-reward :: (MonadTX m) => RewardEscrowID -> m Coin
+reward :: (MonadTX m) => Reward -> m Coin
 reward eID = do
   claimReward eID 
   mint 1

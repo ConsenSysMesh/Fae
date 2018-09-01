@@ -162,18 +162,6 @@ instance (HasEscrowIDs name) => Versionable (EscrowID name) where
   versions f eID@EscrowID{..} = (f entID, emptyVersionMap) 
   mapVersions _ eID = eID
 
--- | /Not/ the generic instance, because that makes just a ton of useless
--- versions of all the tails of a string, and all the characters.  Instead,
--- we treat a list as though it were 'Versioned'.  We take 'Foldable' to be
--- the class designating all things that are "like recursively nested
--- constructors", e.g. cons-lists.
-instance {-# OVERLAPPABLE #-} -- Also undecidable
-  (Versionable a, Functor t, Foldable t, Typeable t, HasEscrowIDs (t a)) => 
-  Versionable (t a) where
-
-  versions f x = (mkVersionID $ map (fst . versions f) $ toList x, emptyVersionMap)
-  mapVersions = fmap . mapVersions
-
 -- | -
 instance Versionable Char where
   versions = defaultVersions

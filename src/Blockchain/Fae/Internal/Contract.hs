@@ -43,8 +43,12 @@ import Text.Read (readMaybe)
 -- * Types
 -- ** Contract data
 
--- | Infix synonym for a pair to make the argument of 'withRoles' clearer.
-type a := b = (a, b)
+-- | Infix synonym for a pair to make the argument of 'useEscrow' clearer.
+type a <-| b = (a, b)
+
+-- | Infix function to construct the pair synonym.
+(<-|) :: a -> b -> a <-| b
+(<-|) = (,)
 
 -- | Another dynamic type, this time including 'Exportable'.
 data ReturnValue =

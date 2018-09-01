@@ -48,7 +48,7 @@ instance ToJSON TXSummary where
     "txResult" .= wrapExceptions txResult,
     "txOutputs" .= wrapExceptions txOutputs,
     "txInputSummaries" .= txInputSummaries,
-    "signers" .= signers ]
+    "txSSigners" .= txSSigners ]
 
 -- | If an exception is found then we tag the value as an exception.
 -- By forcing evaluation of exceptions we prevent uncaught exceptions being thrown
@@ -81,7 +81,7 @@ instance FromJSON TXSummary where
       <*> readJSONField "txResult" o
       <*> readJSONField "txOutputs" o
       <*> o .: "txInputSummaries"
-      <*> o .: "signers"
+      <*> o .: "txSSigners"
 
 instance FromJSON PublicKey where
   parseJSON = withText "VersionID" $ \pKey -> do

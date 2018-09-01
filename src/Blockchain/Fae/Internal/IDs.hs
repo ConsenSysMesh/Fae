@@ -118,11 +118,6 @@ instance HasEscrowIDs PublicKey where
 instance (Typeable a, Typeable b) => HasEscrowIDs (a -> b) where
   traverseEscrowIDs = defaultTraverseEscrowIDs
 
--- | Special case of the 'Generic' instance that is necessary in 'Contract'
--- and needs to be here to break an import cycle.
-instance (HasEscrowIDs a) => HasEscrowIDs [a] where
-  traverseEscrowIDs f = mapM $ traverseEscrowIDs f
-
 -- Boring Generic boilerplate
 
 -- | Empty types have no escrow IDs to apply the traversal function to.

@@ -57,7 +57,7 @@ data TXSummary = TXSummary {
   txResult :: String,
   txOutputs:: [(Int, ShortContractID)],
   txInputSummaries :: [(ShortContractID, TXInputSummary)],
-  signers :: [(String, PublicKey)]
+  txSSigners :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
@@ -79,11 +79,11 @@ instance Pretty TXSummary where
     where header = labelHeader "Transaction" transactionID
           result = prettyPair ("result", displayException $ text txResult)
           outputs = displayException $ prettyList "outputs" $ (_1 %~ show) <$> txOutputs
-          signers' = prettyList "signers" signers
+          txSSigners' = prettyList "signers" txSSigners
           inputs = vcat $ (\(scid, txInputSummary) -> 
             prettyHeader (labelHeader "input" scid) (displayException $ pPrint txInputSummary)) 
               <$> txInputSummaries
-          entry = vcat [ result, outputs, signers', inputs ]
+          entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
@@ -120,19 +120,20 @@ showException e = text "<exception>" <+> text (safeHead $ lines $ show $ Unquote
   safeHead [] = []
   safeHead (x : _) = x
 
---- | Flushes out all exceptions present in the input, returning a formatted
---- error message if one is found.
+-- | Flushes out all exceptions present in the input, returning a formatted
+-- error message if one is found.
 displayException :: VDoc -> VDoc
 displayException doc = 
   unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
 
--- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
+-- | Get a JSON string which can be decoded to TXSummary for the
+-- convenience of faeServer clients
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
   TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   let 
     transactionID = txID
-    signers = Map.toList $ getSigners txSigners
+    txSSigners = Map.toList $ getSigners txSigners
     txInputSCIDs = nub inputOrder
     txResult = show result 
     txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
