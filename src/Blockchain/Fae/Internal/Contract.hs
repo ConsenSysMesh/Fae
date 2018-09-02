@@ -107,6 +107,7 @@ data TXData =
   TXData
   {
     thisTXSigners :: Signers,
+    localHash :: Digest,
     thisTXID :: TransactionID
   }
 
@@ -319,12 +320,11 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
           hideEscrows endowment contractNextID (theContract contractName)
         localCF = either makeLocalCF id nameOrFunction
     ~(y, resultCFM) <- remapSigners renames $ typeify (callContract localCF) x
-    txID <- view _thisTXID
-    -- We hash with the transaction ID so that each new version reflects how
-    -- it was created.  If the transaction is a known quantity, then this
-    -- ensures that the version accurately reflects its effects and not those
-    -- of some other, hidden, transaction.
-    let newVer = mkVersionID (escrowVersion, txID)
+    hash <- view _localHash
+    -- The "local hash" corresponds either to the transaction ID (if not in
+    -- a contract call) or to the arguments of the contract call, and so
+    -- the version will accurately reflect the call history of the escrow.
+    let newVer = mkVersionID (escrowVersion, hash)
     _escrowMap . at entID .= fmap (EscrowEntry newVer . Right) resultCFM
     return y
   where typeify f = fmap (_1 %~ returnTyped) . f . acceptTyped
@@ -432,11 +432,11 @@ hideEscrows escrowMap nextID f =
 forkNextID :: FaeTXM (Digest, Digest)
 forkNextID = do
   oldNextID <- use _nextID
-  txID <- view _thisTXID
+  hash <- view _localHash
   -- It is less crucial that we start the ID chain at a place that reflects
   -- the transaction, but this is nicely uniform with 'useEscrow'.
   _nextID %= digest
-  let forkedNextID = digest (oldNextID, txID)
+  let forkedNextID = digest (oldNextID, hash)
   return (oldNextID, forkedNextID)
 
 -- | Places the escrows backing a value into storage.

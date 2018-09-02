@@ -50,6 +50,13 @@ instance {-# OVERLAPPABLE #-}
   mapVersions vMap = to . gMapVersions vMap . from 
   versions f = gVersions f . from
 
+-- | /Not/ the 'Generic' instance, because that produces a version for each
+-- character and each tail.  This is not an ideal solution; we should
+-- really just use 'Text' instead, but it fixes a common situation.
+instance {-# OVERLAPPING #-} Versionable String where
+  versions f s = (mkVersionID $ map (fst . versions f) s, emptyVersionMap)
+  mapVersions _ = id
+
 -- | /So/ undecidable
 instance {-# OVERLAPPABLE #-}
   (Typeable a, EGeneric a, Serialize (ERep a)) => Exportable a where

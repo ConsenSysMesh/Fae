@@ -45,7 +45,7 @@ data ContractID =
 -- otherwise be unboundedly long chains of contracts that are outputs of
 -- contracts that are outputs of ... that are outputs of some long-ago
 -- transaction.
-newtype ShortContractID = ShortContractID Digest
+newtype ShortContractID = ShortContractID { getShortContractID :: Digest }
   deriving (Eq, Ord, Serialize, IsString, Generic, NFData)
 
 -- | Transactions can have many named signatories, which are available in
