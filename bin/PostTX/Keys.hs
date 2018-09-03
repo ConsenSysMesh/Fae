@@ -2,6 +2,8 @@ module PostTX.Keys where
 
 import Blockchain.Fae.FrontEnd (PrivateKey, PublicKey, public)
 
+import Control.Applicative
+import Control.Exception
 import Control.Monad
 import Control.Lens
 
@@ -17,29 +19,40 @@ import System.Environment
 import System.Exit
 import System.FilePath
 
+
+-- Prints a set of the stored public keys inside of the FaeHome directory.
+-- The empty list in the first pattern match denote that all stored keys 
+-- are to be shown.
+showKeys :: FilePath -> [String] -> IO ()
 showKeys faeHome [] = do  -- Empty list denotes that all keys should be shown 
   storedKeys <- getHomeKeys faeHome
   if null storedKeys then print $ "No keys found at " ++ show faeHome else
-    putStrLn $ concatMap (\(keyName, privKey) ->
-      keyName ++ ": " ++ show (fromMaybe (couldNotValidateErr keyName faeHome) (public privKey)) ++ "\n") storedKeys
-showKeys faeHome keysList = sequence_ $ getHomeKey faeHome <$> keysList
+    putStrLn $
+      concatMap
+        (\(keyName, privKey) -> 
+          keyName ++ ": " ++
+              maybe "Couldn't validate key" show (public (privKey :: PrivateKey))  ++ "\n")
+        storedKeys
+showKeys faeHome keyNamesList = 
+  sequence_ $ showHomeKey faeHome <$> keyNamesList
+   
 
-getHomeKey faeHome keyName = do
+-- Decodes and prints the contewnts of a given home key
+showHomeKey :: FilePath -> String -> IO ()
+showHomeKey faeHome keyName = do
   maybeFile <- findFile [faeHome] keyName
   case maybeFile of 
-    Nothing -> do 
-      print $ "Key: " ++ keyName ++  " not found at " ++ faeHome
-      exitFailure
+    Nothing ->
+      putStrLn $ keyName ++ " " ++  "not found in " ++ faeHome
     Just file -> do
       keyBytes <- BS.readFile file
       case S.decode keyBytes of 
-        Left err -> do 
-          print $ "Key file named " ++ keyName ++  " could not be decoded in " ++ faeHome ++ " : " ++ err 
-          exitFailure
-        Right key ->
-          let pubKey = fromMaybe (couldNotValidateErr keyName faeHome) (public (key :: PrivateKey))
-          in putStrLn $ takeBaseName file ++ ": " ++ show pubKey
+        Left err ->
+          putStrLn $ show faeHome ++ keyName ++  " could not be decoded"  ++ " : " ++ show err 
+        Right key -> putStrLn $ maybe "Couldn't validate key" showKey (public (key :: PrivateKey))
+          where showKey key = takeBaseName file ++ ": " ++ show key
 
+-- Retrieves a key file from the FaeHome directory.
 getHomeKeys :: FilePath -> IO [(String, PrivateKey)]
 getHomeKeys path = do
   dirList <- getDirectoryContents path
@@ -47,4 +60,7 @@ getHomeKeys path = do
   mapMaybe (_2 (preview _Right)) <$> 
     traverse sequenceA [(takeBaseName a, S.decode <$> BS.readFile a) | a <- fileList]
 
-couldNotValidateErr name faeHome = error $ "Key file named " ++ name ++  " could not be validated in " ++ faeHome
+-- Should this be its own exception type?
+couldNotValidateErr :: String -> FilePath -> IO ()
+couldNotValidateErr name faeHome = 
+  error $ "Key file named " ++ name ++ " could not be validated in " ++ faeHome

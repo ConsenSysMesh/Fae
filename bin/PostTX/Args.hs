@@ -3,11 +3,18 @@ module PostTX.Args where
 
 import Blockchain.Fae (TransactionID)
 
+import Control.Exception (throw)
+import Control.Monad (replicateM)
+
 import Common.Lens
 import Common.ProtocolT
 
 import Data.List
 import Data.Maybe
+import Data.Void
+
+import Text.Megaparsec 
+import Text.Megaparsec.Char
 
 import Text.Read
 
@@ -83,12 +90,15 @@ parseArgs = finalize . foldl argGetter
     argUsage = Nothing,
     argShowKeys = Nothing
   }
-          
+
 argGetter :: PostTXArgs -> String -> PostTXArgs
 argGetter st "--help" = st & (_argUsage ?~ UsageSuccess)
+argGetter st "--show-keys" = st & _argShowKeys ?~ []
 argGetter st x 
-  | ("--show-keys", '=' : keysList) <- break (== '=') x
-    = st & _argShowKeys ?~ [keysList]
+  | ("--show-keys", '=' : csvKeysInput) <- break (== '=') x
+    = st & _argShowKeys ?~ case parseKeysArgs csvKeysInput of
+          Left err -> throw err
+          Right keyNamesList -> keyNamesList
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
@@ -138,8 +148,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
         "--fake is incompatible with --view, --lazy, --faeth*, " ++
         "and --new-sender-account"
   | argJSON && (argLazy || useFaeth)
-    = error $
-        "--json is incompatible with --lazy, --faeth*"
+    = error "--json is incompatible with --lazy, --faeth*"
   | argView && (argLazy || useFaeth)
     = error
         "--view is incompatible with --lazy, --faeth*, and --new-sender-account"
@@ -181,3 +190,8 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
 justHost :: Maybe String -> String
 justHost = fromMaybe "0.0.0.0:27182"
 
+-- Parses the comma separated list of keys to show.
+-- Expects each value to be a 64 character hex string.
+parseKeysArgs :: String -> Either (ParseError (Token String) Void) [String]
+parseKeysArgs input = runParser csvParser "" input
+  where csvParser = many (lowerChar <|> digitChar) `sepBy` char ',' :: Parsec Void String [String]

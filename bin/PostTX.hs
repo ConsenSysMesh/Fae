@@ -67,7 +67,7 @@ usage = do
       "  --help           Print this usage",
       "",
       "  Viewing Stored Public Keys:",
-      "  --show-keys              Show all keys."
+      "  --show-keys              Show all keys.",
       "  --show-keys=[key1, key2] Show one or more keys",
       "",
       "  Regular Fae operation:",
