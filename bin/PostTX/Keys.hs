@@ -37,7 +37,7 @@ showKeys faeHome keyNamesList =
   sequence_ $ showHomeKey faeHome <$> keyNamesList
    
 
--- Decodes and prints the contewnts of a given home key
+-- Decodes and prints the contents of a given home key
 showHomeKey :: FilePath -> String -> IO ()
 showHomeKey faeHome keyName = do
   maybeFile <- findFile [faeHome] keyName
@@ -59,8 +59,3 @@ getHomeKeys path = do
   fileList <- filterM doesFileExist dirList
   mapMaybe (_2 (preview _Right)) <$> 
     traverse sequenceA [(takeBaseName a, S.decode <$> BS.readFile a) | a <- fileList]
-
--- Should this be its own exception type?
-couldNotValidateErr :: String -> FilePath -> IO ()
-couldNotValidateErr name faeHome = 
-  error $ "Key file named " ++ name ++ " could not be validated in " ++ faeHome
