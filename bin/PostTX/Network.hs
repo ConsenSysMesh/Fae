@@ -27,4 +27,4 @@ sendReceive jsonEnabled request = do
     txSummaryE = A.eitherDecode txSummaryJSON  :: Either String TXSummary
   if jsonEnabled
     then LC8.putStrLn txSummaryJSON
-    else putStrLn $ either ((++) "Failed To Parse TXSummary JSON: ") prettyShow txSummaryE
+    else putStrLn $ either ("Failed To Parse TXSummary JSON: " ++) prettyShow txSummaryE

@@ -55,10 +55,9 @@ getArgAction = \case
   x | ("--hostname", '=' : hostnameArgument) <- break (== '=') x
     -> Just $ _flags . _hostname .~ hostnameArgument
   x | ("--port", '=' : portArgument) <- break (== '=') x
-      -> Just $ _flags . _port .~ (fromMaybe (error $ "Could not read port argument: " ++ portArgument) $ readMaybe portArgument)
+      -> Just $ _flags . _port .~ fromMaybe (error $ "Could not read port argument: " ++ portArgument) (readMaybe portArgument)
   "--normal-mode" -> Just $ _serverMode .~ FaeMode
   "--resume-session" -> Just $ _flags . _newSession .~ False
   "--new-session" -> Just $ _flags . _newSession .~ True
   "--help" -> Just $ const $ ArgsUsage []
   _ -> Nothing
-

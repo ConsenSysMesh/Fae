@@ -94,7 +94,7 @@ readInputs lines txData@TXData{..} = do
   readData rest txData{inputs = pairs} 
   where readWithFailure input = fromMaybe (error $ "Failed to parse TX input" ++ input) (readMaybe input)
 
-readKeys :: [String] -> (TXData ParsedModules) -> IO (TXData ParsedModules)
+readKeys :: [String] -> TXData ParsedModules -> IO (TXData ParsedModules)
 readKeys lines txData@TXData{..} = do
   (pairs, rest) <- readEqualsSpec (null keys) "keys" id lines
   readData rest txData{keys = pairs} 

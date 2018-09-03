@@ -46,13 +46,13 @@ instance ToJSON TXInputSummary where
           "txInputNonce" .= evalTXInputNonce,
           "txInputOutputs" .= evalTXInputOutputs,
           "txInputVersions" .= evalTXInputVersions ])
-      $ (return . object . pure . ("exception",) . A.String . T.pack . show)
+       (return . object . pure . ("exception",) . A.String . T.pack . show)
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
     "transactionID" .= show transactionID,
-    "txResult" .= (writeJSONField txResult),
-    "txOutputs" .= (writeJSONField txOutputs),
+    "txResult" .= writeJSONField txResult,
+    "txOutputs" .= writeJSONField txOutputs,
     "txInputSummaries" .= txInputSummaries,
     "signers" .= signers ]
 
@@ -69,20 +69,20 @@ readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
 readJSONField fieldName obj = 
   obj .: fieldName <|> do 
     x <- obj .: fieldName
-    (throw . TXFieldException) <$> x .: "exception"
+    throw . TXFieldException <$> x .: "exception"
 
 instance FromJSON TXInputSummary where
-  parseJSON = withObject "TXInputSummary" $ \o -> do
+  parseJSON = withObject "TXInputSummary" $ \o ->
     TXInputSummary
       <$> readJSONField' "txInputNonce" o
       <*> readJSONField' "txInputOutputs" o
       <*> readJSONField' "txInputVersions" o
     where readJSONField' fieldName obj =
             obj .: fieldName <|> do 
-              (throw . TXFieldException) <$> obj .: "exception"
+              throw . TXFieldException <$> obj .: "exception"
       
 instance FromJSON TXSummary where
-  parseJSON = withObject "TXSummary" $ \o -> do
+  parseJSON = withObject "TXSummary" $ \o ->
     TXSummary
       <$> o .: "transactionID"
       <*> readJSONField "txResult" o
@@ -91,7 +91,7 @@ instance FromJSON TXSummary where
       <*> o .: "signers"
 
 instance FromJSON PublicKey where
-  parseJSON = withText "VersionID" $ \pKey -> do
+  parseJSON = withText "VersionID" $ \pKey ->
     either fail return $ readEither (T.unpack pKey)
 
 instance ToJSON PublicKey where
@@ -101,14 +101,14 @@ instance ToJSON ShortContractID where
   toJSON = toJSON . T.pack . show
 
 instance FromJSON VersionID where
-  parseJSON = withText "VersionID" $ \vID -> do
+  parseJSON = withText "VersionID" $ \vID ->
     either fail return $ readEither (T.unpack vID)
 
 instance ToJSON VersionID where
   toJSON = toJSON . T.pack . show
 
 instance FromJSON ShortContractID where
-  parseJSON = withText "ShortContractID" $ \scid -> do
+  parseJSON = withText "ShortContractID" $ \scid ->
     either fail return $ readEither (T.unpack scid)
     
 encodeJSON :: (ToJSON a) => a -> String
