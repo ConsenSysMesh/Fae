@@ -67,11 +67,11 @@ module Blockchain.Fae
     -- * Contracts and escrows
     -- ** Types
     Contract, ContractM, ContractName(..), Exportable, EGeneric, 
-    Fae, MonadContract, WithEscrows, EscrowID, 
-    RewardEscrowID, Reward,
+    Fae, MonadContract, WithEscrows, EscrowID, Reward,
+    -- ** Contract API
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
-    lookupSigner, signer, signers, (:=), claimReward, 
+    lookupSigner, signer, signers, (<-|), claimReward, 
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
     -- the escrow-backed values they expect, contract outputs are

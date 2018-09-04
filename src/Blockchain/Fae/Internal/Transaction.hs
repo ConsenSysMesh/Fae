@@ -11,6 +11,7 @@ This module provides the code that navigates the intricacies of executing a tran
 module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae.Internal.Contract
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.GetInputValues
@@ -90,14 +91,20 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     
     runTX = mapStateT $ 
       fmap fst . runWriterT . flip runReaderT txData . flip evalStateT escrows
-    txData = TXData{ thisTXSigners = txSigners, thisTXID = txID }
+    txData = 
+      TXData
+      {
+        thisTXSigners = txSigners,
+        localHash = getShortContractID txID,
+        thisTXID = txID
+      }
     escrows = Escrows { escrowMap = Map.empty, nextID }
     ShortContractID nextID = txID
 
     withReward inputsL
       | isReward = do
           eID <- getFaeTX $ newEscrow RewardName
-          return $ ReturnValue eID : inputsL
+          return $ ReturnValue (Reward eID) : inputsL
       | otherwise = return inputsL
  
 -- | Actually perform the transaction.
@@ -153,7 +160,8 @@ nextInput (cID, arg, Renames renames) (results, vers) = do
   (iR, vers') <- case valE of
     Right fAbs -> do 
       ~(iR, vers', gAbsM, types) <- lift $ 
-        remapSigners renames $ runContract cID vers fAbs arg
+        local (_localHash .~ digest arg) . remapSigners renames $ 
+          runContract cID vers fAbs arg
 
       -- We don't update the contract if it didn't return cleanly
       let successful = unsafeIsDefined iR

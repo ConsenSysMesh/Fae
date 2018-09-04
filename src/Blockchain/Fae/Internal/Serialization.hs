@@ -141,15 +141,17 @@ fromEscrowEntry ::
   VersionID -> 
   Either (NamedContract name) AbstractLocalContract ->
   m (EEnt name)
-fromEscrowEntry entID escrowVersion = either fromNamedContract (throw err) where
-  err = NotStartState entID escrowVersion
-  fromNamedContract NamedContract{..} = 
-    return $ EEnt entID contractNextID escrowVersion eRep
-    where 
-      -- | Exploiting the fact that 'EGeneric' only requires a 'MonadState
-      -- EscrowMap' rather than (say) a 'FaeTXM', we recursively serialize
-      -- the contract name by supplying the endowment as its context.
-      eRep = evalState (eFrom contractName) endowment
+fromEscrowEntry entID escrowVersion = 
+  -- The positioning of this 'return' is important: it needs to be on the
+  -- far outside, not in (say) 'fromNamedContract', because it needs to be
+  -- unambiguous that 'fromEscrowEntry' does /not/ change the monad state,
+  -- or else the exception may be thrown in trying to figure this out.
+  return . either fromNamedContract (throw err) 
+  where
+    err = NotStartState entID escrowVersion
+    fromNamedContract NamedContract{..} = 
+      EEnt entID contractNextID escrowVersion eRep
+      where eRep = evalState (eFrom contractName) endowment
 
 -- | Sorts the components of an 'EEnt' into those of an 'EscrowEntry'.
 toEscrowEntry :: 
