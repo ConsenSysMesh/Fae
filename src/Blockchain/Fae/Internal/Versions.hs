@@ -61,7 +61,7 @@ data ReadVersioned = ShortContractID ::: VersionID deriving (Read)
 -- | Types that can be versioned, meaning a unique identifier is calculated
 -- for it and all subobjects (stopping at 'Versioned' fields).  Has an
 -- automatic, undecidable instance for any 'Generic' type.
-class (HasEscrowIDs a, Typeable a) => Versionable a where
+class (HasEscrowIDs a) => Versionable a where
   -- | Returns the map of all versions, including self.
   versionMap :: (EntryID -> VersionID) -> a -> VersionMap
   versionMap f x =

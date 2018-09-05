@@ -66,12 +66,14 @@ module Blockchain.Fae
     Transaction, TransactionM, PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
     -- ** Types
-    Contract, ContractM, ContractName(..), Exportable, EGeneric, 
-    Fae, MonadContract, WithEscrows, EscrowID, Reward,
+    ContractName(..), Contract, ContractM, Fae, 
+    MonadContract, WithEscrows, EscrowID, Reward, 
+    type (<-|), type (↤),
     -- ** Contract API
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
-    lookupSigner, signer, signers, (<-|), claimReward, 
+    lookupSigner, signer, signers, claimReward, 
+    (<-|), (↤), 
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
     -- the escrow-backed values they expect, contract outputs are
@@ -79,7 +81,7 @@ module Blockchain.Fae
     -- Contract literal arguments can refer to these values by version.
     Versioned(Versioned, getVersioned),
     -- * Opaque classes
-    GetInputValues, HasEscrowIDs, Versionable, 
+    GetInputValues, HasEscrowIDs, Versionable, Exportable,  
     ContractArg, ContractVal, TransactionArg, TransactionVal,
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
@@ -108,23 +110,28 @@ import Numeric.Natural (Natural)
 
 -- * Types
 
--- | Constraint collection synonym
+-- | Constraint collection for things that are 'ValType's of
+-- a 'ContractName'.
 type ContractVal a = 
   (HasEscrowIDs a, Versionable a, EGeneric a, ESerialize a)
--- | Constraint collection synonym
+-- | Constraint collection for things that are 'ArgType's of
+-- a 'ContractName'.
 type ContractArg a = (HasEscrowIDs a, Versionable a, Read a)
--- | Constraint collection synonym
+-- | Constraint collection for the argument of a 'Transaction'.
 type TransactionArg a = (HasEscrowIDs a, GetInputValues a)
--- | Constraint collection synonym
+-- | Constraint collection for the return value of a 'Transaction'.
 type TransactionVal a = (Typeable a, Show a)
 
--- | A contract transformer to apply effects to 'Fae'.  To demystify the
--- kind signature, it is used like
+-- | A contract transformer to apply effects to 'Fae'.  Concretely, it is
+--
+-- >>> type ContractM t name = ArgType name -> t (Fae (ArgType name) (ValType name)) (ValType name)
+--
+-- To demystify the kind signature, it is used like
 --
 -- >>> type StateContract argType valType = ContractM StateT argType valType
 --
 -- with the first component being a monad /transformer/.  This can then be
--- evaluated back down to a 'Contract argType valType' via 'usingState'.
+-- evaluated back down to a @Contract argType valType@ via 'usingState'.
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =
   ContractT (t (Fae argType valType)) argType valType
 
@@ -134,13 +141,13 @@ type ContractM (t :: (* -> *) -> (* -> *)) argType valType =
 -- >>> type StateTransaction a b = TransactionM StateT a b
 --
 -- with the first component being a monad /transformer/.  This can then be
--- evaluated back down to a 'Transaction a b' via 'usingState'.
+-- evaluated back down to a @Transaction a b@ via 'usingState'.
 type TransactionM (t :: (* -> *) -> (* -> *)) a b = a -> t FaeTX b
 
 -- | A simple utility for adding mutable state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
--- The second argument should be a 'ContractM StateT' or 'TransactionM
--- StateT'.
+-- The second argument should be a @ContractM StateT@ or @TransactionM
+-- StateT@.
 usingState ::
   (Monad m) =>
   s ->
@@ -150,8 +157,8 @@ usingState s f = flip evalStateT s . f
 
 -- | A simple utility for adding constant state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
--- The second argument should be a 'ContractM StateT' or 'TransactionM
--- ReaderT'.
+-- The second argument should be a @ContractM StateT@ or @TransactionM
+-- ReaderT@.
 usingReader ::
   (Monad m) =>
   r ->

@@ -45,10 +45,15 @@ import Text.Read (readMaybe)
 
 -- | Infix synonym for a pair to make the argument of 'useEscrow' clearer.
 type a <-| b = (a, b)
+-- | Nicer Unicode alternative (character @u21a4@)
+type a ↤ b = a <-| b
 
--- | Infix function to construct the pair synonym.
+-- | Infix function to construct '(<-|)'.
 (<-|) :: a -> b -> a <-| b
 (<-|) = (,)
+-- | Nicer Unicode alternative (character @u21a4@)
+(↤) :: a -> b -> a ↤ b
+(↤) = (<-|)
 
 -- | Another dynamic type, this time including 'Exportable'.
 data ReturnValue =
@@ -166,7 +171,12 @@ newtype FaeTX a =
   }
   deriving (Functor, Applicative, Monad)
 
--- | The user-provided form of a contract function
+-- | The user-provided form of a contract function.  Concretely, this is:
+--
+-- >>> type Contract argType valType = argType -> Fae argType valType (WithEscrows valType)
+--
+-- That is, a function from the argument type to the escrow-bearing value
+-- type, inside a Fae monad that expects these argument and value types.
 type Contract argType valType = ContractT (Fae argType valType) argType valType
 -- | Useful generalization to add effects
 type ContractT m argType valType = argType -> m (WithEscrows valType)
@@ -190,10 +200,12 @@ class (Typeable a) => Exportable a where
   importValue :: (MonadState EscrowMap m) => ByteString -> m (Maybe a)
 
 -- | Instances of 'ContractName' are always defined by contract authors,
--- making 'theContract' a global function.  Since it's global, it is still
--- present when we deserialize, so this is effectively a contract that is
--- portable between Fae instances (provided that both instances have the
--- module with the instance; it need not be run, just interpreted).
+-- making 'theContract' a global function.  Since it's global, if a name is
+-- serialized and then deserialized in another Fae instance, the function is
+-- still present when we deserialize, so this is effectively a contract
+-- that is portable between Fae instances (provided that both instances
+-- have the module with the instance; it need not be run, just
+-- interpreted).
 --
 -- A 'ContractName' is the only way to pass data into a new contract, so
 -- the type should have fields for all the parameters of the contract,
@@ -329,11 +341,11 @@ newEscrow contractName = liftTX $ FaeTX $ do
   return $ EscrowID entID
 
 -- | Calls an escrow by ID, which must exist in the present context.  The
--- first argument is a list @[newName '<-|' oldName, ..]@ that specifies new
+-- first argument is a list @[newName ↤ oldName, ..]@ that specifies new
 -- role names and the corresponding existing roles they duplicate.
 useEscrow :: 
   (ContractName name, MonadTX m) =>
-  [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)
+  [String ↤ String] -> EscrowID name -> ArgType name -> m (ValType name)
 useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
   \entID escrowVersion nameOrFunction -> return $ do
     let makeLocalCF NamedContract{..} = localContract $ 
