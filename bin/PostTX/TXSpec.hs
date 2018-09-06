@@ -7,7 +7,7 @@ module PostTX.TXSpec
 
 import Blockchain.Fae.FrontEnd
 
-import Common.Lens hiding ((<.>))
+import Common.Lens
 import Common.ProtocolT
 
 import Control.Monad.Reader
@@ -118,7 +118,7 @@ makeTXSpec ::
 makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt = 
   TXSpec
   {
-    txMessage = addSignatures keys $
+    txMessage = addSignatures keys
       TXMessage
       {
         mainModulePreview = uncurry makePreview mainModule,

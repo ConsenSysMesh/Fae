@@ -159,6 +159,7 @@ executable postTX
     PostTX.Args
     PostTX.Faeth
     PostTX.ImportExport
+    PostTX.Keys
     PostTX.Network
     PostTX.Parser
     PostTX.Submit

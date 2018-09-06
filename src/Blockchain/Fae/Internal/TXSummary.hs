@@ -26,7 +26,7 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
 import Blockchain.Fae.Internal.TX
 
-import Common.Lens hiding ((.=))
+import Common.Lens
 
 import System.IO.Unsafe
 
@@ -111,7 +111,7 @@ prettyPairs = vcat . map prettyPair
 
 -- | Prints a key-value pair with a colon.
 prettyPair :: (Show v) => (String, v) -> Doc
-prettyPair (x, y) = text x <> colon <+> (text $ show y)
+prettyPair (x, y) = text x <> colon <+> text (show y)
 
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
@@ -138,9 +138,9 @@ collectTransaction txID = do
     txResult = show result 
     txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
   txInputSummaries <- getInputSummary txID txInputSCIDs inputOutputs
-  return $ TXSummary{..}
+  return TXSummary{..}
 
--- | Get the TXInputSummary for a gicen ShortContractID 
+-- | Get the TXInputSummary for a given ShortContractID 
 getInputSummary :: 
   (MonadState Storage m, MonadCatch m, MonadIO m) =>
   TransactionID -> 
