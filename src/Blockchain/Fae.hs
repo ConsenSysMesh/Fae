@@ -61,13 +61,14 @@ module Blockchain.Fae
     -- the literal arguments passed to the contracts with the given IDs.
     -- These are then 'read' into Haskell types, to prevent malicious
     -- authors from inserting nonterminating code into the contract calls.
-    Transaction, TransactionM, TransactionID, PublicKey, FaeTX, MonadTX,
+    Transaction, TransactionM, PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
-    Contract, ContractM, ContractID(..), Fae, MonadContract,
-    WithEscrows, EscrowID, BearsValue, RewardEscrowID, Reward,
+    Contract, ContractM, ContractName(..), Exportable, EGeneric, 
+    Fae, MonadContract, WithEscrows, EscrowID, Reward,
+    -- ** Contract API
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
-    lookupSigner, signer, signers, claimReward, bearer, 
+    lookupSigner, signer, signers, (<-|), claimReward, 
     -- * Versioning
     -- | In order to ensure that transaction authors can rely on getting
     -- the escrow-backed values they expect, contract outputs are
@@ -76,6 +77,7 @@ module Blockchain.Fae
     Versioned(Versioned, getVersioned),
     -- * Opaque classes
     GetInputValues, HasEscrowIDs, Versionable, 
+    ContractArg, ContractVal, TransactionArg, TransactionVal,
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
     Generic, Identity(..), Void
@@ -87,6 +89,7 @@ import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
+import Blockchain.Fae.Internal.Serialization
 import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
@@ -101,6 +104,16 @@ import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 
 -- * Types
+
+-- | Constraint collection synonym
+type ContractVal a = 
+  (HasEscrowIDs a, Versionable a, EGeneric a, ESerialize a)
+-- | Constraint collection synonym
+type ContractArg a = (HasEscrowIDs a, Versionable a, Read a)
+-- | Constraint collection synonym
+type TransactionArg a = (HasEscrowIDs a, GetInputValues a)
+-- | Constraint collection synonym
+type TransactionVal a = (Typeable a, Show a)
 
 -- | A contract transformer to apply effects to 'Fae'
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =

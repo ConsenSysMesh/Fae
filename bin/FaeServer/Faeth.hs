@@ -144,10 +144,10 @@ instance ToRequest ParitySubscribe where
 instance ToRequest EthGetBlockByHash where
   requestMethod = const "eth_getBlockByHash"
 
-runFaeth :: Flags -> ThreadId -> TXQueueT IO ()
-runFaeth flags mainTID = reThrow mainTID $ do
-  fork $ runFaethWatcherM flags faethWatcher 
-  runFaeServer (Proxy @Salt) faethSendTXExecData 
+runFaeth :: ServerArgs -> ThreadId -> TXQueueT IO ()
+runFaeth args@ServerArgs{..} mainTID = reThrow mainTID $ do
+  fork $ runFaethWatcherM args faethWatcher 
+  runServer faePort (serverApp $ Proxy @Salt) faethSendTXExecData 
 
 faethSendTXExecData :: SendTXExecData (TXQueueT IO) 
 faethSendTXExecData txED@TXExecData{} = queueTXExecData txED{fake = True}
@@ -209,37 +209,35 @@ processEthTX PartialEthTransaction{..} lastTXID = handleAll ethTXError $ do
 
 runFaethTX :: Hex -> FaeTX -> TransactionID -> FaethWatcherM TransactionID
 runFaethTX ethTXID (FaeTX txMessage mainFile0 modules0) lastTXID = do
-  resultVar <- ioAtomically newEmptyTMVar
+  let
+    (tx, mainFile, modules) = 
+      makeFilesMap txMessage mainFile0 modules0 False False
+    thisTXID = txID tx
+    execError txID e = liftIO . putStrLn $
+      "\nError while executing Fae transaction " ++ show txID ++
+      "\n              in Ethereum transaction " ++ show ethTXID ++
+      "\nError was: " ++ show e ++ "\n"
+  tmVar <- ioAtomically newEmptyTMVar
   callerTID <- view _1
   handleAll (execError thisTXID) $ do
-    txResult <- waitRunTXExecData queueTXExecData
+    txResult <- waitRunTXExecData queueTXExecData resultVar
       TXExecData
       {
         parentM = Just lastTXID,
         lazy = True,
         fake = False,
+        resultVar = tmVar,
         ..
       }
     liftIO $ putStrLn txResult
   return thisTXID
 
-  where
-    tx = maybe (error "Invalid transaction message") id $ 
-      txMessageToTX False txMessage -- ^ When can this be True?
-    thisTXID = txID tx
-    mainFile = addHeader thisTXID mainFile0
-    modules = Map.mapWithKey (fixHeader thisTXID) modules0
-    execError txID e = liftIO . putStrLn $
-      "\nError while executing Fae transaction " ++ show txID ++
-      "\n              in Ethereum transaction " ++ show ethTXID ++
-      "\nError was: " ++ show e ++ "\n"
-
-runFaethWatcherM :: Flags -> FaethWatcherM () -> TXQueueT IO ()
-runFaethWatcherM Flags{..} xFW = do
+runFaethWatcherM :: ServerArgs -> FaethWatcherM () -> TXQueueT IO ()
+runFaethWatcherM ServerArgs{..} xFW = do
   tID <- myThreadId
   blockTXIDs <- liftIO $ newTVarIO Map.empty
   forever $ handleAll waitRestart $ 
-    runProtocolT hostname port $ do
+    runProtocolT faethHostname faethPort $ do
       subID <- sendReceiveProtocolT ParitySubscribe
       runReaderT (getFaethWatcherM xFW) (tID, subID, blockTXIDs) 
 

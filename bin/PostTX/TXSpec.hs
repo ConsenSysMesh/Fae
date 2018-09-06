@@ -1,5 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
-module PostTX.TXSpec (module PostTX.TXSpec, Module, ModuleMap) where
+module PostTX.TXSpec 
+  (
+    module PostTX.TXSpec, 
+    Inputs, Module, ModuleMap, Renames(..), TransactionID, getTXID
+  ) where
 
 import Blockchain.Fae.FrontEnd
 
@@ -20,6 +24,8 @@ import Data.Serialize (Serialize)
 import Data.Maybe
 import Data.Time.Clock
 
+import GHC.Generics
+
 import PostTX.Args
 
 import System.Directory
@@ -27,12 +33,12 @@ import System.Directory
 import Text.Read
 
 -- * Spec types
-data TXData a =
+data TXData =
   TXData
   {
-    dataModules :: a,
+    dataModules :: LoadedModules,
     fallback :: [String],
-    inputs :: [(ContractID, String)],
+    inputs :: Inputs,
     keys :: [(String, String)],
     reward :: Bool,
     parent :: Maybe TransactionID
@@ -46,13 +52,7 @@ data TXSpec a =
     isReward :: Bool,
     parentM :: Maybe TransactionID
   }
-
-data ParsedModules =
-  ParsedModules
-  {
-    bodyM :: Maybe String,
-    others :: [String]
-  }
+  deriving (Generic)
 
 data LoadedModules =
   LoadedModules
@@ -60,6 +60,7 @@ data LoadedModules =
     mainModule :: (FileName, Module),
     otherModules :: ModuleMap
   }
+  deriving (Generic)
 
 type Modules = ModuleMap
 type FileName = String
@@ -67,12 +68,14 @@ type Keys = Map String (Either PublicKey PrivateKey)
 type Identifier = String
 
 class (Monad m, Serialize a) => MakesTXSpec m a where
-  txDataToTXSpec :: TXData LoadedModules -> m (TXSpec a)
+  txDataToTXSpec :: TXData -> m (TXSpec a)
 
 -- * Template Haskell
 makeLenses ''TXData
 makeLenses ''TXSpec
-makeLenses ''ParsedModules
+
+instance Serialize LoadedModules
+instance (Serialize a) => Serialize (TXSpec a)
 
 instance MakesTXSpec IO String where
   txDataToTXSpec = txSpecTimeSalt id
@@ -92,13 +95,13 @@ instance MakesTXSpec (ReaderT FaethArgs IO) Salt where
     liftIO $ txSpecTimeSalt makeSalt txData
 
 txSpecTimeSalt :: 
-  (Serialize a) => (String -> a) -> TXData LoadedModules -> IO (TXSpec a)
+  (Serialize a) => (String -> a) -> TXData -> IO (TXSpec a)
 txSpecTimeSalt makeSalt txData = do
   now <- getCurrentTime
   go <- getMakeTXSpec txData
   return $ go $ makeSalt $ show now
 
-getMakeTXSpec :: (Serialize a) => TXData LoadedModules -> IO (a -> TXSpec a)
+getMakeTXSpec :: (Serialize a) => TXData -> IO (a -> TXSpec a)
 getMakeTXSpec TXData{..} = do
   let 
     keys' = if null keys then [("self", "self")] else keys
@@ -120,7 +123,7 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
       {
         mainModulePreview = uncurry makePreview mainModule,
         otherModulePreviews = Map.mapWithKey makePreview otherModules,
-        signatures = Left . either id (fromMaybe keyErr . public) <$> keys,
+        signatures = (,Nothing) . either id (fromMaybe keyErr . public) <$> keys,
         ..
       },
     ..
@@ -139,11 +142,19 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
       }
 
     addSignatures :: (Serialize a) => Keys -> TXMessage a -> TXMessage a
-    addSignatures keys m = Map.foldrWithKey signPrivate m keys
+    addSignatures keys m = Map.foldrWithKey addSigner m keys
 
-    signPrivate _ (Left k) m = m
-    signPrivate s (Right k) m = signTXMessage s k m
+addSigner :: 
+  (Serialize a) =>
+  String -> Either PublicKey PrivateKey -> TXMessage a -> TXMessage a
+addSigner _ (Left _) = id
+addSigner name (Right privKey) = 
+  fromMaybe (error $ "Not a signer role in this transaction: " ++ name) .
+  signTXMessage name privKey
 
+-- | If the key "name" parses as a public key, then that is the result and
+-- the message will not be signed (by this key).  Otherwise, it is looked
+-- up in @faeHome@ as a file containing a private key.
 resolveKeyName :: String -> IO (Either PublicKey PrivateKey)
 resolveKeyName pubKeyS | Just pubKey <- readMaybe pubKeyS = return $ Left pubKey
 resolveKeyName name = do
@@ -155,4 +166,3 @@ resolveKeyName name = do
     privKey <- newPrivateKey
     BS.writeFile name $ S.encode privKey
     return $ Right privKey
-

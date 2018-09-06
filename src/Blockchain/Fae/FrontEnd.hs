@@ -19,6 +19,7 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.Transaction,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
+    exportValue, importValue,
     -- * Types and Instances for Clients
     module Blockchain.Fae.Internal.TXSummary,
     -- * Cryptography types and functions
@@ -29,6 +30,7 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.IDs.Types
   ) where
 
+import Blockchain.Fae.Internal.Contract (exportValue, importValue)
 import Blockchain.Fae.Internal.Crypto hiding
   (
     Serialize, PassFail, PartialSerialize,
@@ -37,6 +39,7 @@ import Blockchain.Fae.Internal.Crypto hiding
     EdPublicKey
   )
 import Blockchain.Fae.Internal.Exceptions hiding (unsafeIsDefined)
+import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs hiding
   (
     GHasEscrowIDs,

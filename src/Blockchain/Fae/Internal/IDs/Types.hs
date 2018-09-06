@@ -17,7 +17,7 @@ import Blockchain.Fae.Internal.Crypto
 import Common.Lens
 import Control.DeepSeq
 import Data.Map (Map)
-import Data.Serialize 
+import Data.Serialize
 import Data.String
 import GHC.Generics
 import Text.ParserCombinators.ReadP
@@ -39,13 +39,13 @@ data ContractID =
   -- times they have been called.  This infix constructor is for
   -- convenience.  
   ContractID :# Int
-  deriving (Read, Show, Generic)
+  deriving (Read, Show, Generic, Eq, Ord)
 
 -- | The hash of a 'ContractID', useful for abbreviating what would
 -- otherwise be unboundedly long chains of contracts that are outputs of
 -- contracts that are outputs of ... that are outputs of some long-ago
 -- transaction.
-newtype ShortContractID = ShortContractID Digest
+newtype ShortContractID = ShortContractID { getShortContractID :: Digest }
   deriving (Eq, Ord, Serialize, IsString, Generic, NFData)
 
 -- | Transactions can have many named signatories, which are available in
@@ -53,6 +53,11 @@ newtype ShortContractID = ShortContractID Digest
 -- import more modules in the interpreter to get 'Map'.
 newtype Signers = Signers { getSigners :: Map String PublicKey }
   deriving (Serialize, NFData)
+
+-- | Contract calls may also declare local renaming of signatories, which
+-- this records in the structure @newName -> oldName@.
+newtype Renames = Renames { getRenames :: Map String String }
+  deriving (Serialize, NFData) 
 
 -- | For simplicity
 type TransactionID = ShortContractID
@@ -68,14 +73,14 @@ newtype VersionID = VersionID Digest
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
 -- immutable.  Each escrow ID is valid only within a contract or other
--- escrow that actually holds the escrow, and the type parameters must
--- correspond to the escrow's actual argument and value types.  Escrow IDs
--- may only be constructed by the 'newEscrow' function; in contract calls,
--- they can also be referenced by version (see "Versions").  However, they
--- should appear type-correct in contract signatures to formally verify
--- that the contract receives and returns a particular kind of opaque
--- value, e.g. a currency.
-newtype EscrowID argType valType = EscrowID { entID :: EntryID }
+-- escrow that actually holds the escrow, which must have been created with
+-- a "name" type matching the phantom type parameter.  Escrow IDs may only
+-- be constructed by the 'newEscrow' function; in contract calls, they can
+-- also be referenced by version (see "Versions").  However, they should
+-- appear type-correct in contract signatures to formally verify that the
+-- contract receives and returns a particular kind of opaque value, e.g.
+-- a currency.
+newtype EscrowID name = EscrowID { entID :: EntryID }
   deriving (NFData)
 
 -- Instances
@@ -105,7 +110,24 @@ instance Read VersionID where
 instance Show VersionID where
   show (VersionID ver) = show ver
 
+-- | Useful for debugging
+instance Show (EscrowID name) where
+  show = show . entID
+
 -- * Template Haskell
 
 makeLenses ''Signers
+makeLenses ''Renames
+
+-- * Functions
+
+-- | The transaction ID of the "genesis transaction"
+nullID :: TransactionID
+nullID = ShortContractID nullDigest
+
+parentTX :: ContractID -> TransactionID
+parentTX (TransactionOutput txID _) = txID
+parentTX (InputOutput txID _ _) = txID
+parentTX (cID :# _) = parentTX cID
+
 

@@ -36,50 +36,43 @@ import System.IO.Unsafe
 import Text.Read
 
 instance ToJSON TXInputSummary where
-  toJSON TXInputSummary{..} = unsafePerformIO $ 
-    catchAll 
-      (do 
-        evalTXInputNonce <- evaluate $ force $ toJSON txInputNonce
-        evalTXInputOutputs <- evaluate $ force $ toJSON txInputOutputs
-        evalTXInputVersions <- evaluate $ force $ toJSON txInputVersions
-        return $ object [
-          "txInputNonce" .= evalTXInputNonce,
-          "txInputOutputs" .= evalTXInputOutputs,
-          "txInputVersions" .= evalTXInputVersions ])
-       (return . object . pure . ("exception",) . A.String . T.pack . show)
+  toJSON TXInputSummary{..} = wrapExceptions $ 
+    object [
+      "txInputNonce" .= toJSON txInputNonce,
+      "txInputOutputs" .= wrapExceptions txInputOutputs,
+      "txInputVersions" .= toJSON txInputVersions ]
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
     "transactionID" .= show transactionID,
-    "txResult" .= writeJSONField txResult,
-    "txOutputs" .= writeJSONField txOutputs,
+    "txResult" .= wrapExceptions txResult,
+    "txOutputs" .= wrapExceptions txOutputs,
     "txInputSummaries" .= txInputSummaries,
-    "signers" .= signers ]
+    "txSSigners" .= txSSigners ]
 
 -- | If an exception is found then we tag the value as an exception.
 -- By forcing evaluation of exceptions we prevent uncaught exceptions being thrown
 -- and crashing faeServer.
-writeJSONField :: forall a. (ToJSON a) => a -> Value
-writeJSONField val = 
+wrapExceptions :: forall a. (ToJSON a) => a -> Value
+wrapExceptions val = 
   unsafePerformIO $ catchAll (evaluate $ force $ toJSON val)
     (return . object . pure . ("exception",) . A.String . T.pack . show)
 
 -- | If parsing fails then we look for the tagged exception.
 readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
 readJSONField fieldName obj = 
-  obj .: fieldName <|> do 
-    x <- obj .: fieldName
-    throw . TXFieldException <$> x .: "exception"
+  obj .: fieldName <|> (obj .: fieldName >>= exceptionValue) 
+
+exceptionValue :: Object -> Parser a
+exceptionValue x = throw . TXFieldException <$> x .: "exception"
 
 instance FromJSON TXInputSummary where
-  parseJSON = withObject "TXInputSummary" $ \o ->
-    TXInputSummary
-      <$> readJSONField' "txInputNonce" o
-      <*> readJSONField' "txInputOutputs" o
-      <*> readJSONField' "txInputVersions" o
-    where readJSONField' fieldName obj =
-            obj .: fieldName <|> do 
-              throw . TXFieldException <$> obj .: "exception"
+  parseJSON = withObject "TXInputSummary" $ \o -> do
+    exceptionValue o <|>
+      TXInputSummary
+        <$> readJSONField "txInputNonce" o
+        <*> readJSONField "txInputOutputs" o
+        <*> readJSONField "txInputVersions" o
       
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o ->
@@ -88,7 +81,7 @@ instance FromJSON TXSummary where
       <*> readJSONField "txResult" o
       <*> readJSONField "txOutputs" o
       <*> o .: "txInputSummaries"
-      <*> o .: "signers"
+      <*> o .: "txSSigners"
 
 instance FromJSON PublicKey where
   parseJSON = withText "VersionID" $ \pKey ->

@@ -15,10 +15,9 @@ module Blockchain.Fae.Currency
     -- * The currency typeclass
     Currency(..),
     -- * Basic numeric currency
-    -- | This is a nearly featureless currency that most likely suffers
-    -- from the effects of inflation, since its reward function creates one
-    -- coin at a time.  Not suitable for complex economic situations.
-    Coin, reward
+    -- The type 'CoinName' is exported to enable import/export of 'Coin'
+    -- values, but its constructor is not, for obvious reasons.
+    Coin, CoinName, reward
   )
 where
 
@@ -32,7 +31,13 @@ import Data.Maybe
 
 -- | Interface for a currency type.
 class 
-  (Versionable coin, HasEscrowIDs coin, Integral (Valuation coin)) => 
+  (
+    Versionable coin, ContractVal coin, 
+    Integral (Valuation coin), 
+    -- This one is because it should be reasonably common to have
+    -- valuations inside of valuables, particularly 'ContractName's.
+    HasEscrowIDs (Valuation coin)
+  ) => 
   Currency coin where
 
   data Valuation coin
@@ -54,6 +59,16 @@ class
     coin -> Valuation coin -> m (f (coin, f' coin))
 
   -- | Partition the value into the given proportions and the remainder.
+  --
+  -- Note that @split [a0 * b, a1 * b, ..]@ is not equivalent to @split
+  -- [a0, a1, ..]@ despite the proportions being the same: each portion is
+  -- given the designated number of integral "parts", so the former
+  -- produces a list of multiples of @b@ and the latter need not.
+  --
+  -- In any case, the value being split is first rounded down to the
+  -- nearest multiple of the sum of the portions, the difference being
+  -- returned as the remainder.  If this rounding is all that is desired,
+  -- use 'round' instead.
   split :: 
     (Traversable t, Alternative f, MonadTX m) =>
     coin -> t Natural -> m (t coin, f coin)
@@ -79,6 +94,14 @@ class
         (a -> b -> m (c, a)) -> m a -> t b -> m (t c, a)
       mapMAccumL g y0 xs = runStateT (mapM (StateT . flip g) xs) =<< y0
 
+  -- | Rounds a coin down to the nearest multiple of some number, returning
+  -- this rounded coin and the remainder.
+  round :: (MonadTX m) => 
+    coin -> Natural -> m (Maybe coin, coin)
+  round c n = do
+    (l, rM) <- split c [n]
+    return (listToMaybe l, fromMaybe c rM)
+
   -- | A mixed 'Ord'-style comparison
   valCompare :: (MonadTX m) => coin -> Valuation coin -> m Ordering
   valCompare c v = do
@@ -101,7 +124,7 @@ class
   lessThan :: (MonadTX m) => coin -> Valuation coin -> m Bool
   lessThan c n = (== LT) <$> valCompare c n
 
-  -- | A pure 'Eq'-style comparison
+  -- | A pure 'Ord'-style comparison
   coinCompare :: (MonadTX m) => coin -> coin -> m Ordering
   coinCompare c1 c2 = do
     n <- value c2
@@ -119,80 +142,67 @@ class
   losesTo :: (MonadTX m) => coin -> coin -> m Bool
   losesTo c1 c2 = (== LT) <$> coinCompare c1 c2
 
-  -- | Rounds a coin down to the nearest multiple of some number, returning
-  -- this rounded coin and the remainder.
-  round :: (MonadTX m) => 
-    coin -> Natural -> m (Maybe coin, coin)
-  round c n = do
-    (l, rM) <- split c [n]
-    return (listToMaybe l, fromMaybe c rM)
-
 {- The basic example -}
 
--- | This opaque type is the value of our sample currency.
-newtype CoinVal = CoinVal Natural deriving (Generic)
+-- | The newtype both hides the escrow ID (important for contract safety)
+-- and makes it so that type signatures can say they accept the
+-- semantically-meaningful 'Coin' rather than some escrow ID.
+newtype Coin = Coin (EscrowID CoinName) deriving (Generic)
+-- | Only for this module; it's not exported so it doesn't matter in
+-- regular usage.
+data CoinName = MintCoin Natural deriving (Generic)
 
--- @Spend@ exists so that we can get close the escrow and get its
--- contents.  @UnsafePeek@ skips the closing part, and is therefore
--- economically dangerous, since it breaks conservation of value.  We must
--- use it carefully.
---
--- We need @UnsafePeek@ to be unsafe so that we can validate the coin: only
--- a geniune coin can have a Coin value, since we don't export the
--- constructor.  But we don't want to have to spend a coin to validate it.
---
--- In general, we use refutable, partial patterns when @close@ing an escrow
--- so that the pattern matching errors turn into exceptions in the
--- contract.
--- 
--- | The opaque token for using this currency.  Only the 'Currency'
--- functions are given access to its constructors, since otherwise,
--- a malicious user could create their own coins.
-data Token = Spend | UnsafePeek deriving (Generic)
-
--- | This is the actual currency; no user ever looks inside directly.
-type Coin = EscrowID Token CoinVal
-
--- | This internal function is obviously not to be called by users.
+-- | DRY shortcut, purely internal
 mint :: (MonadTX m) => Natural -> m Coin
-mint n = newEscrow [] f where
-  f :: Contract Token CoinVal
-  f UnsafePeek = release coin >>= f
-  f Spend = spend coin
-  coin = CoinVal n
+mint = fmap Coin . newEscrow . MintCoin
+
+instance ContractName CoinName where
+  type ArgType CoinName = Bool
+  type ValType CoinName = Natural
+
+  -- | The coin has two modes: report ('False') and withdraw ('True').
+  -- Obviously this entire function is unsafe for users of 'Coin', because it
+  -- allows them to create a new coin of any value.  It is, however, okay for
+  -- them to have the type signature of the escrow function itself, because
+  -- simply having an escrow of that signature is not enough to have
+  -- a 'Coin'; the 'CoinName' is also required, and that is hidden.
+  theContract name@(MintCoin n) False = release n >>= theContract name
+  theContract (MintCoin n) True = spend n
 
 instance Currency Coin where
+  -- | The constructor isn't exported because using it is equivalent to
+  -- using 'toInteger' and 'fromInteger', methods of 'Integral' and 'Num'
+  -- respectively.  These operations are useful to construct a valuation of
+  -- a particular "denonination", or extract the raw numerical value.
   newtype Valuation Coin = CoinValuation Natural
-    deriving (Eq, Ord, Num, Real, Enum, Integral)
+    deriving (Eq, Ord, Num, Real, Enum, Integral, Generic)
 
   zero = mint 0
 
-  value eID = do
-    CoinVal n <- useEscrow eID UnsafePeek
-    return $ CoinValuation n
+  value (Coin eID) = CoinValuation <$> useEscrow [] eID False
 
-  add eID1 eID2 = do
-    CoinVal n1 <- useEscrow eID1 Spend
-    CoinVal n2 <- useEscrow eID2 Spend
+  add (Coin eID1) (Coin eID2) = do
+    n1 <- useEscrow [] eID1 True
+    n2 <- useEscrow [] eID2 True
     mint $ n1 + n2
 
-  change eID nV@(CoinValuation n) = do
-    ord <- valCompare eID nV
+  change c@(Coin eID) nV@(CoinValuation n) = do
+    ord <- valCompare c nV
     case ord of
-      EQ -> return $ pure (eID, empty)
+      EQ -> return $ pure (c, empty)
       GT -> do
-        CoinVal m <- useEscrow eID Spend
-        amtID <- mint n
-        remID <- mint $ m - n
-        return $ pure (amtID, pure remID)
+        m <- useEscrow [] eID True
+        amt <- mint n
+        rem <- mint $ m - n
+        return $ pure (amt, pure rem)
       LT -> return empty
 
 instance Show (Valuation Coin) where
   show (CoinValuation n) = show n
 
--- | A contract to claim system rewards in exchange for 'Coin' values.  The
--- one-to-one exchange rate is of course an example and probably not
--- actually desirable.
+-- | A contract to redeem system rewards for 'Coin' values.  The one-to-one
+-- exchange rate is of course an example and probably not actually
+-- desirable.
 --
 -- Note that there is no 'Currency' instance for rewards: thus, rewards are
 -- a unary counting value and can only be collected individually; in
@@ -200,8 +210,8 @@ instance Show (Valuation Coin) where
 -- destroys the reward token.  So this function can be seen as reifying
 -- rewards as a true currency, albeit one that cannot necessarily be used
 -- to claim rewards from anywhere else.
-reward :: (MonadTX m) => RewardEscrowID -> m Coin
+reward :: (MonadTX m) => Reward -> m Coin
 reward eID = do
   claimReward eID 
-  mint 1 
+  mint 1
 

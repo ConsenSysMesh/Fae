@@ -57,7 +57,7 @@ data TXSummary = TXSummary {
   txResult :: String,
   txOutputs:: [(Int, ShortContractID)],
   txInputSummaries :: [(ShortContractID, TXInputSummary)],
-  signers :: [(String, PublicKey)]
+  txSSigners :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
@@ -79,11 +79,11 @@ instance Pretty TXSummary where
     where header = labelHeader "Transaction" transactionID
           result = prettyPair ("result", displayException $ text txResult)
           outputs = displayException $ prettyList "outputs" $ (_1 %~ show) <$> txOutputs
-          signers' = prettyList "signers" signers
+          txSSigners' = prettyList "signers" txSSigners
           inputs = vcat $ (\(scid, txInputSummary) -> 
             prettyHeader (labelHeader "input" scid) (displayException $ pPrint txInputSummary)) 
               <$> txInputSummaries
-          entry = vcat [ result, outputs, signers', inputs ]
+          entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
@@ -103,7 +103,7 @@ prettyHeader header body = header $+$ nest 2 body
 -- | Converts a string and list of "lines" into a body with header.
 prettyList :: (Show v) => String -> [(String, v)] -> Doc
 prettyList headString bodyList = 
-  prettyHeader (text headString <> colon) (prettyPairs bodyList)
+  prettyHeader (text headString <> colon) (displayException $ prettyPairs bodyList)
 
 -- | Converts a list of pairs into a display, without header.
 prettyPairs :: (Show v) => [(String, v)] -> Doc
@@ -120,36 +120,47 @@ showException e = text "<exception>" <+> text (safeHead $ lines $ show $ Unquote
   safeHead [] = []
   safeHead (x : _) = x
 
---- | Flushes out all exceptions present in the input, returning a formatted
---- error message if one is found.
+-- | Flushes out all exceptions present in the input, returning a formatted
+-- error message if one is found.
 displayException :: VDoc -> VDoc
 displayException doc = 
   unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
 
--- | Get a JSON string which can be decoded to TXSummary for the convenience of faeServer clients
+-- | Get a JSON string which can be decoded to TXSummary for the
+-- convenience of faeServer clients
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
   TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   let 
     transactionID = txID
-    signers = Map.toList $ getSigners txSigners
+    txSSigners = Map.toList $ getSigners txSigners
     txInputSCIDs = nub inputOrder
     txResult = show result 
     txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
   txInputSummaries <- getInputSummary txID txInputSCIDs inputOutputs
   return TXSummary{..}
 
--- | Get the TXInputSummary for a gicen ShortContractID 
-getInputSummary :: (MonadState Storage m, MonadCatch m, MonadIO m) =>
- TransactionID -> [ShortContractID] -> Map.Map ShortContractID InputOutputVersions -> m [(TransactionID, TXInputSummary)]
-getInputSummary txID inputSCIDs inputMap =
+-- | Get the TXInputSummary for a given ShortContractID 
+getInputSummary :: 
+  (MonadState Storage m, MonadCatch m, MonadIO m) =>
+  TransactionID -> 
+  [ShortContractID] -> 
+  Map.Map ShortContractID InputResults -> 
+  m [(TransactionID, TXInputSummary)]
+getInputSummary txID inputSCIDs inputMap = do
     forM (nub inputSCIDs) $ \scID -> do
       let 
         input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
-        ~InputOutputVersions{..} = input
-        txInputVersions = over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
-        txInputOutputs = getTXOutputs (OutputOfContract txID scID iOutputs)
-      txInputNonce <- use $ nonceAt iRealID . to (fmap snd) . defaultLens (-1)
+        ~InputResults{..} = input
+        txInputVersions = 
+          over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
+        txInputOutputs = 
+          maybe 
+            (throw $ ContractOmitted txID scID) 
+            (getTXOutputs . OutputOfContract txID scID) 
+            iOutputsM
+      txInputNonce <- 
+        use $ nonceAt (withoutNonce iRealID) . to (fmap snd) . defaultLens (-1)
       return (scID, TXInputSummary {..})
 
 -- | Gets the index of each output within faeStorage and the associated ShortContractID 

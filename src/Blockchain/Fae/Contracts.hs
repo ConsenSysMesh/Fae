@@ -14,13 +14,15 @@ module Blockchain.Fae.Contracts
   (
     -- * Two-party swap
     -- $twopartyswap
-    twoPartySwap,
+    twoPartySwap, TwoPartySwap(..),
     -- * Direct selling
     -- $vendor
     sell, redeem,
+    Sell(..), Redeem(..),
     -- * Possession
     -- $possession
-    signOver, deposit
+    signOver, deposit,
+    SignOver(..)
   )
   where
 
@@ -71,66 +73,60 @@ instance Exception TwoPartyException
 -- 'Right'.
 --
 -- Once both items are returned, the contract is deleted.
-twoPartySwap ::
-  (
-    HasEscrowIDs a, HasEscrowIDs b, 
-    Versionable a, Versionable b,
-    Typeable a, Typeable b,
-    MonadTX m
-  ) =>
-  a -> b -> m ()
+twoPartySwap :: (ContractVal a, ContractVal b, MonadTX m) => a -> b -> m ()
 twoPartySwap x y = do
   partyA <- signer "partyA"
   partyB <- signer "partyB"
-  newContract [bearer x, bearer y] $ twoPartySwapC partyA partyB x y
+  newContract $ TwoPartySwap partyA partyB x y
 
 -- | Semantic labels
 data Stages = Stage1 | Stage2
 
--- | Both parts have two stages, so this contract has four iterations.
-twoPartySwapC :: 
-  (HasEscrowIDs a, HasEscrowIDs b, Versionable a, Versionable b) =>
-  PublicKey -> PublicKey -> 
-  a -> b ->
-  Contract (Maybe Bool) (Maybe (Either (Versioned a) (Versioned b)))
-twoPartySwapC partyA partyB x y choice1 = do
-  values <- part1 Stage1 choice1
-  noChoice <- release Nothing
-  part2 Stage1 noChoice values
-  
-  where
-    -- Every time this contract is called, we have to abort if the caller
-    -- is not one of the two parties.
-    getPartySigner = do
-      who <- signer "self"
-      unless (who == partyA || who == partyB) $ throw NotAParty 
-      return who
-    -- Convenient abbreviations
-    xRet = Left $ Versioned x
-    yRet = Right $ Versioned y
-    -- Collect the votes and determine the payouts
-    part1 _ Nothing = throw MustVote
-    part1 _ (Just False) = return (xRet, yRet)
-    part1 Stage1 (Just True) = do
-      sender1 <- getPartySigner
-      choice2 <- release Nothing
-      sender2 <- getPartySigner
-      when (sender1 == sender2) $ throw AlreadyVoted
-      part1 Stage2 choice2
-    part1 Stage2 (Just True) = return (yRet, xRet)
-    -- Accept requests to pay out and deliver appropriately.
-    part2 _ (Just _) _ = throw CantVote
-    part2 Stage1 Nothing (forA, forB) = do
-      receiver1 <- getPartySigner
-      let 
-        orderedValues
-          | receiver1 == partyA = (forA, forB)
-          | otherwise = (forB, forA)
-      noChoice <- release $ Just $ fst orderedValues
-      receiver2 <- getPartySigner
-      when (receiver1 == receiver2) $ throw AlreadyGot 
-      part2 Stage2 noChoice orderedValues
-    part2 Stage2 Nothing (_, ret) = spend $ Just ret
+data TwoPartySwap a b = TwoPartySwap PublicKey PublicKey a b deriving (Generic)
+
+instance (ContractVal a, ContractVal b) => ContractName (TwoPartySwap a b) where
+  type ArgType (TwoPartySwap a b) = Maybe Bool
+  type ValType (TwoPartySwap a b) = Maybe (Either a b)
+
+  -- | Both parts have two stages, so this contract has four iterations.
+  theContract (TwoPartySwap partyA partyB x y) = \choice1 -> do
+    values <- part1 Stage1 choice1
+    noChoice <- release Nothing
+    part2 Stage1 noChoice values
+    
+    where
+      -- Every time this contract is called, we have to abort if the caller
+      -- is not one of the two parties.
+      getPartySigner = do
+        who <- signer "self"
+        unless (who == partyA || who == partyB) $ throw NotAParty 
+        return who
+      -- Convenient abbreviations
+      xRet = Left x
+      yRet = Right y
+      -- Collect the votes and determine the payouts
+      part1 _ Nothing = throw MustVote
+      part1 _ (Just False) = return (xRet, yRet)
+      part1 Stage1 (Just True) = do
+        sender1 <- getPartySigner
+        choice2 <- release Nothing
+        sender2 <- getPartySigner
+        when (sender1 == sender2) $ throw AlreadyVoted
+        part1 Stage2 choice2
+      part1 Stage2 (Just True) = return (yRet, xRet)
+      -- Accept requests to pay out and deliver appropriately.
+      part2 _ (Just _) _ = throw CantVote
+      part2 Stage1 Nothing (forA, forB) = do
+        receiver1 <- getPartySigner
+        let 
+          orderedValues
+            | receiver1 == partyA = (forA, forB)
+            | otherwise = (forB, forA)
+        noChoice <- release $ Just $ fst orderedValues
+        receiver2 <- getPartySigner
+        when (receiver1 == receiver2) $ throw AlreadyGot 
+        part2 Stage2 noChoice orderedValues
+      part2 Stage2 Nothing (_, ret) = spend $ Just ret
 
 -- $vendor
 -- Direct sales are contracts in which the seller delivers the product
@@ -183,46 +179,49 @@ instance Exception VendorError
 -- as a 'Left' value.
 sell :: 
   forall a coin m.
-  (
-    HasEscrowIDs a, Typeable a, Versionable a, 
-    Currency coin, MonadTX m
-  ) =>
+  (ContractVal a, Currency coin, MonadTX m) =>
   a -> Valuation coin -> PublicKey -> m ()
-sell x price seller = newContract [bearer x] sellC where
-  sellC :: 
-    Contract 
-      (Versioned coin)
-      (Either 
-        (Versioned coin) 
-        (Versioned a, Maybe (Versioned coin))
-      )
-  sellC (Versioned payment) = do
+sell x price seller = newContract (Sell seller x price) where
+
+data Sell a coin = Sell PublicKey a (Valuation coin) deriving (Generic)
+
+instance (ContractVal a, Currency coin) => ContractName (Sell a coin) where
+  type ArgType (Sell a coin) = Versioned coin
+  type ValType (Sell a coin) = Either coin (a, Maybe coin)
+
+  theContract (Sell seller x price) = \(Versioned payment) -> do
     claimedSeller <- signer "seller"
     unless (claimedSeller == seller) $ 
       throw $ UnauthorizedSeller claimedSeller
     changeM <- change payment price
     let (cost, remitM) = fromMaybe (throw NotEnough) changeM
-    _ <- release $ Right (Versioned x, Versioned <$> remitM)
+    _ <- release $ Right (x, remitM)
     sender <- signer "self"
     unless (sender == seller) $
       throw $ NotOwner sender
-    spend $ Left $ Versioned cost
+    spend $ Left cost
 
 -- | This is very similar to 'sell' except that instead of accepting
 -- a currency and making change, it accepts an opaque token and
 -- a validation function.
 redeem ::
   forall a b m m'.
-  (
-    HasEscrowIDs a, HasEscrowIDs b, 
-    Versionable a, Versionable b, 
-    Typeable a, Typeable b, 
-    Read b, MonadTX m
-  ) =>
+  (ContractVal a, ContractVal b, ContractArg b, MonadTX m) =>
   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
-redeem x valid seller = newContract [bearer x] redeemC where
-  redeemC :: Contract b (Either b a)
-  redeemC tok = do
+redeem x valid seller = newContract (Redeem seller x valid) where
+
+data Redeem a b = 
+  Redeem PublicKey a (b -> (Fae b (Either b a) Bool))
+  deriving (Generic)
+
+instance 
+  (ContractVal a, ContractVal b, ContractArg b) => 
+  ContractName (Redeem a b) where
+
+  type ArgType (Redeem a b) = b
+  type ValType (Redeem a b) = Either b a
+
+  theContract (Redeem seller x valid) = \tok -> do
     claimedSeller <- signer "seller"
     unless (claimedSeller == seller) $ 
       throw $ UnauthorizedSeller claimedSeller
@@ -255,21 +254,22 @@ instance Exception PossessionError
 -- public key of the recipient.  A new contract is created that takes no
 -- arguments (that is, takes @()@) and checks that "self" is the owner, in
 -- which case it returns the value.
-signOver ::
-  forall a m.
-  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
-  a -> PublicKey -> m ()
-signOver x owner = newContract [bearer x] signOverC where
-  signOverC :: Contract () a
-  signOverC _ = do
+signOver :: forall a m. (ContractVal a, MonadTX m) => a -> PublicKey -> m ()
+signOver x owner = newContract $ SignOver owner x where
+
+data SignOver a = SignOver PublicKey a deriving (Generic)
+
+instance (ContractVal a) => ContractName (SignOver a) where
+  type ArgType (SignOver a) = ()
+  type ValType (SignOver a) = a
+
+  theContract (SignOver owner x) = \_ -> do
     who <- signer "self"
     unless (owner == who) $ throw $ NotOwner who
     spend x
 
 -- | Sign over a value to a named owner.
-deposit ::
-  (HasEscrowIDs a, Versionable a, Typeable a, MonadTX m) =>
-  a -> String -> m ()
+deposit :: (ContractVal a, MonadTX m) => a -> String -> m ()
 deposit x name = do
   owner <- signer name
   signOver x owner

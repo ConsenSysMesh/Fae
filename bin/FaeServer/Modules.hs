@@ -10,6 +10,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Map (Map)
 import qualified Data.Map as Map
 
+import Data.List
 import Data.Maybe
 import Data.Proxy
 import Data.Serialize
@@ -21,60 +22,63 @@ import Network.Wai.Parse
 import System.Directory
 import System.FilePath
 
+type RequestFiles = [(Module, FileInfo LC8.ByteString)]
+
 makeFilesMap :: 
-  forall a. (Serialize a) => Proxy a ->
-  [(C8.ByteString, FileInfo LC8.ByteString)] ->
-  Bool ->
-  (TX, Module, ModuleMap)
-makeFilesMap _ files reward = (tx, mainFile, modules) where
+  (Serialize a) => 
+  TXMessage a -> Module -> ModuleMap -> Bool -> Bool -> (TX, Module, ModuleMap)
+makeFilesMap txMessage mainFile0 modules0 reward isFake = (tx, mainFile, modules) where
+  mainFile = addHeader txID mainFile0
+  modules = Map.mapWithKey (fixHeader txID . dropExtension) modules0
   tx@TX{..} = 
     maybe (error "Invalid transaction message") force $
-    txMessageToTX @a reward $
-    either (error "Couldn't decode transaction message") id $ 
-    decode $
-    fromMaybe (error "Missing transaction message") $ 
-    getFile "message"
-  mainFile = maybe (error "Missing main module") (addHeader txID) $ getFile "body"
-  modules = Map.mapWithKey (fixHeader txID) $ Map.fromList $ getFiles "other"
+    txMessageToTX reward txMessage isFake
 
-  getFile = last . (Nothing :) . map (Just . snd) . getFiles 
-  getFiles name =
-    [
-      (C8.unpack fileName, LC8.toStrict fileContent) 
-        | (name', FileInfo{..}) <- files, name' == name
-    ]
+getFile :: RequestFiles -> String -> Module
+getFile files name = fromMaybe (error $ "Missing " ++ name) $ 
+  getFileMaybe files name
 
-writeModules :: 
-  Module -> ModuleMap -> TransactionID -> IO ()
+getFileMaybe :: RequestFiles -> String -> Maybe Module
+getFileMaybe files = last . (Nothing :) . map (Just . snd) . getFiles files 
+
+getFiles :: RequestFiles -> String -> [(String, Module)]
+getFiles files name =
+  [
+    (C8.unpack fileName, LC8.toStrict fileContent) 
+      | (name', FileInfo{..}) <- files, name' == C8.pack name
+  ]
+
+writeModules :: Module -> ModuleMap -> TransactionID -> IO ()
 writeModules mainFile modules txID = do
   let
-    txIDName = "TX" ++ show txID
-    txDir = "Blockchain" </> "Fae" </> "Transactions"
-    thisTXDir = txDir </> txIDName
-    thisTXPrivate = thisTXDir </> "private"
+    thisTXDir = foldr (</>) "" $ mkTXPathParts txID
+    thisTXPrivate = mkTXPrivatePath txID
     writeModule fileName fileContents = do
       C8.writeFile (thisTXDir </> fileName) fileContents
       C8.writeFile (thisTXPrivate </> fileName) $ privateModule txID fileName
   createDirectoryIfMissing True thisTXPrivate
-  C8.writeFile (txDir </> txIDName <.> "hs") mainFile
+  C8.writeFile (thisTXDir <.> "hs") mainFile
   sequence_ $ Map.mapWithKey writeModule modules
 
 privateModule :: TransactionID -> String -> Module
-privateModule txID fileName = C8.pack $
-  "module " ++ moduleName ++ "(module " ++ realModuleName ++ ") where\n\n" ++
-  "import " ++ realModuleName ++ "\n" 
+privateModule txID fileName = moduleHeader moduleName (Just exports) realModuleName
   where
     moduleName = takeBaseName fileName
-    realModuleName = txModuleName txID ++ "." ++ moduleName
+    exports = ["module " ++ realModuleName]
+    realModuleName = qualify txID moduleName
 
 addHeader :: TransactionID -> Module -> Module
-addHeader txID = C8.append $ C8.pack $
-  "module " ++ txModuleName txID ++ " where\n\n" ++
-  "import Blockchain.Fae\n\n"
+addHeader txID = C8.append header where 
+  header = moduleHeader (mkTXModuleName txID) Nothing "Blockchain.Fae"
 
 fixHeader :: TransactionID -> String -> Module -> Module
-fixHeader txID fileName = replaceModuleNameWith $ 
-  txModuleName txID ++ "." ++ takeBaseName fileName
+fixHeader txID fileName = replaceModuleNameWith (qualify txID fileName)
+
+moduleHeader :: String -> Maybe [String] -> String -> C8.ByteString
+moduleHeader moduleName exportsM importModule = C8.pack $
+  "module " ++ moduleName ++
+  maybe " " (\exports -> " (" ++ intercalate "," exports ++ ") ") exportsM ++
+  "where\n\nimport " ++ importModule ++ "\n\n"
 
 replaceModuleNameWith :: String -> Module -> Module
 replaceModuleNameWith moduleName contents = 
@@ -83,6 +87,6 @@ replaceModuleNameWith moduleName contents =
     (pre, post0) = C8.breakSubstring "module" contents
     (_, post) = C8.breakSubstring "where" post0
  
-txModuleName :: TransactionID -> String
-txModuleName txID = "Blockchain.Fae.Transactions." ++ txGitTag txID
+qualify :: TransactionID -> String -> String
+qualify txID moduleName = mkTXModuleName txID ++ "." ++ moduleName
 

@@ -1,3 +1,5 @@
+import Common.ProtocolT (Salt)
+
 import Control.Monad.Reader
 import Control.Monad.Trans
 import Control.Lens hiding (view)
@@ -6,11 +8,16 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Serialize as S
 import Data.Maybe
+import Data.Serialize (Serialize)
+
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.Serialize as S
 
 import PostTX.Args
 import PostTX.Faeth
 import PostTX.Keys
-import PostTX.SpecParser
+import PostTX.ImportExport
+import PostTX.Parser
 import PostTX.Submit
 import PostTX.TXSpec
 import PostTX.View
@@ -25,23 +32,44 @@ main = do
   userHome <- getHomeDirectory
   faeHome <- fromMaybe (userHome </> "fae") <$> lookupEnv "FAE_HOME"
   createDirectoryIfMissing True faeHome
+  createDirectoryIfMissing True $ faeHome </> "txspecs"
   txDir <- getCurrentDirectory
   setCurrentDirectory faeHome
 
   args <- getArgs
   case parseArgs args of
     PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
-      txData <- withCurrentDirectory txDir $ buildTXData postArgTXName
-      if useFaeth 
-      then do
-        txSpec <- runReaderT (txDataToTXSpec txData) postArgFaeth
-        submitFaeth postArgHost faethValue faethTo txSpec
-      else do
-        txSpec <- txDataToTXSpec txData
-        submit postArgTXName postArgHost postArgFake postArgLazy postArgJSON txSpec
+      let buildTXSpec :: 
+            (MakesTXSpec m a) => 
+            (m (TXSpec a) -> IO (TXSpec a)) -> IO (TXSpec a)
+          buildTXSpec f = case postArgTXNameOrID of
+            Left txID ->
+              either (error $ "Bad transaction file: " ++ show txID) id .
+                S.decode <$> (C8.readFile $ "txspecs" </> show txID)
+            Right txName ->  do
+              txData <- withCurrentDirectory txDir $ buildTXData txName
+              txSpec <- f $ txDataToTXSpec txData
+              let txID = getTXID $ txMessage txSpec
+              C8.writeFile ("txspecs" </> show txID) $ S.encode txSpec
+              return txSpec
+
+          normalSubmit :: (Serialize a) => TXSpec a -> IO ()
+          normalSubmit = submit postArgHost postArgFake postArgLazy postArgJSON 
+      case (useFaeth, postArgFake) of
+        (True, False) -> do
+          txSpec <- buildTXSpec $ flip runReaderT postArgFaeth
+          submitFaeth postArgHost faethValue faethTo txSpec
+        (True, True) -> do
+          txSpec <- buildTXSpec $ flip runReaderT postArgFaeth
+          normalSubmit @Salt txSpec
+        (False, _) -> do
+          txSpec <- buildTXSpec id
+          normalSubmit @String txSpec
     OngoingFaethArgs{..} -> 
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
+    ImportExportArgs{..} -> 
+      importExport exportTXID exportSCID exportHost importHost
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess
@@ -61,7 +89,7 @@ usage = do
       "Usage: (standalone) " ++ self ++ " args",
       "       (with stack) stack exec " ++ self ++ " -- args",
       "", 
-      "where args = (tx name | Fae tx ID | Eth tx ID) [host[:port]] [options]",
+      "where args = data [host[:port]] [options]",
       "where the available options are:",
       "  Help",
       "  --help           Print this usage",
@@ -71,37 +99,44 @@ usage = do
       "  --show-keys=[key1, key2] Show one or more keys",
       "",
       "  Regular Fae operation:",
-      "    with a (tx name)",
+      "    with data = (tx name)",
       "    --fake      Don't add the transaction to the history; only run it once",
       "    --lazy      Don't print transaction results; leave them unevaluated",
       "",
-      "    with a (Fae tx ID)",
+      "    with data = (Fae tx ID)",
       "    --view      Display the results of a previously submitted transaction",
+      "    --resend    Post a previous, signed transaction to a new host",
       "",
       "    with a (tx name | Fae tx ID)",
       "    --json      Format the output of a transaction in JSON",
       "",
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",
+      "                With --fake, connects to faeServer rather than Parity",
       "                Also implied by any of the following options",
       "",
-      "    with a (tx name)",
-      "    --faeth-fee number            Set the required ether fee to run this", 
+      "    with data = (tx name)",
+      "    --faeth-fee=number            Set the required ether fee to run this", 
       "                                  Faeth transaction in Fae",
-      "    --faeth-recipient address     Set the required Ethereum 'to' address",
+      "    --faeth-recipient=address     Set the required Ethereum 'to' address",
       "                                  to run this Faeth transaction in Fae",
       "",
-      "    with a (Eth tx ID)",
-      "    --faeth-add-signature name    Sign the Fae portion of an existing", 
+      "    with data = (Eth tx ID)",
+      "    --faeth-add-signature=name    Sign the Fae portion of an existing", 
       "                                  Faeth transaction as the given identity",
       "",
       "    with either",
-      "    --faeth-eth-value number      Set the ether value sent with a Faeth", 
+      "    --faeth-eth-value=number      Set the ether value sent with a Faeth", 
       "                                  transaction",
-      "    --faeth-eth-to address        Set the Ethereum 'to' address for a", 
+      "    --faeth-eth-to=address        Set the Ethereum 'to' address for a", 
       "                                  Faeth transaction",
       "    --faeth-eth-argument          Set the input that the Ethereum contract",
       "                                  will see, i.e. the contract argument",
+      "",
+      "  Import/Export operation:" ++
+      "    with data = (Fae tx ID):(Fae short contract ID)",
+      "    --import-host=host[:port]     Set host to send import data",
+      "    --export-host=host[:port]     Set host to request export data",
       "",
       "Recognized environment variables:",
       "  FAE_HOME      Directory where keys are stored",

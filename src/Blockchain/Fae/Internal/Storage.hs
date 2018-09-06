@@ -12,14 +12,21 @@ This module provides types and associated functions for accessing the storage of
 module Blockchain.Fae.Internal.Storage where
 
 import Blockchain.Fae.Internal.Contract
+import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
+import Control.Monad.State
+import Control.Monad.Trans
+
+import Data.ByteString (ByteString)
 import Data.IntMap (IntMap)
 import Data.Map (Map)
+import Data.Semigroup
+import Data.Typeable
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
@@ -28,8 +35,29 @@ import GHC.Generics (Generic)
 
 -- * Types
 
--- | 'StorageT' is just an association between transactions and what they did.
-newtype Storage = Storage { getStorage :: Map TransactionID TransactionEntry }
+-- | 'Storage' records the complete effects of running each transaction.
+-- It also holds any contract return values that have been imported; no
+-- attempt is made to validate them against the actual return values, and
+-- it is expected that users come to some agreement on their correctness
+-- before sharing them.
+data Storage = 
+  Storage 
+  { 
+    getStorage :: Map TransactionID TransactionEntry,
+    contractTypes :: Types,
+    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap)
+  }
+
+-- | A general storage transformer; used for running transactions in IO.
+newtype FaeStorageT m a = FaeStorageT { getFaeStorageT :: StateT Storage m a }
+  deriving 
+    (
+      Functor, Applicative, Monad, 
+      MonadThrow, MonadCatch, MonadMask, MonadIO
+    )
+-- | The version used for running pure transactions
+newtype FaeStorage a = FaeStorage { getFaeStorage :: State Storage a }
+  deriving (Functor, Applicative, Monad)
 
 -- | Each transaction can produce outputs in two different ways (cf.
 -- 'ContractID'), has an associated "signer" public key, and a result.
@@ -58,17 +86,18 @@ data Result = forall a. (Show a) => Result a
 -- | Inputs are identified by 'ShortContractID's so that 'ContractIDs' of
 -- the 'InputOutput' variant can be flat, rather than nested potentially
 -- indefinitely.
-type InputOutputs = Map ShortContractID InputOutputVersions
+type InputOutputs = Map ShortContractID InputResults
 -- | We save the versions map, with the actual values scrubbed, so that it
 -- can be displayed to learn the actual version IDs.
-data InputOutputVersions =
-  InputOutputVersions
+data InputResults =
+  InputResults
   {
     iRealID :: ContractID,
-    iOutputs :: Outputs,
-    iVersions :: VersionRepMap
-  }
-  deriving (Generic)
+    iResult :: !ReturnValue,
+    iExportedResult :: ByteString,
+    iVersions :: VersionRepMap,
+    iOutputsM :: Maybe Outputs
+  } deriving (Generic)
 -- | Outputs are ordered by creation.  However, contracts can be deleted,
 -- and deletion must preserve the original ordering index of the remaining
 -- contracts, so it's not enough to just store them in a sequence.  In case
@@ -79,94 +108,51 @@ data InputOutputVersions =
 data Outputs = 
   Outputs
   {
-    outputMap :: IntMap (AbstractGlobalContract, Int),
+    outputMap :: IntMap (AbstractGlobalContract, Int), 
     outputCount :: Int
   }
+
+-- | Convenient abbreviation
+type Types = Map ContractID TypeRep
+
+-- | Not only convenient, but also important for ensuring that the three
+-- different source trees using this type all have the same version of it.
+-- Since this type is exchanged in serialized form between different
+-- processes, type checking cannot verify it at compile time.
+type ExportData = (ContractID, [String], String, ByteString)
 
 -- * Template Haskell
 
 makeLenses ''TransactionEntry
-makeLenses ''InputOutputVersions
+makeLenses ''InputResults
 makeLenses ''Outputs
 makeLenses ''Storage
 
 {- Instances -}
 
--- | For convenience, so we don't have to pattern-match elsewhere.
-instance Show Result where
-  show (Result x) = show x
+-- | Concatenates two output lists, shifting the second one by the full
+-- count of the first one.
+instance Semigroup Outputs where
+  (<>) Outputs{outputMap = os1, outputCount = n1} 
+       Outputs{outputMap = os2, outputCount = n2}
+     = Outputs
+       {
+         outputMap = os1 <> os2',
+         -- Verbose, but uses (<>) to emphasize the fact that we are
+         -- building a 'Semigroup' instance.
+         outputCount = getSum $ Sum n1 <> Sum n2
+       }
+     where os2' = IntMap.mapKeys (+ n1) os2
 
--- | For the 'At' instance
-type instance Index Storage = ContractID
--- | For the 'At' instance
-type instance IxValue Storage = AbstractGlobalContract
--- | For the 'At' instance
-instance Ixed Storage
--- | We define this instance /in addition to/ the natural 'TransactionID'
--- indexing of a 'StorageT' so that we can look up contracts by ID, which
--- requires descending to various levels into the maps.
-instance At Storage where
-  at cID@((_ :# _) :# _) = throw $ InvalidContractID cID
-  at (cID :# n) = nonceAt cID . checkNonce cID (Just n)
-  at cID = nonceAt cID . checkNonce cID Nothing
-
--- * Functions
-
--- | Like 'at', but retaining the nonce
-nonceAt :: ContractID -> Lens' Storage (Maybe (AbstractGlobalContract, Int))
-nonceAt cID@(TransactionOutput txID i) =
-  _getStorage .
-  at txID .
-  defaultLens (throw $ BadTransactionID txID) .
-  _outputs .
-  _outputMap .
-  at i
-nonceAt cID@(InputOutput txID sID i) = 
-  _getStorage .
-  at txID .
-  defaultLens (throw $ BadTransactionID txID) .
-  _inputOutputs .
-  at sID .
-  defaultLens (throw $ BadInputID txID sID) .
-  _iOutputs .
-  _outputMap .
-  at i
-nonceAt cID = throw $ InvalidNonceAt cID
-
--- | Enforces nonce-correctness when it is required
-checkNonce :: 
-  ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
-checkNonce _ Nothing = lens (fmap fst) nonceSetter
-checkNonce cID (Just n) = lens (fmap $ \(x, m) -> f m x) checkNonceSetter where
-  checkNonceSetter xM@(Just (_, m)) yM = f m $ nonceSetter xM yM
-  checkNonceSetter Nothing yM = nonceSetter Nothing yM
-  f :: Int -> b -> b
-  f m x = if m == n then x else throw $ BadNonce cID n m
-
--- | Updating a contract entry nonce-correctly
-nonceSetter :: Maybe (a, Int) -> Maybe a -> Maybe (a, Int)
-nonceSetter (Just (x, m)) (Just y) = Just (y, m + 1)
-nonceSetter Nothing (Just y) = Just (y, 0)
-nonceSetter _ _ = Nothing
-
--- | Just an 'IntMap' constructor, indexing consecutively from 0.
-listToOutputs :: OutputsList -> Outputs
-listToOutputs l = 
-  Outputs
-  {
-    outputMap = oMap, 
-    outputCount = IntMap.size oMap
-  }
-  where oMap = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
-
--- | Like the name says.
-emptyOutputs :: Outputs
-emptyOutputs =
-  Outputs
-  {
-    outputMap = IntMap.empty,
-    outputCount = 0
-  }
+-- | -
+instance Monoid Outputs where
+  mempty = 
+    Outputs
+    {
+      outputMap = IntMap.empty,
+      outputCount = 0
+    }
+  mappend = (<>)
 
 -- | Unions the outputs and the versions of the two arguments.  The failure
 -- mode is when the arguments have a different 'iRealID', in which case we
@@ -177,30 +163,157 @@ emptyOutputs =
 -- since to do so would require manufacturing a hash collision for the
 -- short IDs.  If that happens, the later contract call is /definitely/
 -- malicious, and so it's okay to mishandle it.
-combineIOV :: 
-  InputOutputVersions -> InputOutputVersions -> InputOutputVersions
-combineIOV
-  InputOutputVersions{iOutputs = os1, iVersions = VersionMap vs1}
-  InputOutputVersions{iOutputs = os2, iVersions = VersionMap vs2, ..}
-  = InputOutputVersions
-    {
-      -- 'combineO' shifts the second argument, which needs to be the new
-      -- map.      
-      iOutputs = combineO os2 os1, 
-      iVersions = VersionMap $ vs1 `Map.union` vs2,
-      ..
-    }
+instance Semigroup InputResults where
+  (<>) InputResults{iOutputsM = osM1, iVersions = VersionMap vs1, ..}
+       InputResults{iOutputsM = osM2, iVersions = VersionMap vs2}
+     = InputResults
+       {
+         -- @(<>)@ shifts the second argument, which needs to be the new map.      
+         iOutputsM = osM2 <> osM1, 
+         iVersions = VersionMap $ vs1 <> vs2,
+         ..
+       }
 
--- | Concatenates two output lists, shifting the second one by the full
--- count of the first one.
-combineO :: Outputs -> Outputs -> Outputs
-combineO 
-  Outputs{outputMap = os1, outputCount = n1} 
-  Outputs{outputMap = os2, outputCount = n2}
-  = Outputs
+-- | For convenience, so we don't have to pattern-match elsewhere.
+instance Show Result where
+  show (Result x) = show x
+
+-- | For the 'At' instance
+type instance Index Storage = ContractID
+-- | For the 'At' instance
+type instance IxValue Storage = 
+  Either (WithEscrows ReturnValue, VersionMap) AbstractGlobalContract
+-- | For the 'At' instance
+instance Ixed Storage
+-- | We define this instance /in addition to/ the natural 'TransactionID'
+-- indexing of a 'StorageT' so that we can look up contracts by ID, which
+-- requires descending to various levels into the maps.
+instance At Storage where
+  at cID@((_ :# _) :# _) = throw $ InvalidContractID cID
+  at (cID :# n) = valueWithNonce cID (Just n)
+  at cID = valueWithNonce cID Nothing
+
+-- * Functions
+
+-- | Just combines 'nonceAt,' 'checkNonce', and 'elseImportedValue'.
+valueWithNonce :: 
+  ContractID -> Maybe Int -> Lens' Storage (Maybe (IxValue Storage))
+valueWithNonce cID nM = lens getter setter where
+  cIDN = maybe cID (cID :#) nM
+  getter st = st ^. checkNonceAt cID nM . elseImportedValue st cIDN
+  setter st Nothing = st
+    & nonceAt cID .~ Nothing
+    & _importedValues . at cID .~ Nothing
+  setter st (Just (Right x)) = st & checkNonceAt cID nM ?~ x
+  setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
+
+checkNonceAt :: 
+  ContractID -> Maybe Int -> Lens' Storage (Maybe AbstractGlobalContract)
+checkNonceAt cID nM = nonceAt cID . checkNonce cID nM
+
+-- | Like 'at', but retaining the nonce
+nonceAt :: ContractID -> Lens' Storage (Maybe (AbstractGlobalContract, Int))
+nonceAt cID@(TransactionOutput txID i) =
+  txLens txID .
+  mLens
+  (
+    _outputs .
+    _outputMap .
+    at i
+  )
+nonceAt cID@(InputOutput txID sID i) = 
+  txInputLens txID sID .
+  mLens
+  (
+    _iOutputsM .
+    defaultLens (throw $ ContractOmitted txID sID) .
+    _outputMap .
+    at i
+  )
+nonceAt cID = throw $ InvalidNonceAt cID
+
+-- | Common activity: looking up an input call's results
+txInputLens :: 
+  TransactionID -> ShortContractID -> Lens' Storage (Maybe InputResults)
+txInputLens txID scID = txLens txID . mLens (_inputOutputs . at scID)
+
+-- | Common activity: looking up a transaction by ID
+txLens :: TransactionID -> Lens' Storage (Maybe TransactionEntry)
+txLens txID = _getStorage . at txID
+
+-- | For focusing on values 'at' an index (which may be absent).
+mLens :: (Monad m) => Lens' s (m a) -> Lens' (m s) (m a)
+mLens l = lens (>>= view l) (\ms ma -> set l ma <$> ms)
+
+-- | Enforces nonce-correctness when it is required
+checkNonce :: ContractID -> Maybe Int -> Lens' (Maybe (a, Int)) (Maybe a)
+checkNonce _ Nothing = lens (fmap fst) nonceSetter
+checkNonce cID (Just n) = lens (>>= uncurry (flip f)) checkNonceSetter where
+  checkNonceSetter xM@(Just (_, m)) yM = f m =<< nonceSetter xM yM
+  checkNonceSetter Nothing yM = nonceSetter Nothing yM
+  f :: Int -> b -> Maybe b
+  f m x = if m == n then Just x else Nothing
+
+-- | Updating a contract entry nonce-correctly
+nonceSetter :: Maybe (a, Int) -> Maybe a -> Maybe (a, Int)
+nonceSetter (Just (x, m)) (Just y) = Just (y, m + 1)
+nonceSetter Nothing (Just y) = Just (y, 0)
+nonceSetter _ _ = Nothing
+
+-- | If no contract was found at this ID, try to get an imported return
+-- value for it.
+elseImportedValue :: 
+  Storage -> ContractID -> 
+  Getter (Maybe AbstractGlobalContract) (Maybe (IxValue Storage))
+elseImportedValue st cID = to f where
+  f Nothing = Left <$> st ^. _importedValues . at cID
+  f x = Right <$> x
+
+-- | Just an 'IntMap' constructor, indexing consecutively from 0.
+listToOutputs :: 
+  (Int -> ContractID) -> OutputsList -> (Outputs, Types)
+listToOutputs mkCID outsTypes = (outputs, makeMap types) where
+  outputs = 
+    Outputs
     {
-      outputMap = os1 `IntMap.union` os2',
-      outputCount = n1 + n2
+      outputMap = oMap, 
+      outputCount = IntMap.size oMap
     }
-  where os2' = IntMap.mapKeys (+ n1) os2
+  oMap = makeIntMap outs
+  (types, outs) = unzip outsTypes
+  -- Ugh repetition
+  makeIntMap l = IntMap.fromList $ zip [0 ..] $ zip l (repeat 0) 
+  makeMap = Map.fromList . zip (map mkCID [0 ..])
+
+-- | Deserializes an exported value as the correct type and puts it in
+-- imported value storage for the future.  This is in `FaeStorage` and not
+-- `FaeStorageT` because the former is not an instance of the latter, and
+-- the interpreter benefits from having a monomorphic type.
+addImportedValue :: 
+  (Versionable a, HasEscrowIDs a, Exportable a) => 
+  State Escrows a -> ContractID -> FaeStorage ()
+addImportedValue valueImporter cID = FaeStorage $ do
+  unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
+  let (importedValue, Escrows{..}) = 
+        runState valueImporter (Escrows Map.empty nullDigest)
+      vMap = versionMap (lookupWithEscrows escrowMap) importedValue
+  _importedValues . at cID ?= 
+    (WithEscrows escrowMap (ReturnValue importedValue), vMap)
+
+getExportedValue :: 
+  (Monad m) =>
+  TransactionID -> ShortContractID -> 
+  FaeStorageT m ExportData
+getExportedValue txID scID = FaeStorageT $ do
+  InputResults{..} <- use $ txInputLens txID scID .
+    defaultLens (throw $ BadInputID txID scID)
+  nameType <- use $ _contractTypes . at (withoutNonce iRealID) . 
+    defaultLens (throw $ BadContractID iRealID)
+  let modNames = tyConModule <$> listTyCons nameType
+  return (iRealID, modNames, show nameType, iExportedResult)
+
+  where
+    listTyCons :: TypeRep -> [TyCon]
+    listTyCons rep = con : (reps >>= listTyCons) where
+      (con, reps) = splitTyConApp rep
 

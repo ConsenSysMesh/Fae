@@ -253,7 +253,9 @@ instance Serialize Salt
 
 -- | -
 instance Show Error where
-  show Error{..} = errMessage ++ maybe "" (\d -> "\n" ++ show d) errData
+  show Error{..} = 
+    "Error in JSON-RPC response: " ++
+    errMessage ++ maybe "" (\d -> "\n" ++ show d) errData
 
 -- | -
 instance Exception Error
@@ -427,7 +429,9 @@ liftWS f = liftProtocolT ask >>= liftIO . f
 -- | Opens a websocket connection with whatever handshake that protocol
 -- uses (handled by @websockets@, not by us) and initializes the ID counter
 -- to 0.
-runProtocolT :: (MonadIO m, Commutes IO (Reader WS.Connection) m) => String -> Int -> ProtocolT m () -> m ()
+runProtocolT :: 
+  (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
+  String -> Int -> ProtocolT m () -> m ()
 runProtocolT host port x = do
   liftIO $ putStrLn $
     "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"
@@ -451,7 +455,9 @@ sendProtocolT sendReqParams = do
 -- | Receives a JSON-RPC response over a websocket.
 receiveProtocolT :: (FromJSON a, MonadProtocol m) => Int -> m a
 receiveProtocolT reqID = do
-  Response{..} <- either error id . A.eitherDecode <$> liftWS WS.receiveData
+  Response{..} <- 
+    either (\e -> error $ "Couldn't decode JSON-RPC response: " ++ show e) id . 
+    A.eitherDecode <$> liftWS WS.receiveData
   return $
     if respReqID == reqID
     then either throw id respData
