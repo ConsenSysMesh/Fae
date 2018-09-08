@@ -31,16 +31,18 @@ import PostTX.TXSpec
     Inputs, Module, ModuleMap, Renames(..), TransactionID
   )
 
+import System.Environment
+import System.Exit
+
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Perm
 
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import System.Environment
-import System.Exit
-
 import Text.Read
+
+import Type.Reflection (typeRep, Typeable)
 
 -- | We don't use custom error types, but we do use IO because all the
 -- environment variable lookups have to occur in the middle of parsing.
@@ -196,12 +198,12 @@ headedList header p =
 
 -- | Reads a /single/ path component, absorbing the slash (thus, not the
 -- "basename").
-readPath :: (Read a) => SpecParser a
+readPath :: (Read a, Typeable a) => SpecParser a
 readPath = readEnd $ symbol "/"
 
 -- | Grabs text to the end of the line (but doesn't absorb the newline) and
 -- 'read's it.
-readWord :: (Read a) => SpecParser a
+readWord :: (Read a, Typeable a) => SpecParser a
 readWord = readEnd endl
 
 -- | Grabs text to the end of the line (but doesn't absorb the newline) and
@@ -217,8 +219,9 @@ literalEnd :: SpecParser end -> SpecParser String
 literalEnd end = resolveLine =<< someTill printChar (try $ lineBlank *> end)
 
 -- | To 'literalEnd' as 'readWord' is to 'literal'.
-readEnd :: (Read a) => SpecParser end -> SpecParser a
-readEnd end = either fail return . readEither =<< literalEnd end
+readEnd :: forall a end. (Read a, Typeable a) => SpecParser end -> SpecParser a
+readEnd end = (\s -> either (err s) return $ readEither s) =<< literalEnd end
+  where err s = error $ "Couldn't read " ++ s ++ " as type " ++ show (typeRep @a)
 
 -- | A lookahead newline, important since list items need to continue until
 -- a newline but not absorb it.
