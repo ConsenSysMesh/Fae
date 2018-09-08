@@ -51,7 +51,7 @@ data FinalizedPostTXArgs =
   ImportExportArgs
   {
     exportTXID :: TransactionID,
-    exportSCID :: ShortContractID,
+    exportIx :: Int,
     exportHost :: String,
     importHost :: String
   } |
@@ -186,15 +186,15 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     }
   | (exportHostM, importHostM) <- argImportExport,
     Just argData <- argDataM,
-    (exportTXIDS, ':' : exportSCIDS) <- break (== ':') argData =
+    (exportTXIDS, ':' : exportIxS) <- break (== ':') argData =
     ImportExportArgs
     {
       exportTXID = 
         fromMaybe (error $ "Couldn't parse transaction ID: " ++ exportTXIDS) $ 
         readMaybe exportTXIDS,
-      exportSCID = 
-        fromMaybe (error $ "Couldn't parse short contract ID: " ++ exportSCIDS) $ 
-        readMaybe exportSCIDS,
+      exportIx = 
+        fromMaybe (error $ "Couldn't parse input call index: " ++ exportIxS) $ 
+        readMaybe exportIxS,
       exportHost = justHost exportHostM,
       importHost = justHost importHostM
     }

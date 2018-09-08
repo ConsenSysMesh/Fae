@@ -19,6 +19,7 @@ module Blockchain.Fae.Internal.TXSummary (
     TransactionID
 ) where
 
+import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
@@ -37,8 +38,12 @@ import Control.Monad.State
 
 import qualified Data.IntMap as IntMap
 import qualified Data.Map as Map
+import qualified Data.Vector as Vector
+import Data.Vector (Vector)
 
+import Data.Foldable
 import Data.List
+import Data.Maybe
 
 import GHC.Generics hiding (to)
 
@@ -49,7 +54,7 @@ import Text.PrettyPrint.HughesPJClass
 -- a proto-ContractID.
 data OutputOf = 
   OutputOfTransaction TransactionID Outputs |
-  OutputOfContract TransactionID ShortContractID Outputs
+  OutputOfContract TransactionID Int Outputs
 
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
@@ -130,47 +135,43 @@ displayException doc =
 -- convenience of faeServer clients
 collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
-  TransactionEntry{..} <- use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  let 
-    transactionID = txID
-    txSSigners = Map.toList $ getSigners txSigners
-    txInputSCIDs = nub inputOrder
-    txResult = show result 
-    txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
-  txInputSummaries <- getInputSummary txID txInputSCIDs inputOutputs
+  TransactionEntry{..} <- 
+    use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
+  let transactionID = txID
+      txSSigners = Map.toList $ getSigners txSigners
+      txResult = show result 
+      txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
+  txInputSummaries <- toList <$> getInputSummary txID inputResults
   return $ TXSummary{..}
 
--- | Get the TXInputSummary for a gicen ShortContractID 
+-- | Get the TXInputSummary for a given ShortContractID 
 getInputSummary :: 
   (MonadState Storage m, MonadCatch m, MonadIO m) =>
   TransactionID -> 
-  [ShortContractID] -> 
-  Map.Map ShortContractID InputResults -> 
-  m [(TransactionID, TXInputSummary)]
-getInputSummary txID inputSCIDs inputMap = do
-    forM (nub inputSCIDs) $ \scID -> do
-      let 
-        input = Map.findWithDefault (throw $ BadInputID txID scID) scID inputMap
-        ~InputResults{..} = input
-        txInputVersions = 
-          over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
-        txInputOutputs = 
-          maybe 
-            (throw $ ContractOmitted txID scID) 
-            (getTXOutputs . OutputOfContract txID scID) 
-            iOutputsM
-      txInputNonce <- 
-        use $ nonceAt (withoutNonce iRealID) . to (fmap snd) . defaultLens (-1)
-      return (scID, TXInputSummary {..})
+  Vector InputResults -> 
+  m (Vector (ShortContractID, TXInputSummary))
+getInputSummary txID = Vector.imapM $ \ix ~InputResults{..} -> do
+  txInputNonce <- use $ 
+    outputAtID iRealID . 
+    uncertainA _outputNonce . 
+    defaultLens (-1) 
+  let txInputVersions = 
+        over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
+      txInputOutputs = 
+        maybe 
+          (throw $ ContractOmitted txID ix) 
+          (getTXOutputs . OutputOfContract txID ix) 
+          iOutputsM
+  return (txID, TXInputSummary {..})
 
--- | Gets the index of each output within faeStorage and the associated ShortContractID 
+-- | Gets the index of each output within faeStorage and the associated
+-- ShortContractID 
 getTXOutputs :: OutputOf -> [(Int, ShortContractID)]
-getTXOutputs outs = outputsToList $ outputCIDs outs
-  where
-    outputsToList = IntMap.toList . IntMap.map shorten
-    outputCIDs (OutputOfTransaction txID outputs) = 
-      makeOutputCIDs (TransactionOutput txID) outputs
-    outputCIDs (OutputOfContract txID scID outputs) =
-      makeOutputCIDs (InputOutput txID scID) outputs
-    makeOutputCIDs makeCID Outputs{..} = 
-      IntMap.mapWithKey (\i _ -> makeCID i) outputMap
+getTXOutputs = catMaybes . Vector.toList . outputCIDs where
+  outputCIDs (OutputOfTransaction txID outputs) = 
+    makeOutputCIDs (ContractID txID Body) outputs
+  outputCIDs (OutputOfContract txID ix outputs) =
+    makeOutputCIDs (ContractID txID $ InputCall ix) outputs
+  makeOutputCIDs makeCID = Vector.imap $ 
+    \ix -> fmap $ \Output{..} -> (ix, shorten $ makeCID ix $ Nonce outputNonce)
+

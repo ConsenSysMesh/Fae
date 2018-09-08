@@ -96,7 +96,7 @@ importExportApp sendTXExecData = \request respond -> do
       let valuePackage = getFile files "valuePackage"
           exportData = (importedCID, valueModules, valueType, valuePackage)
       in send signalVar $ \callerTID signalVar -> ImportValue{..}
-    (Nothing, Just (calledInTX, shortCID)) ->
+    (Nothing, Just (calledInTX, ixInTX)) ->
       send exportResultVar $ \callerTID exportResultVar -> ExportValue{..}
     (Nothing, Nothing) -> 
         error "Must specify either 'import' or 'export' parameter"

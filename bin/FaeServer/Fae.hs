@@ -76,7 +76,7 @@ runTXExecData View{..} = do
 
 runTXExecData ExportValue{..} = do
   void $ recallHistory parentM
-  exportResult <- lift $ lift $ getExportedValue calledInTX shortCID
+  exportResult <- lift $ lift $ getExportedValue calledInTX ixInTX
   ioAtomically $ putTMVar exportResultVar exportResult
 
 runTXExecData ImportValue{..} = do

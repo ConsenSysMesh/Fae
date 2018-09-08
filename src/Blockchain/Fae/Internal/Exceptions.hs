@@ -54,12 +54,12 @@ data VersionException =
 data StorageException =
   BadTransactionID TransactionID |
   BadContractID ContractID |
-  BadInputID TransactionID ShortContractID |
+  BadInputID TransactionID Int |
   BadNonce ContractID Int Int |
   InvalidNonceAt ContractID |
   ContractIDCollision ContractID ContractID ShortContractID |
   MismatchedContractIDs ContractID ContractID |
-  ContractOmitted TransactionID ShortContractID |
+  ContractOmitted TransactionID Int |
   CantImport ByteString TypeRep |
   ImportWithoutNonce ContractID
 
@@ -107,8 +107,8 @@ instance Show VersionException where
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
   show (BadContractID cID) = "Not a contract ID: " ++ show cID
-  show (BadInputID txID sID) = 
-    "No input contract with short ID " ++ show sID ++ 
+  show (BadInputID txID ix) = 
+    "No input contract with index " ++ show ix ++ 
     " for transaction " ++ show txID
   show (BadNonce cID bad good) = 
     "Contract " ++ show cID ++ " has nonce " ++ show good ++ "; got: " ++ show bad
@@ -119,8 +119,8 @@ instance Show StorageException where
   show (MismatchedContractIDs cID1 cID2) =
     "Attempted to combine contract outputs for contracts " ++ 
     show cID1 ++ " and " ++ show cID2 ++ " with different short contract IDs"
-  show (ContractOmitted txID scID) =
-    "Contract call " ++ show scID ++ 
+  show (ContractOmitted txID ix) =
+    "Contract call #" ++ show ix ++ 
     " in transaction " ++ show txID ++ 
     " was replaced with an imported return value."
   show (CantImport bs ty) =

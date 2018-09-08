@@ -111,14 +111,26 @@ data TXData =
     thisTXID :: TransactionID
   }
 
+-- ** Contract outputs
+
+-- | Stores the actual contract function, the type of its 'ContractName'
+-- for exporting purposes, and the "nonce", or number of successful contract
+-- calls.
+data Output =
+  Output
+  {
+    outputContract :: AbstractGlobalContract,
+    outputType :: TypeRep,
+    outputNonce :: Int
+  }
+  deriving (Generic)
+
 -- ** Internal contract monads
 
--- | Useful alias for a rather long term.
-type OutputsList = [(TypeRep, AbstractGlobalContract)]
 -- | Monad modifier; several of ours use escrows.
 type EscrowsT = StateT Escrows
 -- | The internal operational monad for Fae contracts.
-type FaeExternalM = ReaderT TXData (Writer OutputsList)
+type FaeExternalM = ReaderT TXData (Writer [Output])
 -- | The authoring monad for Fae contracts (when wrapped in 'Fae')
 type FaeContractM argType valType = 
   EscrowsT (SuspendT (WithEscrows argType) (WithEscrows valType) FaeExternalM)
@@ -226,8 +238,12 @@ class (Monad m) => MonadTX m where
 
 makeLenses ''Escrows
 makeLenses ''TXData
+makeLenses ''Output
 
 {- Instances -}
+
+-- | -
+instance NFData Output
 
 -- | -
 instance MonadTX FaeTX where
@@ -295,8 +311,11 @@ newContract ::
 newContract x = liftTX $ FaeTX $ do
   (_, nextID) <- forkNextID
   WithEscrows escrowMap _ <- takeEscrows x
-  let contractF = globalContract $ hideEscrows escrowMap nextID (theContract x)
-  tell [(typeRep $ Proxy @name, contractF)]
+  let outputContract = 
+        globalContract $ hideEscrows escrowMap nextID (theContract x)
+      outputType = typeRep $ Proxy @name
+      outputNonce = 0
+  tell [Output{..}]
 
 -- | Creates a new escrow endowed with a given list of valuables.
 newEscrow :: 
