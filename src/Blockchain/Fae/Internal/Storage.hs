@@ -98,7 +98,7 @@ data InputResults =
 -- | The elements are 'Maybe' because an output contract may be deleted,
 -- but the indexing of the others should not change, so we have to keep the
 -- full array.
-type Outputs = Vector (Maybe Output)
+type Outputs = Vector Output
 
 -- | Not only convenient, but also important for ensuring that the three
 -- different source trees using this type all have the same version of it.
@@ -159,7 +159,7 @@ outputAt ContractID{..} =
   uncertainA _getStorage .
   uncertainM1 (at parentTransaction) .
   txPartLens transactionPart .
-  joinUncertainty (uncertainM1 $ updateVectorAt creationIndex)
+  uncertainM2 (updateVectorAt creationIndex)
 
 txPartLens :: TransactionPart -> Lens' (Maybe TransactionEntry) (Maybe Outputs)
 txPartLens Body = uncertainA _outputs
@@ -179,15 +179,19 @@ updateVectorAt n = lens (Vector.!? n) setter where
 
 outputContractNonce :: 
   Nonce -> Lens' (Maybe Output) (Maybe AbstractGlobalContract) 
-outputContractNonce nonce = checkL . lens getter setter where
-  getter = fmap outputContract
-  setter mo mc = (_outputNonce +~ 1) <$> liftM2 (_outputContract .~) mc mo
-  checkL | Current <- nonce = id
-         | Nonce n <- nonce = guardNonce n
+outputContractNonce nonce = 
+  uncertainM1 _outputData . 
+  checkL . 
+  lens getter setter
+  where
+    getter = fmap outputContract
+    setter odM = fmap (_outputNonce +~ 1) . liftA2 (flip (_outputContract .~)) odM 
+    checkL | Current <- nonce = id
+           | Nonce n <- nonce = guardNonce n
 
-guardNonce :: (MonadPlus m) => Int -> Lens' (m Output) (m Output)
+guardNonce :: (MonadPlus m) => Int -> Lens' (m OutputData) (m OutputData)
 guardNonce n = (. (>>= g)) where
-  g o@Output{..} = guard (n == outputNonce) >> return o
+  g od@OutputData{..} = guard (n == outputNonce) >> return od
 
 joinUncertainty :: 
   (Monad m) => Lens s (m (m t)) (m (m a)) (m b) -> Lens s (m t) (m a) (m b)
@@ -220,7 +224,7 @@ onlyJust err = lens getter setter where
   setter _ = fromMaybe $ throw err
 
 listToOutputs :: [Output] -> Outputs
-listToOutputs = Vector.fromList . map Just
+listToOutputs = Vector.fromList
 
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not
@@ -253,5 +257,4 @@ getExportedValue txID ix = FaeStorageT $ do
 
 outputAtID :: ContractID -> Lens' Storage (Maybe Output)
 outputAtID cID = onlyJust (BadContractID cID) . outputAt cID
-
 

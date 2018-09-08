@@ -164,8 +164,7 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
     Left (x, vMap) -> do
       iResult <- lift $ putEscrows x
       at cID .= Nothing -- Just to make sure
-      let 
-          (iVersions, vers') = makeOV cID vMap vers
+      let (iVersions, vers') = makeOV cID vMap vers
           iRealID = cID
           iOutputsM = Nothing
       iExportedResult <- lift $ exportReturnValue iResult

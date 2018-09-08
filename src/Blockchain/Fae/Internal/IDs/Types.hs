@@ -151,3 +151,4 @@ hasNonce ContractID{..} =
   case contractNonce of
     Current -> False
     _ -> True
+

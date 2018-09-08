@@ -119,8 +119,17 @@ data TXData =
 data Output =
   Output
   {
+    outputData :: Maybe OutputData,
+    -- | This is not @Maybe@ because even when the contract is spent, we
+    -- need its type for exporting.
+    outputType :: TypeRep 
+  }
+  deriving (Generic)
+
+data OutputData =
+  OutputData
+  {
     outputContract :: AbstractGlobalContract,
-    outputType :: TypeRep,
     outputNonce :: Int
   }
   deriving (Generic)
@@ -239,11 +248,15 @@ class (Monad m) => MonadTX m where
 makeLenses ''Escrows
 makeLenses ''TXData
 makeLenses ''Output
+makeLenses ''OutputData
 
 {- Instances -}
 
 -- | -
 instance NFData Output
+
+-- | -
+instance NFData OutputData
 
 -- | -
 instance MonadTX FaeTX where
@@ -315,6 +328,7 @@ newContract x = liftTX $ FaeTX $ do
         globalContract $ hideEscrows escrowMap nextID (theContract x)
       outputType = typeRep $ Proxy @name
       outputNonce = 0
+      outputData = Just OutputData{..}
   tell [Output{..}]
 
 -- | Creates a new escrow endowed with a given list of valuables.

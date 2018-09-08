@@ -103,6 +103,12 @@ instance ToJSON VersionID where
 instance FromJSON ShortContractID where
   parseJSON = withText "ShortContractID" $ \scid -> do
     either fail return $ readEither (T.unpack scid)
+
+instance ToJSON UnquotedString where
+  toJSON = toJSON . show
+
+instance FromJSON UnquotedString where
+  parseJSON = fmap UnquotedString . parseJSON
     
 encodeJSON :: (ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a

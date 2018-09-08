@@ -43,31 +43,25 @@ import Data.Vector (Vector)
 
 import Data.Foldable
 import Data.List
-import Data.Maybe
+import Data.Typeable
 
 import GHC.Generics hiding (to)
 
 import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
--- | Outputs decorated with what they were output from. Sort of
--- a proto-ContractID.
-data OutputOf = 
-  OutputOfTransaction TransactionID Outputs |
-  OutputOfContract TransactionID Int Outputs
-
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
   transactionID :: ShortContractID,
   txResult :: String,
-  txOutputs:: [(Int, ShortContractID)],
+  txOutputs:: Vector UnquotedString,
   txInputSummaries :: [(ShortContractID, TXInputSummary)],
   txSSigners :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
   txInputNonce :: Int,
-  txInputOutputs :: [(Int, ShortContractID)],
+  txInputOutputs :: Vector UnquotedString,
   txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
 
@@ -83,7 +77,8 @@ instance Pretty TXSummary where
    pPrint TXSummary{..} = prettyHeader header entry
     where header = labelHeader "Transaction" transactionID
           result = prettyPair ("result", displayException $ text txResult)
-          outputs = displayException $ prettyList "outputs" $ (_1 %~ show) <$> txOutputs
+          outputs = displayException $ 
+            prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
           txSSigners' = prettyList "signers" txSSigners
           inputs = vcat $ (\(scid, txInputSummary) -> 
             prettyHeader (labelHeader "input" scid) (displayException $ pPrint txInputSummary)) 
@@ -91,11 +86,14 @@ instance Pretty TXSummary where
           entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] 
-    where outputs = prettyList "outputs" $ (_1 %~ show) <$> txInputOutputs
-          versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
-            bimap show UnquotedString <$> txInputVersions
-          nonce = prettyPair ("nonce", text $ show txInputNonce)
+  pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] where 
+    outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
+    versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
+      bimap show UnquotedString <$> txInputVersions
+    nonce = prettyPair ("nonce", text $ show txInputNonce)
+
+toIxList :: Vector a -> [(Int, a)]
+toIxList = zip [0 ..] . toList
 
 -- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc
@@ -140,7 +138,7 @@ collectTransaction txID = do
   let transactionID = txID
       txSSigners = Map.toList $ getSigners txSigners
       txResult = show result 
-      txOutputs = getTXOutputs $ OutputOfTransaction txID outputs
+      txOutputs = showTypes outputs
   txInputSummaries <- toList <$> getInputSummary txID inputResults
   return $ TXSummary{..}
 
@@ -151,27 +149,28 @@ getInputSummary ::
   Vector InputResults -> 
   m (Vector (ShortContractID, TXInputSummary))
 getInputSummary txID = Vector.imapM $ \ix ~InputResults{..} -> do
-  txInputNonce <- use $ 
-    outputAtID iRealID . 
-    uncertainA _outputNonce . 
-    defaultLens (-1) 
+  -- If the 'iRealID' doesn't point to anything, we should be looking at an
+  -- imported return value, so we can get the nonce from the ID itself.  If
+  -- that fails, we have a bug.  Otherwise, we can't necessarily get the
+  -- nonce from the ID, so we look it up in the entry (which we now know to
+  -- exist).
+  let altNonce Nothing
+        | Nonce n <- contractNonce iRealID = n
+        | otherwise = throw $ BadContractID iRealID
+      altNonce (Just o) = o ^. 
+        _outputData . 
+        uncertainA _outputNonce . 
+        defaultLens (-1) 
+  txInputNonce <- use $ outputAtID iRealID . to altNonce
   let txInputVersions = 
         over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
       txInputOutputs = 
         maybe 
           (throw $ ContractOmitted txID ix) 
-          (getTXOutputs . OutputOfContract txID ix) 
+          showTypes 
           iOutputsM
   return (txID, TXInputSummary {..})
 
--- | Gets the index of each output within faeStorage and the associated
--- ShortContractID 
-getTXOutputs :: OutputOf -> [(Int, ShortContractID)]
-getTXOutputs = catMaybes . Vector.toList . outputCIDs where
-  outputCIDs (OutputOfTransaction txID outputs) = 
-    makeOutputCIDs (ContractID txID Body) outputs
-  outputCIDs (OutputOfContract txID ix outputs) =
-    makeOutputCIDs (ContractID txID $ InputCall ix) outputs
-  makeOutputCIDs makeCID = Vector.imap $ 
-    \ix -> fmap $ \Output{..} -> (ix, shorten $ makeCID ix $ Nonce outputNonce)
+showTypes :: Outputs -> Vector UnquotedString
+showTypes = fmap $ UnquotedString . show . outputType
 
