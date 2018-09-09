@@ -90,9 +90,6 @@ instance FromJSON PublicKey where
 instance ToJSON PublicKey where
   toJSON = toJSON . T.pack . show
 
-instance ToJSON ShortContractID where
-  toJSON = toJSON . T.pack . show
-
 instance FromJSON VersionID where
   parseJSON = withText "VersionID" $ \vID -> do
     either fail return $ readEither (T.unpack vID)
@@ -100,9 +97,19 @@ instance FromJSON VersionID where
 instance ToJSON VersionID where
   toJSON = toJSON . T.pack . show
 
-instance FromJSON ShortContractID where
-  parseJSON = withText "ShortContractID" $ \scid -> do
-    either fail return $ readEither (T.unpack scid)
+instance ToJSON ContractID where
+  toJSON = toJSON . show
+
+instance FromJSON ContractID where
+  parseJSON = withText "ContractID" $ \cID -> do
+    either fail return $ readEither (T.unpack cID)
+
+instance ToJSON Digest where
+  toJSON = toJSON . show
+
+instance FromJSON Digest where
+  parseJSON = withText "Digest" $ \dig -> do
+    either fail return $ readEither (T.unpack dig)
 
 instance ToJSON UnquotedString where
   toJSON = toJSON . show

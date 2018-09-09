@@ -40,7 +40,7 @@ data ContractID =
     creationIndex :: Int,
     contractNonce :: Nonce
   }
-  deriving (Eq, Ord, Generic)
+  deriving (Read, Show, Eq, Ord, Generic)
 
 -- | Contracts may be created either in the transaction body or in the body
 -- of a previous contract called by the transaction.
@@ -98,18 +98,6 @@ instance Serialize ContractID
 instance Digestible ContractID
 -- | -
 instance NFData ContractID
--- | The 'Read' instance, being a parser, belongs in 'PostTX.Parser', but
--- a 'Show' instance is valuable as part of the core library.  This prints
--- a contract ID as a "path" `txID/txPart/index/nonce`.
-instance Show ContractID where
-  show ContractID{..} = intercalate "/" $ 
-    [
-      show parentTransaction, 
-      show transactionPart, 
-      show creationIndex, 
-      show contractNonce
-    ]
-
 -- | -
 instance Serialize TransactionPart
 -- | -
@@ -154,4 +142,14 @@ hasNonce ContractID{..} =
   case contractNonce of
     Current -> False
     _ -> True
+
+-- | Prints a contract ID as a "path" `txID/txPart/index/nonce`.
+prettyContractID :: ContractID -> String
+prettyContractID ContractID{..} = intercalate "/" $ 
+  [
+    show parentTransaction, 
+    show transactionPart, 
+    show creationIndex, 
+    show contractNonce
+  ]
 

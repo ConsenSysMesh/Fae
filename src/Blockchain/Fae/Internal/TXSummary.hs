@@ -50,18 +50,21 @@ import GHC.Generics hiding (to)
 import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
+-- | Serializable representation of a contract type
+type CType = UnquotedString
+
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
   transactionID :: ShortContractID,
   txResult :: String,
-  txOutputs:: Vector UnquotedString,
-  txInputSummaries :: [(ShortContractID, TXInputSummary)],
+  txOutputs:: Vector CType,
+  txInputSummaries :: Vector (ContractID, TXInputSummary),
   txSSigners :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
   txInputNonce :: Int,
-  txInputOutputs :: Vector UnquotedString,
+  txInputOutputs :: Vector CType,
   txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
 
@@ -70,8 +73,8 @@ makeLenses ''TXSummary
 -- | Helpful shorthand; we don't use annotations.
 type VDoc = Doc
 
-instance Pretty ShortContractID where 
-  pPrint scid = text $ show scid
+instance Pretty ContractID where 
+  pPrint = text . prettyContractID
 
 instance Pretty TXSummary where
    pPrint TXSummary{..} = prettyHeader header entry
@@ -80,9 +83,11 @@ instance Pretty TXSummary where
           outputs = displayException $ 
             prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
           txSSigners' = prettyList "signers" txSSigners
-          inputs = vcat $ (\(scid, txInputSummary) -> 
-            prettyHeader (labelHeader "input" scid) (displayException $ pPrint txInputSummary)) 
-              <$> txInputSummaries
+          inputs = txInputSummaries & vcat . toList . Vector.imap
+            (\ix (cID, txInputSummary) -> 
+              prettyHeader 
+                (prettyPair ("input #" ++ show ix, pPrint cID))
+                (displayException $ pPrint txInputSummary))
           entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
@@ -131,7 +136,8 @@ displayException doc =
 
 -- | Get a JSON string which can be decoded to TXSummary for the
 -- convenience of faeServer clients
-collectTransaction :: (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
+collectTransaction :: 
+  (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
 collectTransaction txID = do
   TransactionEntry{..} <- 
     use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
@@ -139,14 +145,12 @@ collectTransaction txID = do
       txSSigners = Map.toList $ getSigners txSigners
       txResult = show result 
       txOutputs = showTypes outputs
-      txInputSummaries = toList $ getInputSummary txID inputResults
+      txInputSummaries = getInputSummary txID inputResults
   return $ TXSummary{..}
 
 -- | Get the TXInputSummary for a given ShortContractID 
 getInputSummary :: 
-  TransactionID -> 
-  Vector InputResults -> 
-  Vector (ShortContractID, TXInputSummary)
+  TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
 getInputSummary txID = Vector.imap $ \ix ~InputResults{..} -> 
   let txInputVersions = 
         over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
@@ -159,7 +163,7 @@ getInputSummary txID = Vector.imap $ \ix ~InputResults{..} ->
       txInputNonce
         | Nonce n <- nonce = n + 1
         | Current <- nonce = -1
-  in (txID, TXInputSummary{..})
+  in (either id id iRealID, TXInputSummary{..})
 
 showTypes :: Outputs -> Vector UnquotedString
 showTypes = fmap $ UnquotedString . show . outputType
