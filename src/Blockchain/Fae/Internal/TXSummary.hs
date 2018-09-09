@@ -139,29 +139,15 @@ collectTransaction txID = do
       txSSigners = Map.toList $ getSigners txSigners
       txResult = show result 
       txOutputs = showTypes outputs
-  txInputSummaries <- toList <$> getInputSummary txID inputResults
+      txInputSummaries = toList $ getInputSummary txID inputResults
   return $ TXSummary{..}
 
 -- | Get the TXInputSummary for a given ShortContractID 
 getInputSummary :: 
-  (MonadState Storage m, MonadCatch m, MonadIO m) =>
   TransactionID -> 
   Vector InputResults -> 
-  m (Vector (ShortContractID, TXInputSummary))
-getInputSummary txID = Vector.imapM $ \ix ~InputResults{..} -> do
-  -- If the 'iRealID' doesn't point to anything, we should be looking at an
-  -- imported return value, so we can get the nonce from the ID itself.  If
-  -- that fails, we have a bug.  Otherwise, we can't necessarily get the
-  -- nonce from the ID, so we look it up in the entry (which we now know to
-  -- exist).
-  let altNonce Nothing
-        | Nonce n <- contractNonce iRealID = n
-        | otherwise = throw $ BadContractID iRealID
-      altNonce (Just o) = o ^. 
-        _outputData . 
-        uncertainA _outputNonce . 
-        defaultLens (-1) 
-  txInputNonce <- use $ outputAtID iRealID . to altNonce
+  Vector (ShortContractID, TXInputSummary)
+getInputSummary txID = Vector.imap $ \ix ~InputResults{..} -> 
   let txInputVersions = 
         over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
       txInputOutputs = 
@@ -169,7 +155,11 @@ getInputSummary txID = Vector.imapM $ \ix ~InputResults{..} -> do
           (throw $ ContractOmitted txID ix) 
           showTypes 
           iOutputsM
-  return (txID, TXInputSummary {..})
+      nonce = either (const Current) contractNonce iRealID
+      txInputNonce
+        | Nonce n <- nonce = n + 1
+        | Current <- nonce = -1
+  in (txID, TXInputSummary{..})
 
 showTypes :: Outputs -> Vector UnquotedString
 showTypes = fmap $ UnquotedString . show . outputType

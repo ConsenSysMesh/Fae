@@ -29,6 +29,7 @@ import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
 
 import Data.Foldable
+import Data.Maybe
 import Data.Semigroup ((<>))
 import qualified Data.Vector as Vector
 
@@ -76,7 +77,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     defaultInputResult cID = 
       InputResults
       {
-        iRealID = cID,
+        iRealID = Left cID,
         iResult = ReturnValue (),
         iExportedResult = mempty,
         iVersions = emptyVersionMap,
@@ -147,25 +148,26 @@ nextInput ::
   Int -> (ContractID, String, Renames) -> 
   ([ReturnValue], VersionMap') -> TXStorageM ([ReturnValue], VersionMap')
 nextInput ix (cID, arg, Renames renames) (results, vers) = do
-  valE <- use $ at cID . defaultLens (throw $ BadContractID cID)
+  valEM <- fromMaybe (throw $ BadContractID cID) <$> gets (myView $ atCID cID)
 
-  (iR, vers') <- case valE of
-    Right fAbs -> do 
+  (iR, vers') <- case valEM of
+    Right OutputData{..} -> do 
+      let cID' = cID{contractNonce = Nonce outputNonce}
       ~(iR, vers', gAbsM) <- lift $ 
         local (_localHash .~ digest arg) . remapSigners renames $ 
-          runContract cID vers fAbs arg
+          runContract cID' vers outputContract arg
 
       -- We don't update the contract if it didn't return cleanly
       let successful = unsafeIsDefined iR
-      when successful $ at cID .= (Right <$> gAbsM)
+      when successful $ atCID cID' .= (Right <$> gAbsM)
 
       return (iR, vers')
 
-    Left (x, vMap) -> do
+    Left (x, vMap, updated) -> do
       iResult <- lift $ putEscrows x
-      at cID .= Nothing -- Just to make sure
+      atCID cID .= Nothing -- Just to make sure
       let (iVersions, vers') = makeOV cID vMap vers
-          iRealID = cID
+          iRealID = (if updated then Right else Left) cID
           iOutputsM = Nothing
       iExportedResult <- lift $ exportReturnValue iResult
       return (InputResults{..}, vers')
@@ -176,7 +178,8 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
 
 -- | Executes the contract function, returning the result, the structured
 -- outputs, the new map of all currently defined versions, and the
--- continuation function.
+-- continuation function.  The 'ContractID' argument must have a 'Nonce
+-- Int' and not a 'Current' nonce.
 runContract ::
   ContractID ->
   VersionMap' ->
@@ -190,8 +193,9 @@ runContract cID vers fAbs arg = do
     -- We store this with the nonce (if given) so that if (and when) it is
     -- exported, the correct id-with-nonce can be retrieved.  Once the
     -- contract is called again, its current nonce is no longer the correct
-    -- one for this result.
-    iRealID = cID
+    -- one for this result.  The 'Either' syntax indicates whether the
+    -- contract was deleted or updated.
+    iRealID = maybe Left (const Right) gAbsM cID
     iOutputsM = Just $ listToOutputs outputsL
     ~(iVersions, vers') = makeOV cID vMap vers
   -- The actual result of the contract includes both 'result' and also

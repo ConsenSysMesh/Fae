@@ -46,7 +46,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry,
-    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap)
+    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap, Bool)
   }
 
 -- | A general storage transformer; used for running transactions in IO.
@@ -88,7 +88,9 @@ data Result = forall a. (Show a) => Result a
 data InputResults =
   InputResults
   {
-    iRealID :: ContractID,
+    -- | The 'Left' means the contract was deleted after this call; the
+    -- 'Right' means its nonce was incremented.
+    iRealID :: Either ContractID ContractID,
     iResult :: !ReturnValue,
     iExportedResult :: ByteString,
     iVersions :: VersionRepMap,
@@ -104,7 +106,9 @@ type Outputs = Vector Output
 -- different source trees using this type all have the same version of it.
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
-type ExportData = (ContractID, [String], String, ByteString)
+type ExportData = (Either ContractID ContractID, [String], String, ByteString)
+
+type AtCID = Either (WithEscrows ReturnValue, VersionMap, Bool)
 
 -- * Template Haskell
 
@@ -126,29 +130,25 @@ inputResultsAt txID ix =
   at txID .
   txInputLens ix
 
--- | For the 'At' instance
-type instance Index Storage = ContractID
--- | For the 'At' instance
-type instance IxValue Storage = 
-  Either (WithEscrows ReturnValue, VersionMap) AbstractGlobalContract
--- | For the 'At' instance
-instance Ixed Storage
--- | We define this instance /in addition to/ the natural 'TransactionID'
--- indexing of a 'StorageT' so that we can look up contracts by ID, which
--- requires descending to various levels into the maps.
-instance At Storage where
-  at cID = lens getter setter where
-    getter st = 
-      case st ^. outputAtNonce cID of
-        Nothing -> Left <$> st ^. _importedValues . at cID
-        x -> Right <$> x
-    setter st (Just (Right x)) = st & outputAtNonce cID ?~ x
-    setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
-    setter st Nothing = st
-      & outputAtNonce cID .~ Nothing
-      & _importedValues . at cID .~ Nothing
+atCID :: 
+  ContractID -> 
+  Lens Storage Storage 
+       (Maybe (AtCID OutputData))
+       (Maybe (AtCID AbstractGlobalContract))
+atCID cID = lens getter setter where
+  getter st = 
+    case myView (outputAtNonce cID) st of
+      Nothing -> Left <$> st ^. _importedValues . at cID
+      x -> Right <$> x
+  setter st (Just (Right x)) = st & outputAtNonce cID ?~ x
+  setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
+  setter st Nothing = st
+    & outputAtNonce cID .~ Nothing
+    & _importedValues . at cID .~ Nothing
 
-outputAtNonce :: ContractID -> Lens' Storage (Maybe AbstractGlobalContract)
+outputAtNonce :: 
+  ContractID -> 
+  Lens Storage Storage (Maybe OutputData) (Maybe AbstractGlobalContract)
 outputAtNonce cID = 
   onlyJust (BadContractID cID) . 
   outputAt cID . 
@@ -178,13 +178,17 @@ updateVectorAt n = lens (Vector.!? n) setter where
     | otherwise = Nothing
 
 outputContractNonce :: 
-  Nonce -> Lens' (Maybe Output) (Maybe AbstractGlobalContract) 
+  Nonce -> 
+  Lens (Maybe Output) 
+       (Maybe Output) 
+       (Maybe OutputData) 
+       (Maybe AbstractGlobalContract) 
 outputContractNonce nonce = 
   uncertainM1 _outputData . 
   checkL . 
   lens getter setter
   where
-    getter = fmap outputContract
+    getter = id
     setter odM = fmap (_outputNonce +~ 1) . liftA2 (flip (_outputContract .~)) odM 
     checkL | Current <- nonce = id
            | Nonce n <- nonce = guardNonce n
@@ -212,9 +216,9 @@ uncertainA l = lens getter setter where
   getter = fmap $ myView l
   setter = flip $ liftA2 (set l)
 
--- | I have no idea why, but the 'view' from "Control.Lens" causes the
--- "uncertain" family of functions not to typecheck, whereas this works
--- fine.
+-- | I have no idea why, but the 'view' (so also 'use') from "Control.Lens"
+-- causes various lens-using expressions not to typecheck, whereas this
+-- works fine.
 myView :: Lens s t a b -> s -> a
 myView l = getConst . l Const
 
@@ -232,21 +236,23 @@ listToOutputs = Vector.fromList
 -- the interpreter benefits from having a monomorphic type.
 addImportedValue :: 
   (Versionable a, HasEscrowIDs a, Exportable a) => 
-  State Escrows a -> ContractID -> FaeStorage ()
-addImportedValue valueImporter cID = FaeStorage $ do
+  State Escrows a -> Either ContractID ContractID -> FaeStorage ()
+addImportedValue valueImporter cIDE = FaeStorage $ do
+  let (cID, updated) = either (,False) (,True) cIDE
   unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
   let (importedValue, Escrows{..}) = 
         runState valueImporter (Escrows Map.empty nullDigest)
       vMap = versionMap (lookupWithEscrows escrowMap) importedValue
   _importedValues . at cID ?= 
-    (WithEscrows escrowMap (ReturnValue importedValue), vMap)
+    (WithEscrows escrowMap (ReturnValue importedValue), vMap, updated)
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = FaeStorageT $ do
   InputResults{..} <- use $ inputResultsAt txID ix .
     defaultLens (throw $ BadInputID txID ix)
-  Output{..} <- use $ outputAtID iRealID . 
-    defaultLens (throw $ BadContractID iRealID)
+  let realID = either id id iRealID
+  Output{..} <- use $ outputAtID realID . 
+    defaultLens (throw $ BadContractID realID)
   let modNames = tyConModule <$> listTyCons outputType
   return (iRealID, modNames, show outputType, iExportedResult)
 

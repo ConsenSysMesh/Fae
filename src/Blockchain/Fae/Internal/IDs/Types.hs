@@ -136,6 +136,9 @@ instance Show (EscrowID name) where
 
 makeLenses ''Signers
 makeLenses ''Renames
+makeLenses ''ContractID
+makeLenses ''TransactionPart
+makePrisms ''Nonce
 
 -- * Functions
 
