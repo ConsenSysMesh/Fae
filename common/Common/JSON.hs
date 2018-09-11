@@ -44,27 +44,11 @@ instance ToJSON TXInputSummary where
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
-    "transactionID" .= show transactionID,
+    "transactionID" .= transactionID,
     "txResult" .= wrapExceptions txResult,
     "txOutputs" .= wrapExceptions txOutputs,
     "txInputSummaries" .= txInputSummaries,
     "txSSigners" .= txSSigners ]
-
--- | If an exception is found then we tag the value as an exception.
--- By forcing evaluation of exceptions we prevent uncaught exceptions being thrown
--- and crashing faeServer.
-wrapExceptions :: forall a. (ToJSON a) => a -> Value
-wrapExceptions val = 
-  unsafePerformIO $ catchAll (evaluate $ force $ toJSON val)
-    (return . object . pure . ("exception",) . A.String . T.pack . show)
-
--- | If parsing fails then we look for the tagged exception.
-readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
-readJSONField fieldName obj = 
-  obj .: fieldName <|> (obj .: fieldName >>= exceptionValue) 
-
-exceptionValue :: Object -> Parser a
-exceptionValue x = throw . TXFieldException <$> x .: "exception"
 
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
@@ -119,3 +103,20 @@ instance FromJSON UnquotedString where
     
 encodeJSON :: (ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
+
+-- | If an exception is found then we tag the value as an exception.
+-- By forcing evaluation of exceptions we prevent uncaught exceptions being thrown
+-- and crashing faeServer.
+wrapExceptions :: forall a. (ToJSON a) => a -> Value
+wrapExceptions val = 
+  unsafePerformIO $ catchAll (evaluate $ force $ toJSON val)
+    (return . object . pure . ("exception",) . A.String . T.pack . show)
+
+-- | If parsing fails then we look for the tagged exception.
+readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
+readJSONField fieldName obj = 
+  obj .: fieldName <|> (obj .: fieldName >>= exceptionValue) 
+
+exceptionValue :: Object -> Parser a
+exceptionValue x = throw . TXFieldException <$> x .: "exception"
+

@@ -60,7 +60,9 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
     then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
     else do
       txSummary <- lift $ collectTransaction txID
-      return $ encodeJSON txSummary
+      -- Strict because I've seen a case where an exception is thrown so
+      -- late that it isn't caught by the app and a response isn't even sent.
+      return $! encodeJSON txSummary
   if fake
   then unless lazy $ liftIO gitClean 
   else do

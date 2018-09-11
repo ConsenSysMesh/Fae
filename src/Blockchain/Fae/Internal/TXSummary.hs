@@ -55,7 +55,7 @@ type CType = UnquotedString
 
 -- | Useful for Fae clients communicating with faeServer
 data TXSummary = TXSummary {
-  transactionID :: ShortContractID,
+  transactionID :: TransactionID,
   txResult :: String,
   txOutputs:: Vector CType,
   txInputSummaries :: Vector (ContractID, TXInputSummary),
@@ -70,25 +70,22 @@ data TXInputSummary = TXInputSummary {
 
 makeLenses ''TXSummary
 
--- | Helpful shorthand; we don't use annotations.
-type VDoc = Doc
-
 instance Pretty ContractID where 
   pPrint = text . prettyContractID
 
 instance Pretty TXSummary where
-   pPrint TXSummary{..} = prettyHeader header entry
-    where header = labelHeader "Transaction" transactionID
-          result = prettyPair ("result", displayException $ text txResult)
-          outputs = displayException $ 
-            prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
-          txSSigners' = prettyList "signers" txSSigners
-          inputs = txInputSummaries & vcat . toList . Vector.imap
-            (\ix (cID, txInputSummary) -> 
-              prettyHeader 
-                (prettyPair ("input #" ++ show ix, pPrint cID))
-                (displayException $ pPrint txInputSummary))
-          entry = vcat [ result, outputs, txSSigners', inputs ]
+   pPrint TXSummary{..} = prettyHeader header entry where 
+     header = labelHeader "Transaction" transactionID
+     result = prettyPair ("result", displayException $ text txResult)
+     outputs = displayException $ 
+       prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
+     txSSigners' = prettyList "signers" txSSigners
+     inputs = txInputSummaries & vcat . toList . Vector.imap
+       (\ix (cID, txInputSummary) -> 
+         prettyHeader 
+           (prettyPair ("input #" ++ show ix, pPrint cID))
+           (displayException $ pPrint txInputSummary))
+     entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] where 
@@ -96,6 +93,41 @@ instance Pretty TXInputSummary where
     versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
       bimap show UnquotedString <$> txInputVersions
     nonce = prettyPair ("nonce", text $ show txInputNonce)
+
+-- | Get a well-typed 'TXSummary' that can be communicated from the server
+-- to a user (i.e. @faeServer@ to @postTX@) as JSON.
+collectTransaction :: 
+  (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
+collectTransaction txID = do
+  TransactionEntry{..} <- 
+    use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
+  let transactionID = txID
+      txSSigners = Map.toList $ getSigners txSigners
+      txResult = show result 
+      txOutputs = showTypes outputs
+      txInputSummaries = getInputSummary txID inputResults
+  return $ TXSummary{..}
+
+-- | Get the 'TXInputSummary' for a given 'TransactionID' 
+getInputSummary :: 
+  TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
+getInputSummary txID = Vector.imap $ \ix ~InputResults{..} -> 
+  let txInputVersions = 
+        over (traverse . _2) (show . bearerType) $ 
+          Map.toList $ getVersionMap iVersions
+      txInputOutputs = 
+        maybe 
+          (throw $ ContractOmitted txID ix) 
+          showTypes 
+          iOutputsM
+      nonce = either (const Current) contractNonce iRealID
+      txInputNonce
+        | Nonce n <- nonce = n + 1
+        | Current <- nonce = -1
+  in (either id id iRealID, TXInputSummary{..})
+
+showTypes :: Outputs -> Vector UnquotedString
+showTypes = fmap $ UnquotedString . show . outputType
 
 toIxList :: Vector a -> [(Int, a)]
 toIxList = zip [0 ..] . toList
@@ -123,48 +155,14 @@ prettyPair (x, y) = text x <> colon <+> (text $ show y)
 
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
-showException :: SomeException -> VDoc
+showException :: SomeException -> Doc
 showException e = text "<exception>" <+> text (safeHead $ lines $ show $ UnquotedString $ show e) where
   safeHead [] = []
   safeHead (x : _) = x
 
 -- | Flushes out all exceptions present in the input, returning a formatted
 -- error message if one is found.
-displayException :: VDoc -> VDoc
+displayException :: Doc -> Doc
 displayException doc = 
   unsafePerformIO $ catchAll (evaluate $ force doc) (return . showException) 
-
--- | Get a JSON string which can be decoded to TXSummary for the
--- convenience of faeServer clients
-collectTransaction :: 
-  (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
-collectTransaction txID = do
-  TransactionEntry{..} <- 
-    use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
-  let transactionID = txID
-      txSSigners = Map.toList $ getSigners txSigners
-      txResult = show result 
-      txOutputs = showTypes outputs
-      txInputSummaries = getInputSummary txID inputResults
-  return $ TXSummary{..}
-
--- | Get the TXInputSummary for a given ShortContractID 
-getInputSummary :: 
-  TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
-getInputSummary txID = Vector.imap $ \ix ~InputResults{..} -> 
-  let txInputVersions = 
-        over (traverse . _2) show $ Map.toList $ getVersionMap iVersions
-      txInputOutputs = 
-        maybe 
-          (throw $ ContractOmitted txID ix) 
-          showTypes 
-          iOutputsM
-      nonce = either (const Current) contractNonce iRealID
-      txInputNonce
-        | Nonce n <- nonce = n + 1
-        | Current <- nonce = -1
-  in (either id id iRealID, TXInputSummary{..})
-
-showTypes :: Outputs -> Vector UnquotedString
-showTypes = fmap $ UnquotedString . show . outputType
 

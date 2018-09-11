@@ -91,9 +91,9 @@ data InputResults =
     -- | The 'Left' means the contract was deleted after this call; the
     -- 'Right' means its nonce was incremented.
     iRealID :: Either ContractID ContractID,
-    iResult :: !ReturnValue,
+    iResult :: ReturnValue,
     iExportedResult :: ByteString,
-    iVersions :: VersionRepMap,
+    iVersions :: VersionMap,
     iOutputsM :: Maybe Outputs
   } deriving (Generic)
 
@@ -107,8 +107,6 @@ type Outputs = Vector Output
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
 type ExportData = (Either ContractID ContractID, [String], String, ByteString)
-
-type AtCID = Either (WithEscrows ReturnValue, VersionMap, Bool)
 
 -- * Template Haskell
 
@@ -128,70 +126,75 @@ inputResultsAt :: TransactionID -> Int -> Lens' Storage (Maybe InputResults)
 inputResultsAt txID ix = 
   _getStorage . 
   at txID .
-  txInputLens ix
+  uncertain (txInputLens ix)
 
-atCID :: 
-  ContractID -> 
-  Lens Storage Storage 
-       (Maybe (AtCID OutputData))
-       (Maybe (AtCID AbstractGlobalContract))
-atCID cID = lens getter setter where
-  getter st = 
-    case myView (outputAtNonce cID) st of
-      Nothing -> Left <$> st ^. _importedValues . at cID
-      x -> Right <$> x
-  setter st (Just (Right x)) = st & outputAtNonce cID ?~ x
-  setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
-  setter st Nothing = st
-    & outputAtNonce cID .~ Nothing
-    & _importedValues . at cID .~ Nothing
+contractAtCID :: ContractID -> Lens' Storage (Maybe AbstractGlobalContract)
+contractAtCID cID = outputAt cID . uncertain _outputData . lens getter setter where
+  getter = fmap outputContract
+  setter = flip . liftA2 $ set _outputContract 
 
-outputAtNonce :: 
-  ContractID -> 
-  Lens Storage Storage (Maybe OutputData) (Maybe AbstractGlobalContract)
+-- | For the 'At' instance
+type instance Index Storage = ContractID
+-- | For the 'At' instance
+type instance IxValue Storage = 
+  Either (WithEscrows ReturnValue, VersionMap, Bool) OutputData
+-- | For the 'At' instance
+instance Ixed Storage
+-- | We define this instance /in addition to/ the natural 'TransactionID'
+-- indexing of a 'StorageT' so that we can look up contracts by ID, which
+-- requires descending through several levels of lookups, any of which may
+-- fail (in different ways).
+instance At Storage where
+  at cID = lens getter setter where
+    getter st = 
+      case st ^. outputAtNonce cID of
+        Nothing -> Left <$> st ^. _importedValues . at cID
+        x -> Right <$> x
+    setter st (Just (Right x)) = st & outputAtNonce cID ?~ x
+    setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
+    setter st Nothing = st
+      & outputAtNonce cID .~ Nothing
+      & _importedValues . at cID .~ Nothing
+
+outputAtNonce :: ContractID -> Lens' Storage (Maybe OutputData)
 outputAtNonce cID = 
-  onlyJust (BadContractID cID) . 
   outputAt cID . 
   outputContractNonce (contractNonce cID)
 
-outputAt :: ContractID -> Lens' (Maybe Storage) (Maybe Output)
-outputAt ContractID{..} =
-  uncertainA _getStorage .
-  uncertainM1 (at parentTransaction) .
-  txPartLens transactionPart .
-  uncertainM2 (updateVectorAt creationIndex)
+outputAt :: ContractID -> Lens' Storage (Maybe Output)
+outputAt cID@ContractID{..} =
+  _getStorage .
+  at parentTransaction .
+  uncertain (txPartLens transactionPart) .
+  uncertain (vectorAt creationIndex)
 
-txPartLens :: TransactionPart -> Lens' (Maybe TransactionEntry) (Maybe Outputs)
-txPartLens Body = uncertainA _outputs
-txPartLens (InputCall n) = txInputLens n . uncertainM1 _iOutputsM
+txPartLens :: TransactionPart -> Lens' TransactionEntry (Maybe Outputs)
+txPartLens p = 
+  case p of
+    Body -> _outputs . onlyJust DeletedEntry
+    InputCall n -> 
+      txInputLens n . 
+      uncertain _iOutputsM
 
-txInputLens :: Int -> Lens' (Maybe TransactionEntry) (Maybe InputResults)
-txInputLens n =
-  uncertainA _inputResults . 
-  uncertainM2 (updateVectorAt n)
+txInputLens :: Int -> Lens' TransactionEntry (Maybe InputResults)
+txInputLens n = _inputResults . vectorAt n
 
-updateVectorAt :: Int -> Lens (Vector a) (Maybe (Vector a)) (Maybe a) a
-updateVectorAt n = lens (Vector.!? n) setter where
-  setter v y 
-    | 0 <= n && n < Vector.length v = 
-      Just $ Vector.modify (\w -> Vector.unsafeWrite w n y) v
-    | otherwise = Nothing
+vectorAt :: Int -> Lens' (Vector a) (Maybe a)
+vectorAt n = 
+  onlyJust DeletedEntry .
+  lens ((=<<) (Vector.!? n)) (\mv my -> mv >>= (my >>=) . setter)
+ where
+    setter v y
+      | 0 <= n && n < Vector.length v = 
+        Just $ Vector.modify (\w -> Vector.unsafeWrite w n y) v
+      | otherwise = Nothing
 
-outputContractNonce :: 
-  Nonce -> 
-  Lens (Maybe Output) 
-       (Maybe Output) 
-       (Maybe OutputData) 
-       (Maybe AbstractGlobalContract) 
-outputContractNonce nonce = 
-  uncertainM1 _outputData . 
-  checkL . 
-  lens getter setter
-  where
-    getter = id
-    setter odM = fmap (_outputNonce +~ 1) . liftA2 (flip (_outputContract .~)) odM 
-    checkL | Current <- nonce = id
-           | Nonce n <- nonce = guardNonce n
+outputContractNonce :: Nonce -> Lens' (Maybe Output) (Maybe OutputData) 
+outputContractNonce nonce = lens getter setter . checkL where
+  getter = (>>= outputData)
+  setter mo mod = fmap (_outputData .~ ((_outputNonce +~ 1) <$> mod)) mo
+  checkL | Current <- nonce = id
+         | Nonce n <- nonce = guardNonce n
 
 guardNonce :: (MonadPlus m) => Int -> Lens' (m OutputData) (m OutputData)
 guardNonce n = (. (>>= g)) where
@@ -201,26 +204,10 @@ joinUncertainty ::
   (Monad m) => Lens s (m (m t)) (m (m a)) (m b) -> Lens s (m t) (m a) (m b)
 joinUncertainty = ((fmap join .) .) . (. (. join))
 
-uncertainM1 :: (Monad m) => Lens s t (m a) (m b) -> Lens (m s) (m t) (m a) (m b)
-uncertainM1 l = lens getter setter where
-  getter = (>>= myView l)
+uncertain :: (Monad m) => Lens' s (m a) -> Lens' (m s) (m a)
+uncertain l = lens getter setter where
+  getter = (>>= view l)
   setter ms my = (l .~ my) <$> ms
-
-uncertainM2 :: (Monad m) => Lens s (m t) (m a) b -> Lens (m s) (m t) (m a) (m b)
-uncertainM2 l = lens getter setter where
-  getter = (>>= myView l)
-  setter ms my = my >>= (ms >>=) . set l
-
-uncertainA :: (Applicative m) => Lens s t a b -> Lens (m s) (m t) (m a) (m b)
-uncertainA l = lens getter setter where
-  getter = fmap $ myView l
-  setter = flip $ liftA2 (set l)
-
--- | I have no idea why, but the 'view' (so also 'use') from "Control.Lens"
--- causes various lens-using expressions not to typecheck, whereas this
--- works fine.
-myView :: Lens s t a b -> s -> a
-myView l = getConst . l Const
 
 onlyJust :: (Exception e) => e -> Lens' a (Maybe a)
 onlyJust err = lens getter setter where
@@ -251,7 +238,7 @@ getExportedValue txID ix = FaeStorageT $ do
   InputResults{..} <- use $ inputResultsAt txID ix .
     defaultLens (throw $ BadInputID txID ix)
   let realID = either id id iRealID
-  Output{..} <- use $ outputAtID realID . 
+  Output{..} <- use $ outputAt realID . 
     defaultLens (throw $ BadContractID realID)
   let modNames = tyConModule <$> listTyCons outputType
   return (iRealID, modNames, show outputType, iExportedResult)
@@ -260,7 +247,4 @@ getExportedValue txID ix = FaeStorageT $ do
     listTyCons :: TypeRep -> [TyCon]
     listTyCons rep = con : (reps >>= listTyCons) where
       (con, reps) = splitTyConApp rep
-
-outputAtID :: ContractID -> Lens' Storage (Maybe Output)
-outputAtID cID = onlyJust (BadContractID cID) . outputAt cID
 

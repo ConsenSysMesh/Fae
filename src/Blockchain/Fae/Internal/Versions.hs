@@ -28,6 +28,10 @@ import Data.Maybe
 import Data.Proxy
 import Data.Typeable
 
+import Data.Vector (Vector)
+import qualified Data.Vector as Vector
+import qualified Data.Vector.Mutable as Vector (write)
+
 import qualified GHC.Generics as Gen (from, to)
 import GHC.Generics hiding (from, to)
 
@@ -37,24 +41,22 @@ import Numeric.Natural
 
 -- * Types
 
--- | Generalization of the two kinds of version maps.  The difference is
--- that one only retains type information.
-newtype VersionMapT a = VersionMap { getVersionMap :: Map VersionID a }
 -- | The inverse to the map of subobjects to their versions.
-type VersionMap = VersionMapT BearsValue
--- | The one that only retains the types.
-type VersionRepMap = VersionMapT TypeRep
+newtype VersionMap = VersionMap { getVersionMap :: Map VersionID BearsValue }
 -- | Versions by contract ID
-newtype VersionMap' = VersionMap' (Map ShortContractID VersionMap)
+newtype InputVersionMap = 
+  InputVersionMap { getInputVersionMap :: Vector VersionMap }
 -- | For marking a contract input to be passed by version ID, or a contract
 -- output to be considered a single coherent unit.
 data Versioned a = 
   Versioned { getVersioned :: a } |
-  VersionedID ShortContractID VersionID 
+  -- | The 'Int' is the input index of the contract that produced the
+  -- 'VersionID'.
+  VersionedID Int VersionID 
   deriving (Generic)
 
 -- | Purely to have a nice syntax for entering VersionedIDs.
-data ReadVersioned = ShortContractID ::: VersionID deriving (Read)
+data ReadVersioned = Int ::: VersionID deriving (Read)
 
 -- * Type classes
 
@@ -73,7 +75,7 @@ class (HasEscrowIDs a, Typeable a) => Versionable a where
 
   -- | Sort of the inverse of 'versionMap', this resolves all 'VersionedID'
   -- variants of 'Versioned' to 'Versioned' variants.
-  mapVersions :: VersionMap' -> a -> a
+  mapVersions :: InputVersionMap -> a -> a
 
   -- | Returns the version and the map of all strictly sub-versions.
   versions :: (EntryID -> VersionID) -> a -> (VersionID, VersionMap)
@@ -84,14 +86,14 @@ class GVersionable f where
   -- | Like 'versions'
   gVersions :: (EntryID -> VersionID) -> f p -> (VersionID, VersionMap)
   -- | Like 'mapVersions'
-  gMapVersions :: VersionMap' -> f p -> (f p)
+  gMapVersions :: InputVersionMap -> f p -> (f p)
 
 -- | For traversing the records of a product type.
 class GRecords f where
   -- | The 'VersionMap' is of all the records in self, not including self.
   gRecords :: (EntryID -> VersionID) -> f p -> State Int VersionMap
   -- | Like 'mapVersions'
-  gRMapVersions :: VersionMap' -> f p -> (f p)
+  gRMapVersions :: InputVersionMap -> f p -> (f p)
 
 -- | For applying a conditional to a type-level bool
 class IfK (b :: Bool) where
@@ -123,11 +125,10 @@ instance Traversable Versioned where
   traverse _ (VersionedID scID v) = pure $ VersionedID scID v
 
 -- | Read 'Versioned' values as a 'ReadVersioned', i.e. of the form
--- @ShortContractID ::: Digest@.  Regardless of whether 'a' has a 'Read'
--- instance, @Versioned a@ always does, though the version may fail to be
--- resolved.
+-- @Int ::: Digest@.  Regardless of whether 'a' has a 'Read' instance,
+-- @Versioned a@ always does, though the version may fail to be resolved.
 instance Read (Versioned a) where
-  readsPrec n s = [ (VersionedID scID v, x) | (scID ::: v, x) <- readsPrec n s ]
+  readsPrec n s = [ (VersionedID ix v, x) | (ix ::: v, x) <- readsPrec n s ]
 
 -- | This instance enforces 'Versioned's as being opaque, unified types.
 -- Ideally this designation should be accompanied by actual data hiding.
@@ -139,17 +140,17 @@ instance (Versionable a) => Versionable (Versioned a) where
   versionMap f (VersionedID _ ver) = throw $ UnresolvedVersionID ver
 
   mapVersions _ Versioned{} = throw UnexpectedResolvedVersion
-  mapVersions (VersionMap' vMap) (VersionedID scID ver) =
+  mapVersions (InputVersionMap vVers) (VersionedID ix ver) =
     Versioned $ 
     fromMaybe 
       (throw $ BadVersionedType ver (bearerType xDyn) (typeRep $ Proxy @a)) $ 
     unBearer xDyn
     where 
       xDyn = 
-        fromMaybe (throw $ BadVersionID scID ver) $
+        fromMaybe (throw $ BadVersionID ix ver) $
         Map.lookup ver $
-        maybe (throw $ BadVersionID scID ver) getVersionMap $
-        Map.lookup scID vMap
+        maybe (throw $ BadVersionID ix ver) getVersionMap $
+        vVers Vector.!? ix
 
 -- | Pass through the 'Versioned' constructor
 instance (HasEscrowIDs a) => HasEscrowIDs (Versioned a) where
@@ -301,16 +302,16 @@ defaultVersions ::
 defaultVersions _ x = (mkVersionID x, emptyVersionMap)
 
 -- | For default instances of 'Versionable'
-defaultMapVersions :: VersionMap' -> a -> a
+defaultMapVersions :: InputVersionMap -> a -> a
 defaultMapVersions _ = id
 
 -- | For convenience
-emptyVersionMap :: VersionMapT a
+emptyVersionMap :: VersionMap
 emptyVersionMap = VersionMap Map.empty
 
 -- | For convenience
-emptyVersionMap' :: VersionMap'
-emptyVersionMap' = VersionMap' Map.empty
+emptyInputVersionMap :: Int -> InputVersionMap
+emptyInputVersionMap n = InputVersionMap $ Vector.replicate n emptyVersionMap
 
 -- | For convenience
 vUnion :: VersionMap -> VersionMap -> VersionMap
@@ -320,8 +321,6 @@ vUnion (VersionMap m1) (VersionMap m2) = VersionMap $ Map.union m1 m2
 mkVersionID :: (Digestible a) => a -> VersionID
 mkVersionID = VersionID . digest
 
--- | Convenient because of the newtype
-addContractVersions :: ContractID -> VersionMap -> VersionMap' -> VersionMap'
-addContractVersions cID vMap (VersionMap' vers) =
-  VersionMap' $ Map.insert (shorten cID) vMap vers
-
+addContractVersions :: Int -> VersionMap -> InputVersionMap -> InputVersionMap
+addContractVersions ix vMap (InputVersionMap vVers) =
+  InputVersionMap $ Vector.modify (\mv -> Vector.write mv ix vMap) vVers

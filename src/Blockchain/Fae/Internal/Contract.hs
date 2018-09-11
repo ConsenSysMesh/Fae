@@ -166,7 +166,7 @@ type AbstractLocalContract = ContractF BearsValue BearsValue
 -- | The form of a contract function intended to be called from
 -- a transaction.
 type AbstractGlobalContract = 
-  ContractF (String, VersionMap') (ReturnValue, VersionMap)
+  ContractF (String, InputVersionMap) (ReturnValue, VersionMap)
 
 -- ** User-visible
 
@@ -422,7 +422,7 @@ returnLocal = fmap bearer . putEscrows
 acceptGlobal :: 
   forall argType.
   (Read argType, Versionable argType, HasEscrowIDs argType) =>
-  (String, VersionMap') -> FaeTXM (WithEscrows argType)
+  (String, InputVersionMap) -> FaeTXM (WithEscrows argType)
 acceptGlobal (argS, vers) = takeEscrows x where
   -- Laziness assurance: the 'maybe' function (which is not lazy) is
   -- nonetheless safe here because 'argS' is not provided by user code, and

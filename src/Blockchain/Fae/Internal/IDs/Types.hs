@@ -64,8 +64,6 @@ newtype Renames = Renames { getRenames :: Map String String }
   deriving (Serialize, NFData) 
 
 -- | For simplicity
-type ShortContractID = Digest
--- | For simplicity
 type TransactionID = Digest
 -- | For simplicity
 type BlockID = Digest
@@ -133,9 +131,6 @@ makePrisms ''Nonce
 -- | The transaction ID of the "genesis transaction"
 nullID :: TransactionID
 nullID = nullDigest
-
-shorten :: ContractID -> ShortContractID
-shorten = digest
 
 hasNonce :: ContractID -> Bool
 hasNonce ContractID{..} =
