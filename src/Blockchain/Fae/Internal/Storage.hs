@@ -130,7 +130,7 @@ inputResultsAt txID ix =
   uncertain (txInputLens ix)
 
 contractAtCID :: ContractID -> Lens' Storage (Maybe AbstractGlobalContract)
-contractAtCID cID = outputAt cID . uncertain _outputData . lens getter setter where
+contractAtCID cID = outputAtNonce cID . lens getter setter where
   getter = fmap outputContract
   setter = flip . liftA2 $ set _outputContract 
 

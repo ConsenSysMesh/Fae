@@ -63,7 +63,7 @@ data TXSummary = TXSummary {
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
-  txInputNonce :: Maybe Int,
+  txInputDeleted :: Bool,
   txInputOutputs :: Vector CType,
   txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
@@ -88,11 +88,13 @@ instance Pretty TXSummary where
      entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] where 
-    outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
-    versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
-      bimap show UnquotedString <$> txInputVersions
-    nonce = prettyPair ("nonce", text $ maybe "contract deleted" show txInputNonce)
+  pPrint TXInputSummary{..} = vcat $ 
+    (if txInputDeleted then (message :) else id) $ 
+    [ outputs, versions ] where 
+      outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
+      versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
+        bimap show UnquotedString <$> txInputVersions
+      message = text "contract deleted"
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
@@ -120,12 +122,7 @@ getInputSummary txID = Vector.imap $ \ix ~InputResults{..} ->
           (throw $ ContractOmitted txID ix) 
           showTypes 
           iOutputsM
-      nonce = contractNonce iRealID
-      txInputNonce 
-        | Current <- nonce = throw $ BadContractID iRealID
-        | iDeleted = Nothing 
-        | Nonce n <- nonce = Just (n + 1)
-  in (iRealID, TXInputSummary{..})
+  in (iRealID, TXInputSummary{txInputDeleted = iDeleted, ..})
 
 showTypes :: Outputs -> Vector UnquotedString
 showTypes = fmap $ UnquotedString . show . outputType
