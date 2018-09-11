@@ -142,8 +142,8 @@ interpretTX TX{..} = do
 -- have been run.
 interpretImportedValue :: 
   (Typeable m, MonadMask m, MonadIO m) => ExportData -> FaeInterpretT m ()
-interpretImportedValue (cID, moduleNames, typeS, valBS) = 
-  faeInterpret moduleNames runString $ \f -> f (WrappedByteString valBS) cID
+interpretImportedValue (cID, del, moduleNames, typeS, valBS) = 
+  faeInterpret moduleNames runString $ \f -> f (WrappedByteString valBS) cID del
   where
     runString = unwords
       [

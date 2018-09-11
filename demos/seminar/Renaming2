@@ -8,6 +8,6 @@ inputs
     c1Role = ryan
 
   -- Should return (1, $tom)
-  $txID/Body/1/Current = $scID ::: $vID
+  $txID/Body/1/Current = 0 ::: $vID
     c2Role = tom
 

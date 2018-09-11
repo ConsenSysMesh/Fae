@@ -63,7 +63,7 @@ data TXSummary = TXSummary {
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
-  txInputNonce :: Int,
+  txInputNonce :: Maybe Int,
   txInputOutputs :: Vector CType,
   txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
@@ -92,7 +92,7 @@ instance Pretty TXInputSummary where
     outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
     versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
       bimap show UnquotedString <$> txInputVersions
-    nonce = prettyPair ("nonce", text $ show txInputNonce)
+    nonce = prettyPair ("nonce", text $ maybe "contract deleted" show txInputNonce)
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
@@ -120,11 +120,12 @@ getInputSummary txID = Vector.imap $ \ix ~InputResults{..} ->
           (throw $ ContractOmitted txID ix) 
           showTypes 
           iOutputsM
-      nonce = either (const Current) contractNonce iRealID
-      txInputNonce
-        | Nonce n <- nonce = n + 1
-        | Current <- nonce = -1
-  in (either id id iRealID, TXInputSummary{..})
+      nonce = contractNonce iRealID
+      txInputNonce 
+        | Current <- nonce = throw $ BadContractID iRealID
+        | iDeleted = Nothing 
+        | Nonce n <- nonce = Just (n + 1)
+  in (iRealID, TXInputSummary{..})
 
 showTypes :: Outputs -> Vector UnquotedString
 showTypes = fmap $ UnquotedString . show . outputType

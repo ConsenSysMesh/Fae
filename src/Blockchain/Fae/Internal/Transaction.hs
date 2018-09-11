@@ -79,7 +79,8 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
     defaultInputResult cID = 
       InputResults
       {
-        iRealID = Left cID,
+        iRealID = cID,
+        iDeleted = False,
         iResult = ReturnValue (),
         iExportedResult = mempty,
         iVersions = emptyVersionMap,
@@ -156,10 +157,10 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
   -- Lazy because 'Nothing' throws an exception.
   ~iR@InputResults{..} <- case valEM of
     -- A quick way of assigning the same exception to all the fields of the
-    -- 'InputResults', but setting the 'iRealID' to an actual value, which
-    -- is useful even if the contract itself is missing.
+    -- 'InputResults', but setting the 'iRealID' and 'iDeleted' to actual
+    -- values, which are useful even if the contract itself is missing.
     Nothing -> return $ (throw $ BadContractID cID) & 
-      \ ~InputResults{..} -> InputResults{iRealID = Right cID, ..}
+      \ ~InputResults{..} -> InputResults{iRealID = cID, iDeleted = False, ..}
     Just (Right OutputData{..}) -> do 
       let cID' = cID{contractNonce = Nonce outputNonce}
       ~(iR, gAbsM) <- lift $ 
@@ -172,13 +173,11 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
 
       return iR
 
-    Just (Left (x, iVersions, updated)) -> do
-      iResult <- lift $ putEscrows x
+    Just (Left (x, iVersions, iDeleted)) -> do
       at cID .= Nothing -- Just to make sure
-      let iRealID = (if updated then Right else Left) cID
-          iOutputsM = Nothing
+      iResult <- lift $ putEscrows x
       iExportedResult <- lift $ exportReturnValue iResult
-      return InputResults{..}
+      return InputResults{iRealID = cID, iOutputsM = Nothing, ..}
 
   txID <- view _thisTXID
   _getStorage . at txID . uncertain (txInputLens ix) ?= iR 
@@ -194,7 +193,7 @@ runContract ::
   AbstractGlobalContract -> 
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
-runContract cID vers fAbs arg = do
+runContract iRealID vers fAbs arg = do
   thisTXID <- view _thisTXID
   ~(~(~(result, iVersions), gAbsM), outputsL) <- 
     listen $ callContract fAbs (arg, vers)
@@ -204,7 +203,7 @@ runContract cID vers fAbs arg = do
     -- contract is called again, its current nonce is no longer the correct
     -- one for this result.  The 'Either' syntax indicates whether the
     -- contract was deleted or updated.
-    iRealID = maybe Left (const Right) gAbsM cID
+    iDeleted = isNothing gAbsM
     iOutputsM = Just $ listToOutputs outputsL
   -- The actual result of the contract includes both 'result' and also
   -- the outputs and continuation function, so we link their fates.

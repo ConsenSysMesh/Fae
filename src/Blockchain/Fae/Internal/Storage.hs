@@ -90,7 +90,8 @@ data InputResults =
   {
     -- | The 'Left' means the contract was deleted after this call; the
     -- 'Right' means its nonce was incremented.
-    iRealID :: Either ContractID ContractID,
+    iRealID :: ContractID,
+    iDeleted :: Bool,
     iResult :: ReturnValue,
     iExportedResult :: ByteString,
     iVersions :: VersionMap,
@@ -106,7 +107,7 @@ type Outputs = Vector Output
 -- different source trees using this type all have the same version of it.
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
-type ExportData = (Either ContractID ContractID, [String], String, ByteString)
+type ExportData = (ContractID, Bool, [String], String, ByteString)
 
 -- * Template Haskell
 
@@ -223,25 +224,23 @@ listToOutputs = Vector.fromList
 -- the interpreter benefits from having a monomorphic type.
 addImportedValue :: 
   (Versionable a, HasEscrowIDs a, Exportable a) => 
-  State Escrows a -> Either ContractID ContractID -> FaeStorage ()
-addImportedValue valueImporter cIDE = FaeStorage $ do
-  let (cID, updated) = either (,False) (,True) cIDE
+  State Escrows a -> ContractID -> Bool -> FaeStorage ()
+addImportedValue valueImporter cID deleted = FaeStorage $ do
   unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
   let (importedValue, Escrows{..}) = 
         runState valueImporter (Escrows Map.empty nullDigest)
       vMap = versionMap (lookupWithEscrows escrowMap) importedValue
   _importedValues . at cID ?= 
-    (WithEscrows escrowMap (ReturnValue importedValue), vMap, updated)
+    (WithEscrows escrowMap (ReturnValue importedValue), vMap, deleted)
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = FaeStorageT $ do
   InputResults{..} <- use $ inputResultsAt txID ix .
     defaultLens (throw $ BadInputID txID ix)
-  let realID = either id id iRealID
-  Output{..} <- use $ outputAt realID . 
-    defaultLens (throw $ BadContractID realID)
+  Output{..} <- use $ outputAt iRealID . 
+    defaultLens (throw $ BadContractID iRealID)
   let modNames = tyConModule <$> listTyCons outputType
-  return (iRealID, modNames, show outputType, iExportedResult)
+  return (iRealID, iDeleted, modNames, show outputType, iExportedResult)
 
   where
     listTyCons :: TypeRep -> [TyCon]

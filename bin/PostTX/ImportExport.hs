@@ -29,8 +29,8 @@ buildExportRequest exportData exportHost =
     modulePart "export" "export" (S.encode exportData) : []
 
 buildImportRequest :: ExportData -> String -> IO Request
-buildImportRequest (cID, modNames, typeS, valueBS) importHost =
+buildImportRequest (cID, deleted, modNames, typeS, valueBS) importHost =
   flip formDataBody (requestURL importHost) $
-    modulePart "import" "import" (S.encode (cID, modNames, typeS)) :
+    modulePart "import" "import" (S.encode (cID, deleted, modNames, typeS)) :
     modulePart "valuePackage" "valuePackage" valueBS : []
 

@@ -40,7 +40,7 @@ unsafeIsDefined act = unsafePerformIO $ catchAll
 
 -- | Exceptions for version-related errors.
 data VersionException =
-  BadVersionID Int VersionID |
+  BadVersionID Int VersionID TypeRep |
   BadVersionedType VersionID TypeRep TypeRep |
   UnresolvedVersionID VersionID |
   UnexpectedResolvedVersion
@@ -82,8 +82,10 @@ instance Show TXFieldException where
 
 -- | -
 instance Show VersionException where
-  show (BadVersionID ix vID) = 
-    "No version found in input contract #" ++ show ix ++ " with ID: " ++ show vID
+  show (BadVersionID ix vID rep) = 
+    "No version found in input contract #" ++ show ix ++ 
+    " with ID: " ++ show vID ++
+    " (expected type: " ++ show rep ++ ")"
   show (BadVersionedType vID bad good) = 
     "For value with version ID: " ++ show vID ++ 
     "; expected type: " ++ show good ++ 

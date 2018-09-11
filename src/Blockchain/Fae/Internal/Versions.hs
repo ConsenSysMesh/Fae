@@ -146,10 +146,12 @@ instance (Versionable a) => Versionable (Versioned a) where
       (throw $ BadVersionedType ver (bearerType xDyn) (typeRep $ Proxy @a)) $ 
     unBearer xDyn
     where 
+      err :: b
+      err = throw $ BadVersionID ix ver $ typeRep $ Proxy @a
       xDyn = 
-        fromMaybe (throw $ BadVersionID ix ver) $
+        fromMaybe err $
         Map.lookup ver $
-        maybe (throw $ BadVersionID ix ver) getVersionMap $
+        maybe err getVersionMap $
         vVers Vector.!? ix
 
 -- | Pass through the 'Versioned' constructor
