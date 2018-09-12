@@ -62,8 +62,9 @@ main = do
         setCurrentDirectory portDir
       void $ fork $ runFae tID args
       void $ fork $ runServer importExportPort importExportApp queueTXExecData
+      void $ fork $ runServer 27184 transferApp queueTXExecData
       case serverMode of
-        FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData 
+        FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData
         FaethMode -> runFaeth args tID
     (ArgsUsage xs) -> liftIO $ case xs of
       [] -> do

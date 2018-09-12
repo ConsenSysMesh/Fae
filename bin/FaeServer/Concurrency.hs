@@ -33,7 +33,7 @@ data TXExecData =
     resultVar :: TMVar String,
     callerTID :: ThreadId
   } |
-  View 
+  View
   {
     viewTXID :: TransactionID,
     parentM :: Maybe TransactionID,
@@ -93,8 +93,8 @@ instance (TXQueueM m) => TXQueueM (ProtocolT m) where
 type SendTXExecData m = TXExecData -> m ()
 
 -- | Blocks on the result variable after sending off the TX.
-waitRunTXExecData :: 
-  (TXQueueM m) => 
+waitRunTXExecData ::
+  (TXQueueM m) =>
   SendTXExecData m -> (TXExecData -> TMVar a) -> TXExecData -> m a
 waitRunTXExecData sendOff tmVar txExecData = do
   sendOff txExecData
@@ -108,7 +108,7 @@ queueTXExecData txExecData = do
 
 readTXExecData :: (TXQueueM m) => m TXExecData
 readTXExecData = do
-  txQueue <- liftTXQueueT ask   
+  txQueue <- liftTXQueueT ask
   ioAtomically $ readTQueue txQueue
 
 reThrowExit :: (MonadIO m, MonadCatch m) => ThreadId -> ThreadId -> m () -> m ()
@@ -120,4 +120,3 @@ reThrow tID = handleAll (liftIO . throwTo tID)
 
 ioAtomically :: (MonadIO m) => STM a -> m a
 ioAtomically = liftIO . atomically
-

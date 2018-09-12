@@ -30,21 +30,22 @@ import PostTX.TXSpec
 import Text.PrettyPrint.HughesPJClass
 
 requestURL :: String -> Request
-requestURL host = fromMaybe (error $ "Bad host string: " ++ host) $ 
+requestURL host = fromMaybe (error $ "Bad host string: " ++ host) $
   parseRequest $ "http://" ++ host
-    
+
 sendReceive :: (LC8.ByteString -> a) -> Request -> IO a
 sendReceive decode request = do
   manager <- newManager defaultManagerSettings
-  response <- httpLbs request manager 
+  response <- httpLbs request manager
   return $ decode $ responseBody response
 
 sendReceiveString :: Request -> IO String
 sendReceiveString = sendReceive LC8.unpack
 
+-- used by exportRequest, made into a exportResponse
 sendReceiveSerialize :: (Typeable a, Serialize a) => Request -> IO a
-sendReceiveSerialize = 
-  sendReceive $ either (responseError . printHex) id . S.decodeLazy 
+sendReceiveSerialize =
+  sendReceive $ either (responseError . printHex) id . S.decodeLazy
 
 sendReceiveJSON :: (Typeable a, FromJSON a) => Request -> IO (Either String a)
 sendReceiveJSON = sendReceive $ \bs ->
@@ -56,13 +57,13 @@ sendReceiveJSONString isJson
   | otherwise = fmap (either id prettyShow) . sendReceiveJSON @TXSummary
 
 responseError :: forall a. (Typeable a) => String -> a
-responseError s = 
+responseError s =
   error $ "Couldn't parse response as type " ++ show tr ++ ": " ++ s
   where tr = typeRep $ Proxy @a
 
+-- used by buildExportRequest and buildImportRequest
 modulePart :: String -> String -> Module -> Part
-modulePart param name = partFileRequestBody (T.pack param) name . RequestBodyBS 
+modulePart param name = partFileRequestBody (T.pack param) name . RequestBodyBS
 
 moduleParts :: String -> Modules -> [Part]
 moduleParts param = Map.foldrWithKey (\name -> (:) . modulePart param name) []
-

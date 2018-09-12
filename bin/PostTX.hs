@@ -15,6 +15,7 @@ import PostTX.SpecParser
 import PostTX.Submit
 import PostTX.TXSpec
 import PostTX.View
+import PostTX.Transfer
 
 import System.Directory
 import System.Environment
@@ -33,8 +34,8 @@ main = do
   args <- getArgs
   case parseArgs args of
     PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
-      let buildTXSpec :: 
-            (MakesTXSpec m a) => 
+      let buildTXSpec ::
+            (MakesTXSpec m a) =>
             (m (TXSpec a) -> IO (TXSpec a)) -> IO (TXSpec a)
           buildTXSpec f = case postArgTXNameOrID of
             Left txID ->
@@ -48,7 +49,7 @@ main = do
               return txSpec
 
           normalSubmit :: (Serialize a) => TXSpec a -> IO ()
-          normalSubmit = submit postArgHost postArgFake postArgLazy postArgJSON 
+          normalSubmit = submit postArgHost postArgFake postArgLazy postArgJSON
       case (useFaeth, postArgFake) of
         (True, False) -> do
           txSpec <- buildTXSpec $ flip runReaderT postArgFaeth
@@ -59,11 +60,10 @@ main = do
         (False, _) -> do
           txSpec <- buildTXSpec id
           normalSubmit @String txSpec
-    OngoingFaethArgs{..} -> 
-      resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
+    OngoingFaethArgs{..} -> resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
-    ImportExportArgs{..} -> 
-      importExport exportTXID exportSCID exportHost importHost
+    ImportExportArgs{..} -> importExport exportTXID exportSCID exportHost importHost
+    TransferQueryArgs{..} -> transferQuery transferTXID transferTo
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess
@@ -79,7 +79,7 @@ usage = do
     [
       "Usage: (standalone) " ++ self ++ " args",
       "       (with stack) stack exec " ++ self ++ " -- args",
-      "", 
+      "",
       "where args = data [host[:port]] [options]",
       "where the available options are:",
       "  Help",
@@ -103,19 +103,19 @@ usage = do
       "                Also implied by any of the following options",
       "",
       "    with data = (tx name)",
-      "    --faeth-fee=number            Set the required ether fee to run this", 
+      "    --faeth-fee=number            Set the required ether fee to run this",
       "                                  Faeth transaction in Fae",
       "    --faeth-recipient=address     Set the required Ethereum 'to' address",
       "                                  to run this Faeth transaction in Fae",
       "",
       "    with data = (Eth tx ID)",
-      "    --faeth-add-signature=name    Sign the Fae portion of an existing", 
+      "    --faeth-add-signature=name    Sign the Fae portion of an existing",
       "                                  Faeth transaction as the given identity",
       "",
       "    with either",
-      "    --faeth-eth-value=number      Set the ether value sent with a Faeth", 
+      "    --faeth-eth-value=number      Set the ether value sent with a Faeth",
       "                                  transaction",
-      "    --faeth-eth-to=address        Set the Ethereum 'to' address for a", 
+      "    --faeth-eth-to=address        Set the Ethereum 'to' address for a",
       "                                  Faeth transaction",
       "    --faeth-eth-argument          Set the input that the Ethereum contract",
       "                                  will see, i.e. the contract argument",
@@ -194,4 +194,3 @@ usage = do
       "",
       "  All IDs, and public keys, are 32-byte unprefixed hex strings"
     ]
-
