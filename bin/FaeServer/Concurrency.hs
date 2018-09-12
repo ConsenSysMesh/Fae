@@ -40,6 +40,13 @@ data TXExecData =
     resultVar :: TMVar String,
     callerTID :: ThreadId
   } |
+  PostTXData
+  {
+    postTXID :: TransactionID,
+    parentM :: Maybe TransactionID,
+    resultVar :: TMVar String,
+    callerTID :: ThreadId
+  } |
   ExportValue
   {
     parentM :: Maybe TransactionID,
@@ -55,7 +62,7 @@ data TXExecData =
     signalVar :: TMVar (),
     callerTID :: ThreadId
   }
-
+  
 -- | Communications channel with the interpreter thread
 type TXQueue = TQueue TXExecData
 

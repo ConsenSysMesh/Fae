@@ -17,11 +17,12 @@ data ServerArgs =
     newSession :: Bool,
     faePort :: Int,
     importExportPort :: Int,
+    postTXPort :: Int,
     faethHostname :: String,
     faethPort :: Int
   }
 
-data ServerMode = FaeMode | FaethMode
+data ServerMode = FaeMode | FaethMode | PostTXMode
  
 defaultFaethHost :: String
 defaultFaethHost = "127.0.0.1"
@@ -41,6 +42,7 @@ parseArgs = foldl addArg $
     newSession = True,
     faePort = 27182,
     importExportPort = 27183,
+    postTXPort = 27184,
     faethHostname = defaultFaethHost,
     faethPort = defaultFaethPort
   }
@@ -66,7 +68,10 @@ getArgAction = \case
       Just $ _ArgsServer . _faePort .~ read faePortArg
     | ("--import-export-port", '=' : importExportPortArg) <- break (== '=') x ->
       Just $ _ArgsServer . _importExportPort .~ read importExportPortArg
+    | ("--posttx-port", '=' : postTXPortArg) <- break (== '=') x ->
+              Just $ _ArgsServer . _postTXPort .~ read postTXPortArg
   "--normal-mode" -> Just $ _ArgsServer . _serverMode .~ FaeMode
+  "--posttx-mode" -> Just $ _ArgsServer . _serverMode .~ PostTXMode
   "--resume-session" -> Just $ _ArgsServer . _newSession .~ False
   "--new-session" -> Just $ _ArgsServer . _newSession .~ True
   "--help" -> Just $ const $ ArgsUsage []
