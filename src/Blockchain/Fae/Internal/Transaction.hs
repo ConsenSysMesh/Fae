@@ -162,16 +162,15 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
     Nothing -> return $ (throw $ BadContractID cID) & 
       \ ~InputResults{..} -> InputResults{iRealID = cID, iDeleted = False, ..}
     Just (Right OutputData{..}) -> do 
-      let cID' = cID{contractNonce = Nonce outputNonce}
       ~(iR, gAbsM) <- lift $ 
         local (_localHash .~ digest arg) . remapSigners renames $ 
-          runContract cID' vers outputContract arg
+          runContract cID vers outputContract arg
 
       -- We don't update the contract if it didn't return cleanly
       let successful = unsafeIsDefined iR
-      when successful $ contractAtCID cID' .= gAbsM
+      when successful $ contractAtCID cID .= gAbsM
 
-      return iR
+      return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
 
     Just (Left (x, iVersions, iDeleted)) -> do
       at cID .= Nothing -- Just to make sure
@@ -195,7 +194,7 @@ runContract ::
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID vers fAbs arg = do
   thisTXID <- view _thisTXID
-  ~(~(~(result, iVersions), gAbsM), outputsL) <- 
+  ~(~(~(result, vers), gAbsM), outputsL) <- 
     listen $ callContract fAbs (arg, vers)
   let 
     -- We store this with the nonce (if given) so that if (and when) it is
@@ -205,6 +204,9 @@ runContract iRealID vers fAbs arg = do
     -- contract was deleted or updated.
     iDeleted = isNothing gAbsM
     iOutputsM = Just $ listToOutputs outputsL
+    iVersions
+      | hasNonce iRealID = vers
+      | otherwise = emptyVersionMap
   -- The actual result of the contract includes both 'result' and also
   -- the outputs and continuation function, so we link their fates.
   let iResult = gAbsM `deepseq` outputsL `seq` result

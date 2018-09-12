@@ -38,9 +38,9 @@ import Text.Read
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = wrapExceptions $ 
     object [
-      "txInputDeleted" .= toJSON txInputDeleted,
+      "txInputDeleted" .= txInputDeleted,
       "txInputOutputs" .= wrapExceptions txInputOutputs,
-      "txInputVersions" .= toJSON txInputVersions ]
+      "txInputVersions" .= wrapExceptions txInputVersions ]
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
@@ -52,7 +52,6 @@ instance ToJSON TXSummary where
 
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
-    exceptionValue o <|>
       TXInputSummary
         <$> readJSONField "txInputDeleted" o
         <*> readJSONField "txInputOutputs" o

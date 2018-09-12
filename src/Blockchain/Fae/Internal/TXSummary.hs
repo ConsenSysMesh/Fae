@@ -74,20 +74,25 @@ instance Pretty ContractID where
   pPrint = text . prettyContractID
 
 instance Pretty TXSummary where
-   pPrint TXSummary{..} = prettyHeader header entry where 
-     header = labelHeader "Transaction" transactionID
-     result = prettyPair ("result", displayException $ text txResult)
-     outputs = displayException $ 
-       prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
-     txSSigners' = prettyList "signers" txSSigners
-     inputs = txInputSummaries & vcat . toList . Vector.imap
-       (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
-         let printCID = pPrint cID <+> 
-              text (if txInputDeleted then "(deleted)" else "(updated)")
-         in prettyHeader 
-              (prettyPair ("input #" ++ show ix, printCID))
-              (displayException $ pPrint txInputSummary))
-     entry = vcat [ result, outputs, txSSigners', inputs ]
+  pPrint TXSummary{..} = prettyHeader header entry where 
+    header = labelHeader "Transaction" transactionID
+    result = prettyPair ("result", displayException $ text txResult)
+    outputs = displayException $ 
+      prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
+    txSSigners' = prettyList "signers" txSSigners
+    inputs = txInputSummaries & vcat . toList . Vector.imap
+      (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
+        let printCID = pPrint cID <+> parens (text message) 
+            message
+              | not worked = "failed"
+              | txInputDeleted = "deleted"
+              | otherwise = "updated"
+            worked = unsafeIsDefined prettyInput
+            prettyInput = pPrint txInputSummary
+        in prettyHeader 
+             (prettyPair ("input #" ++ show ix, printCID))
+             (displayException prettyInput))
+    entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ outputs, versions ] where 
