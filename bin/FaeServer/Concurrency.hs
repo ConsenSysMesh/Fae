@@ -44,7 +44,7 @@ data TXExecData =
   {
     parentM :: Maybe TransactionID,
     calledInTX :: TransactionID,
-    shortCID :: ShortContractID,
+    ixInTX :: Int,
     exportResultVar :: TMVar ExportData,
     callerTID :: ThreadId
   } |

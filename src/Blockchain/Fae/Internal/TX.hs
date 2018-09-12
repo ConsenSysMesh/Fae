@@ -142,8 +142,8 @@ interpretTX TX{..} = do
 -- have been run.
 interpretImportedValue :: 
   (Typeable m, MonadMask m, MonadIO m) => ExportData -> FaeInterpretT m ()
-interpretImportedValue (cID, moduleNames, typeS, valBS) = 
-  faeInterpret moduleNames runString $ \f -> f (WrappedByteString valBS) cID
+interpretImportedValue (cID, del, moduleNames, typeS, valBS) = 
+  faeInterpret moduleNames runString $ \f -> f (WrappedByteString valBS) cID del
   where
     runString = unwords
       [
@@ -196,7 +196,7 @@ runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
   fmap (either throw id) $
-    flip evalStateT (Storage Map.empty Map.empty Map.empty) $ 
+    flip evalStateT (Storage Map.empty Map.empty) $ 
       getFaeStorageT $ 
         (case ghcLibdirM of
           Nothing -> unsafeRunInterpreterWithArgs args

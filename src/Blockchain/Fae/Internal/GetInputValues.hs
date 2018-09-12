@@ -6,6 +6,7 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 -}
+{-# LANGUAGE DataKinds #-}
 module Blockchain.Fae.Internal.GetInputValues where
 
 import Blockchain.Fae.Internal.Contract
@@ -101,6 +102,10 @@ instance (HasEscrowIDs c, Typeable c) => GGetInputValues (K1 i c) where
 -- | Just ignore metadata for this one.
 instance (GGetInputValues f) => GGetInputValues (M1 i t f) where
   gGetInputValues = M1 <$> gGetInputValues
+
+-- | Abort: newtypes get read as the whole type.
+instance {-# OVERLAPPING #-} GGetInputValues (M1 D (MetaData t m p True) f) where
+  gGetInputValues = empty
 
 -- | Abort: the "empty sum" type gets read as the whole type
 instance GGetInputValues U1 where

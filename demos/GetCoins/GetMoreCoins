@@ -3,4 +3,4 @@ reward = True
 keys
   self = $self
 inputs
-  TransactionOutput $coinTX 0 :# 0 = ()
+  $coinTX / Body / 0 / Nonce 0 = ()

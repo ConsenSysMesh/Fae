@@ -29,7 +29,11 @@ import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
 
 import Data.Foldable
+import Data.Maybe
 import Data.Semigroup ((<>))
+
+import Data.Vector (Vector)
+import qualified Data.Vector as Vector
 
 import qualified Data.Map as Map
 import Data.Map (Map)
@@ -60,34 +64,28 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
   txStorage ?= 
     TransactionEntry
     {
-      inputOutputs = Map.fromList defaultIOs,
-      inputOrder = inputOrder,
+      inputResults = 
+        Vector.fromList $ map (defaultInputResult . view _1) inputArgs,
       outputs = mempty,
       txSigners,
       result = Result (undefined :: a)
     }
-  ~(result, ~(outputs, types)) <- runTX $ runInputContracts inputArgs >>= 
+  ~(result, outputs) <- runTX $ runInputContracts inputArgs >>= 
     lift . (withReward >=> doTX f fallback . getInputValues)
   txStorage %= fmap (\txE -> txE{result, outputs})
-  _contractTypes %= (<> types)
 
   where 
     txStorage = _getStorage . at txID
-
-    inputIDs = map (view _1) inputArgs
-    defaultIOs = flip map inputIDs $ \cID ->
-      (
-        shorten cID, 
-        InputResults
-        {
-          iRealID = cID,
-          iResult = ReturnValue (),
-          iExportedResult = mempty,
-          iVersions = emptyVersionMap,
-          iOutputsM = mempty
-        }
-      )
-    inputOrder = map fst defaultIOs
+    defaultInputResult cID = 
+      InputResults
+      {
+        iRealID = cID,
+        iStatus = Failed,
+        iResult = ReturnValue (),
+        iExportedResult = mempty,
+        iVersions = emptyVersionMap,
+        iOutputsM = mempty
+      }
     
     runTX = mapStateT $ 
       fmap fst . runWriterT . flip runReaderT txData . flip evalStateT escrows
@@ -95,11 +93,10 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
       TXData
       {
         thisTXSigners = txSigners,
-        localHash = getShortContractID txID,
+        localHash = txID,
         thisTXID = txID
       }
-    escrows = Escrows { escrowMap = Map.empty, nextID }
-    ShortContractID nextID = txID
+    escrows = Escrows { escrowMap = Map.empty, nextID = txID }
 
     withReward inputsL
       | isReward = do
@@ -111,14 +108,13 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
 doTX :: 
   (HasEscrowIDs inputs, GetInputValues inputs, Show a) => 
   Transaction inputs a -> [Transaction inputs ()] -> 
-  inputs -> FaeTXM (Result, (Outputs, Types))
+  inputs -> FaeTXM (Result, Outputs)
 doTX f fallbacks x = do
   txID <- view _thisTXID
-  (_2 %~ listToOutputs (TransactionOutput txID) . force) <$> 
-    callTX (doFallbacks fallbacks) x f
+  (_2 %~ listToOutputs . force) <$> callTX (doFallbacks fallbacks) x f
 
 -- | Performs all fallback transactions, ignoring errors.
-doFallbacks :: [Transaction inputs ()] -> inputs -> FaeTXM OutputsList
+doFallbacks :: [Transaction inputs ()] -> inputs -> FaeTXM [Output]
 doFallbacks fallbacks x = fmap concat . 
   forM fallbacks $ fmap snd . callTX (const $ return []) x
 
@@ -128,8 +124,8 @@ doFallbacks fallbacks x = fmap concat .
 -- value.
 callTX :: 
   (Show a) =>
-  (inputs -> FaeTXM OutputsList) -> inputs -> 
-  Transaction inputs a -> FaeTXM (Result, OutputsList)
+  (inputs -> FaeTXM [Output]) -> inputs -> 
+  Transaction inputs a -> FaeTXM (Result, [Output])
 callTX g x f = do
   escrows <- get
   let fallback = put escrows >> g x
@@ -142,9 +138,9 @@ callTX g x f = do
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
 runInputContracts :: Inputs -> TXStorageM [ReturnValue]
-runInputContracts = fmap fst .
-  foldl' (>>=) (return ([], emptyVersionMap')) .
-  map nextInput
+runInputContracts inputs = fmap fst $
+  foldl' (>>=) (return ([], emptyInputVersionMap $ length inputs)) $
+    zipWith nextInput [0 ..] inputs
 
 -- | If the contract function is available, run it as a monadic state
 -- update, adding the result to the ongoing list and updating the map of
@@ -152,78 +148,67 @@ runInputContracts = fmap fst .
 -- that.  Otherwise, this input is exceptional (and so, probably, is the
 -- transaction result).
 nextInput ::
-  (ContractID, String, Renames) -> 
-  ([ReturnValue], VersionMap') -> TXStorageM ([ReturnValue], VersionMap')
-nextInput (cID, arg, Renames renames) (results, vers) = do
-  valE <- use $ at cID . defaultLens (throw $ BadContractID cID)
+  Int -> (ContractID, String, Renames) -> 
+  ([ReturnValue], InputVersionMap) -> 
+  TXStorageM ([ReturnValue], InputVersionMap)
+nextInput ix (cID, arg, Renames renames) (results, vers) = do
+  valEM <- use $ at cID 
 
-  (iR, vers') <- case valE of
-    Right fAbs -> do 
-      ~(iR, vers', gAbsM, types) <- lift $ 
+  -- Lazy because 'Nothing' throws an exception.
+  ~iR@InputResults{..} <- case valEM of
+    -- A quick way of assigning the same exception to all the fields of the
+    -- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
+    -- values, which are useful even if the contract itself is missing.
+    Nothing -> return $ (throw $ BadContractID cID) & 
+      \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
+    Just (Right OutputData{..}) -> do 
+      ~(iR, gAbsM) <- lift $ 
         local (_localHash .~ digest arg) . remapSigners renames $ 
-          runContract cID vers fAbs arg
+          runContract cID vers outputContract arg
 
       -- We don't update the contract if it didn't return cleanly
-      let successful = unsafeIsDefined iR
-      when successful $ do
-        at cID .= (Right <$> gAbsM)
-        _contractTypes %= (<> types)
+      when (successful iR) $ contractAtCID cID .= gAbsM
 
-      return (iR, vers')
+      return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
 
-    Left (x, vMap) -> do
-      iResult <- lift $ putEscrows x
+    Just (Left (x, iVersions, iStatus)) -> do
       at cID .= Nothing -- Just to make sure
-      let 
-          (iVersions, vers') = makeOV cID vMap vers
-          iRealID = cID
-          iOutputsM = Nothing
+      iResult <- lift $ putEscrows x
       iExportedResult <- lift $ exportReturnValue iResult
-      return (InputResults{..}, vers')
+      return InputResults{iRealID = cID, iOutputsM = Nothing, ..}
 
   txID <- view _thisTXID
-  -- Important here that 'iR', the new results, are the /first/
-  -- argument to '(<>)'; see the comments for that instance.
-  _getStorage . at txID %=
-    fmap (_inputOutputs . at (shorten cID) %~ (Just iR <>))
-  return (results |> iResult iR, vers')
+  _getStorage . at txID . uncertain (txInputLens ix) ?= iR 
+  return (results |> iResult, addContractVersions ix iVersions vers)
 
 -- | Executes the contract function, returning the result, the structured
 -- outputs, the new map of all currently defined versions, and the
--- continuation function.
+-- continuation function.  The 'ContractID' argument must have a 'Nonce
+-- Int' and not a 'Current' nonce.
 runContract ::
   ContractID ->
-  VersionMap' ->
+  InputVersionMap ->
   AbstractGlobalContract -> 
   String ->
-  FaeTXM (InputResults, VersionMap', Maybe AbstractGlobalContract, Types)
-runContract cID vers fAbs arg = do
+  FaeTXM (InputResults, Maybe AbstractGlobalContract)
+runContract iRealID vers fAbs arg = do
   thisTXID <- view _thisTXID
-  ~(~(~(result, vMap), gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
+  ~(~(~(result, vers), gAbsM), outputsL) <- 
+    listen $ callContract fAbs (arg, vers)
   let 
-    -- We store this with the nonce (if given) so that if (and when) it is
-    -- exported, the correct id-with-nonce can be retrieved.  Once the
-    -- contract is called again, its current nonce is no longer the correct
-    -- one for this result.
-    iRealID = cID
-    (outs, types) = listToOutputs (InputOutput thisTXID (shorten cID)) outputsL
-    iOutputsM = Just outs
-    ~(iVersions, vers') = makeOV cID vMap vers
+    iResult = gAbsM `deepseq` outputsL `seq` result
+    iOutputsM = Just $ listToOutputs outputsL
+    worked = unsafeIsDefined iResult
+    iStatus
+      | not (unsafeIsDefined iResult) = Failed
+      | Nothing <- gAbsM = Deleted
+      | otherwise = Updated
+    iVersions
+      | hasNonce iRealID = vers
+      | otherwise = vers `seq` emptyVersionMap
   -- The actual result of the contract includes both 'result' and also
   -- the outputs and continuation function, so we link their fates.
-  let iResult = gAbsM `deepseq` outputsL `seq` result
+  let 
   iExportedResult <- exportReturnValue iResult
-  return (InputResults{..}, vers', gAbsM, types)
-
--- | Adds the new version map to the ongoing total, but only if the
--- contract ID has a nonce.  This restriction is part of the guarantee that
--- using a versioned value produces exactly the expected result.
-makeOV :: ContractID -> VersionMap -> VersionMap' -> (VersionRepMap, VersionMap')
-makeOV cID vMap vers
-  | hasNonce cID = 
-      (
-        VersionMap $ bearerType <$> getVersionMap vMap, 
-        addContractVersions cID vMap vers
-      )
-  | otherwise = (emptyVersionMap, vers)
+  return (InputResults{..}, gAbsM)
 

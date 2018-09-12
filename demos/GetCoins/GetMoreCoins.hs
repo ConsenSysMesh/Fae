@@ -1,7 +1,7 @@
 import Blockchain.Fae.Contracts
 import Blockchain.Fae.Currency
 
-body :: Transaction (RewardEscrowID, Coin) ()
+body :: Transaction (Reward, Coin) ()
 body (rID, oldCoin) = do
   coin <- reward rID
   newCoin <- add oldCoin coin

@@ -63,7 +63,7 @@ main = do
       resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
     ImportExportArgs{..} -> 
-      importExport exportTXID exportSCID exportHost importHost
+      importExport exportTXID exportIx exportHost importHost
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess

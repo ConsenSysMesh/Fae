@@ -113,7 +113,7 @@ unsignTXMessage txm = do
 -- hash is taken of the unsigned message, without validating the
 -- signatures.
 getTXID :: (Serialize a) => TXMessage a -> TransactionID
-getTXID = ShortContractID . digest . unsignedTXMessage
+getTXID = digest . unsignedTXMessage
 
 -- | Extracts the portion of the transaction that is useful for
 -- constructing the transaction call.  Modules must be placed in the
