@@ -81,20 +81,19 @@ instance Pretty TXSummary where
        prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
      txSSigners' = prettyList "signers" txSSigners
      inputs = txInputSummaries & vcat . toList . Vector.imap
-       (\ix (cID, txInputSummary) -> 
-         prettyHeader 
-           (prettyPair ("input #" ++ show ix, pPrint cID))
-           (displayException $ pPrint txInputSummary))
+       (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
+         let printCID = pPrint cID <+> 
+              text (if txInputDeleted then "(deleted)" else "(updated)")
+         in prettyHeader 
+              (prettyPair ("input #" ++ show ix, printCID))
+              (displayException $ pPrint txInputSummary))
      entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat $ 
-    (if txInputDeleted then (message :) else id) $ 
-    [ outputs, versions ] where 
-      outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
-      versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
-        bimap show UnquotedString <$> txInputVersions
-      message = text "contract deleted"
+  pPrint TXInputSummary{..} = vcat [ outputs, versions ] where 
+    outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
+    versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
+      bimap show UnquotedString <$> txInputVersions
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
