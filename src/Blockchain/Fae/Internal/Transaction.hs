@@ -80,7 +80,7 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
       InputResults
       {
         iRealID = cID,
-        iDeleted = False,
+        iStatus = Failed,
         iResult = ReturnValue (),
         iExportedResult = mempty,
         iVersions = emptyVersionMap,
@@ -157,22 +157,21 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
   -- Lazy because 'Nothing' throws an exception.
   ~iR@InputResults{..} <- case valEM of
     -- A quick way of assigning the same exception to all the fields of the
-    -- 'InputResults', but setting the 'iRealID' and 'iDeleted' to actual
+    -- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
     -- values, which are useful even if the contract itself is missing.
     Nothing -> return $ (throw $ BadContractID cID) & 
-      \ ~InputResults{..} -> InputResults{iRealID = cID, iDeleted = False, ..}
+      \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
     Just (Right OutputData{..}) -> do 
       ~(iR, gAbsM) <- lift $ 
         local (_localHash .~ digest arg) . remapSigners renames $ 
           runContract cID vers outputContract arg
 
       -- We don't update the contract if it didn't return cleanly
-      let successful = unsafeIsDefined iR
-      when successful $ contractAtCID cID .= gAbsM
+      when (successful iR) $ contractAtCID cID .= gAbsM
 
       return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
 
-    Just (Left (x, iVersions, iDeleted)) -> do
+    Just (Left (x, iVersions, iStatus)) -> do
       at cID .= Nothing -- Just to make sure
       iResult <- lift $ putEscrows x
       iExportedResult <- lift $ exportReturnValue iResult
@@ -197,19 +196,19 @@ runContract iRealID vers fAbs arg = do
   ~(~(~(result, vers), gAbsM), outputsL) <- 
     listen $ callContract fAbs (arg, vers)
   let 
-    -- We store this with the nonce (if given) so that if (and when) it is
-    -- exported, the correct id-with-nonce can be retrieved.  Once the
-    -- contract is called again, its current nonce is no longer the correct
-    -- one for this result.  The 'Either' syntax indicates whether the
-    -- contract was deleted or updated.
-    iDeleted = isNothing gAbsM
+    iResult = gAbsM `deepseq` outputsL `seq` result
     iOutputsM = Just $ listToOutputs outputsL
+    worked = unsafeIsDefined iResult
+    iStatus
+      | not (unsafeIsDefined iResult) = Failed
+      | Nothing <- gAbsM = Deleted
+      | otherwise = Updated
     iVersions
       | hasNonce iRealID = vers
-      | otherwise = emptyVersionMap
+      | otherwise = vers `seq` emptyVersionMap
   -- The actual result of the contract includes both 'result' and also
   -- the outputs and continuation function, so we link their fates.
-  let iResult = gAbsM `deepseq` outputsL `seq` result
+  let 
   iExportedResult <- exportReturnValue iResult
   return (InputResults{..}, gAbsM)
 

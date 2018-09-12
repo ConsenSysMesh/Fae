@@ -46,7 +46,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry,
-    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap, Bool)
+    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap, Status)
   }
 
 -- | A general storage transformer; used for running transactions in IO.
@@ -91,12 +91,14 @@ data InputResults =
     -- | The 'Left' means the contract was deleted after this call; the
     -- 'Right' means its nonce was incremented.
     iRealID :: ContractID,
-    iDeleted :: Bool,
+    iStatus :: Status,
     iResult :: ReturnValue,
     iExportedResult :: ByteString,
     iVersions :: VersionMap,
     iOutputsM :: Maybe Outputs
   } deriving (Generic)
+
+data Status = Updated | Deleted | Failed deriving (Show, Generic)
 
 -- | The elements are 'Maybe' because an output contract may be deleted,
 -- but the indexing of the others should not change, so we have to keep the
@@ -107,7 +109,7 @@ type Outputs = Vector Output
 -- different source trees using this type all have the same version of it.
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
-type ExportData = (ContractID, Bool, [String], String, ByteString)
+type ExportData = (ContractID, Status, [String], String, ByteString)
 
 -- * Template Haskell
 
@@ -120,6 +122,9 @@ makeLenses ''Storage
 -- | For convenience, so we don't have to pattern-match elsewhere.
 instance Show Result where
   show (Result x) = show x
+
+-- | -
+instance Serialize Status
 
 -- * Functions
 
@@ -138,7 +143,7 @@ contractAtCID cID = outputAtNonce cID . lens getter setter where
 type instance Index Storage = ContractID
 -- | For the 'At' instance
 type instance IxValue Storage = 
-  Either (WithEscrows ReturnValue, VersionMap, Bool) OutputData
+  Either (WithEscrows ReturnValue, VersionMap, Status) OutputData
 -- | For the 'At' instance
 instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
@@ -218,20 +223,25 @@ onlyJust err = lens getter setter where
 listToOutputs :: [Output] -> Outputs
 listToOutputs = Vector.fromList
 
+successful :: InputResults -> Bool
+successful InputResults{..}
+  | Failed <- iStatus = False
+  | otherwise = True
+
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not
 -- `FaeStorageT` because the former is not an instance of the latter, and
 -- the interpreter benefits from having a monomorphic type.
 addImportedValue :: 
   (Versionable a, HasEscrowIDs a, Exportable a) => 
-  State Escrows a -> ContractID -> Bool -> FaeStorage ()
-addImportedValue valueImporter cID deleted = FaeStorage $ do
+  State Escrows a -> ContractID -> Status -> FaeStorage ()
+addImportedValue valueImporter cID status = FaeStorage $ do
   unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
   let (importedValue, Escrows{..}) = 
         runState valueImporter (Escrows Map.empty nullDigest)
       vMap = versionMap (lookupWithEscrows escrowMap) importedValue
   _importedValues . at cID ?= 
-    (WithEscrows escrowMap (ReturnValue importedValue), vMap, deleted)
+    (WithEscrows escrowMap (ReturnValue importedValue), vMap, status)
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = FaeStorageT $ do
@@ -240,7 +250,7 @@ getExportedValue txID ix = FaeStorageT $ do
   Output{..} <- use $ outputAt iRealID . 
     defaultLens (throw $ BadContractID iRealID)
   let modNames = tyConModule <$> listTyCons outputType
-  return (iRealID, iDeleted, modNames, show outputType, iExportedResult)
+  return (iRealID, iStatus, modNames, show outputType, iExportedResult)
 
   where
     listTyCons :: TypeRep -> [TyCon]

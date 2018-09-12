@@ -63,7 +63,7 @@ data TXSummary = TXSummary {
 } deriving (Show, Generic)
 
 data TXInputSummary = TXInputSummary {
-  txInputDeleted :: Bool,
+  txInputStatus :: Status,
   txInputOutputs :: Vector CType,
   txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
@@ -82,12 +82,7 @@ instance Pretty TXSummary where
     txSSigners' = prettyList "signers" txSSigners
     inputs = txInputSummaries & vcat . toList . Vector.imap
       (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
-        let printCID = pPrint cID <+> parens (text message) 
-            message
-              | not worked = "failed"
-              | txInputDeleted = "deleted"
-              | otherwise = "updated"
-            worked = unsafeIsDefined prettyInput
+        let printCID = pPrint cID <+> parens (text $ show txInputStatus) 
             prettyInput = pPrint txInputSummary
         in prettyHeader 
              (prettyPair ("input #" ++ show ix, printCID))
@@ -126,7 +121,7 @@ getInputSummary txID = Vector.imap $ \ix ~InputResults{..} ->
           (throw $ ContractOmitted txID ix) 
           showTypes 
           iOutputsM
-  in (iRealID, TXInputSummary{txInputDeleted = iDeleted, ..})
+  in (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
 
 showTypes :: Outputs -> Vector UnquotedString
 showTypes = fmap $ UnquotedString . show . outputType

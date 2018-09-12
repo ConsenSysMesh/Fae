@@ -36,9 +36,9 @@ import System.IO.Unsafe
 import Text.Read
 
 instance ToJSON TXInputSummary where
-  toJSON TXInputSummary{..} = wrapExceptions $ 
+  toJSON TXInputSummary{..} = 
     object [
-      "txInputDeleted" .= txInputDeleted,
+      "txInputStatus" .= txInputStatus,
       "txInputOutputs" .= wrapExceptions txInputOutputs,
       "txInputVersions" .= wrapExceptions txInputVersions ]
 
@@ -52,8 +52,9 @@ instance ToJSON TXSummary where
 
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
+    exceptionValue o <|>
       TXInputSummary
-        <$> readJSONField "txInputDeleted" o
+        <$> readJSONField "txInputStatus" o
         <*> readJSONField "txInputOutputs" o
         <*> readJSONField "txInputVersions" o
       
@@ -99,6 +100,9 @@ instance ToJSON UnquotedString where
 
 instance FromJSON UnquotedString where
   parseJSON = fmap UnquotedString . parseJSON
+
+instance ToJSON Status
+instance FromJSON Status
     
 encodeJSON :: (ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
