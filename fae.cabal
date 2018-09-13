@@ -32,7 +32,6 @@ library
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.GenericInstances
-    Blockchain.Fae.Internal.GetInputValues
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
     Blockchain.Fae.Internal.Messages,

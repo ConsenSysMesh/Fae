@@ -8,13 +8,12 @@ Stability: experimental
 
 This module provides the code that navigates the intricacies of executing a transaction.  It is useful for front-end implementations, but not to users.
 -}
+{-# LANGUAGE DataKinds #-}
 module Blockchain.Fae.Internal.Transaction where
 
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
-import Blockchain.Fae.Internal.GenericInstances
-import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
@@ -30,7 +29,9 @@ import Control.Monad.Writer hiding ((<>))
 
 import Data.Foldable
 import Data.Maybe
+import Data.Proxy
 import Data.Semigroup ((<>))
+import Data.Typeable
 
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector
@@ -48,6 +49,51 @@ type Inputs = [(ContractID, String, Renames)]
 -- saving the results.
 type TXStorageM = StateT Storage FaeTXM
 
+-- * Typeclasses
+
+-- | This class, and its only instances, define what a transaction function
+-- must look like: essentially, any function of the form
+--
+-- >>> body :: a -> b -> ... -> FaeTX result
+--
+-- where the argument types correspond, in order, to the return types of
+-- the transaction's input contracts.  Correspondingly, any fallback
+-- functions must have the signature
+--
+-- >>> fallback :: a -> b -> ... -> FaeTX ()
+--
+-- though other return value types are accepted, and ignored.
+class 
+  (Typeable (TransactionResult f), Show (TransactionResult f)) =>
+  TransactionBody f where
+
+  type TransactionInputs f :: [*]
+  type TransactionResult f :: *
+  type TransactionFallback f :: *
+  callTransactionBody :: f -> [ReturnValue] -> FaeTX (TransactionResult f)
+
+type TransactionConstraints f =
+  (TransactionBody f, TransactionBody (TransactionFallback f))
+
+{- Instances -}
+
+instance (Typeable a, Show a) => TransactionBody (FaeTX a) where
+  type TransactionInputs (FaeTX a) = '[a]
+  type TransactionResult (FaeTX a) = a
+  type TransactionFallback (FaeTX a) = FaeTX ()
+  callTransactionBody f [] = f
+  callTransactionBody _ _ = throw TooManyInputs
+
+instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
+  type TransactionInputs (a -> f) = a : TransactionInputs f
+  type TransactionResult (a -> f) = TransactionResult f
+  type TransactionFallback (a -> f) = a -> TransactionFallback f
+  callTransactionBody g [] = throw NotEnoughInputs
+  callTransactionBody g (x : rest) = callTransactionBody (g $ cast x) rest
+    where 
+      cast rv = getReturnValue rv $
+        throw $ BadArgType (returnValueType rv) (typeRep $ Proxy @a)
+
 -- * Functions
 
 -- ** Running transactions
@@ -55,11 +101,9 @@ type TXStorageM = StateT Storage FaeTXM
 -- | Runs a transaction on its inputs, with some basic information about
 -- the context.
 runTransaction :: 
-  forall inputs a.
-  (GetInputValues inputs, HasEscrowIDs inputs, Typeable a, Show a) =>
-  Transaction inputs a -> [Transaction inputs ()] -> 
-  Inputs -> TransactionID -> Signers -> Bool ->
-  FaeStorage ()
+  (TransactionConstraints f) =>
+  f -> [TransactionFallback f] -> 
+  Inputs -> TransactionID -> Signers -> Bool -> FaeStorage ()
 runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
   txStorage ?= 
     TransactionEntry
@@ -68,10 +112,10 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
         Vector.fromList $ map (defaultInputResult . view _1) inputArgs,
       outputs = mempty,
       txSigners,
-      result = Result (undefined :: a)
+      result = throw $ IncompleteTransaction txID
     }
   ~(result, outputs) <- runTX $ runInputContracts inputArgs >>= 
-    lift . (withReward >=> doTX f fallback . getInputValues)
+    lift . (withReward >=> doTX f fallback)
   txStorage %= fmap (\txE -> txE{result, outputs})
 
   where 
@@ -106,15 +150,14 @@ runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
  
 -- | Actually perform the transaction.
 doTX :: 
-  (HasEscrowIDs inputs, GetInputValues inputs, Show a) => 
-  Transaction inputs a -> [Transaction inputs ()] -> 
-  inputs -> FaeTXM (Result, Outputs)
+  (TransactionConstraints f) => 
+  f -> [TransactionFallback f] -> [ReturnValue] -> FaeTXM (Result, Outputs)
 doTX f fallbacks x = do
   txID <- view _thisTXID
   (_2 %~ listToOutputs . force) <$> callTX (doFallbacks fallbacks) x f
 
 -- | Performs all fallback transactions, ignoring errors.
-doFallbacks :: [Transaction inputs ()] -> inputs -> FaeTXM [Output]
+doFallbacks :: (TransactionBody g) => [g] -> [ReturnValue] -> FaeTXM [Output]
 doFallbacks fallbacks x = fmap concat . 
   forM fallbacks $ fmap snd . callTX (const $ return []) x
 
@@ -123,13 +166,13 @@ doFallbacks fallbacks x = fmap concat .
 -- and errors in the call itself or its outputs are deferred to the return
 -- value.
 callTX :: 
-  (Show a) =>
-  (inputs -> FaeTXM [Output]) -> inputs -> 
-  Transaction inputs a -> FaeTXM (Result, [Output])
+  (TransactionBody f) => 
+  ([ReturnValue] -> FaeTXM [Output]) -> [ReturnValue] -> f ->
+  FaeTXM (Result, [Output])
 callTX g x f = do
   escrows <- get
   let fallback = put escrows >> g x
-  ~(y, w) <- listen . getFaeTX $ f x
+  ~(y, w) <- listen . getFaeTX $ callTransactionBody f x
   let result = w `deepseq` Result y
   (result,) <$> if unsafeIsDefined result then return w else fallback
 

@@ -191,12 +191,6 @@ newtype FaeTX a =
 type Contract argType valType = ContractT (Fae argType valType) argType valType
 -- | Useful generalization to add effects
 type ContractT m argType valType = argType -> m (WithEscrows valType)
--- | The user-provided form of a transaction function.  Despite the similar
--- form, the meanings of 'a' and 'b' here are rather different than
--- 'argType' and 'valType' for a 'Contract', because transactions accept
--- a data type constructed from the return values of various contract
--- calls, and return without preserving value.
-type Transaction a b = a -> FaeTX b
 
 -- * Fae typeclasses
 
