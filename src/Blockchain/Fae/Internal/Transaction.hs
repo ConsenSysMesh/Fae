@@ -67,25 +67,25 @@ class
   (Typeable (TransactionResult f), Show (TransactionResult f)) =>
   TransactionBody f where
 
-  type TransactionInputs f :: [*]
   type TransactionResult f :: *
   type TransactionFallback f :: *
   callTransactionBody :: f -> [ReturnValue] -> FaeTX (TransactionResult f)
 
+-- | A little more concise than its expansion.
 type TransactionConstraints f =
   (TransactionBody f, TransactionBody (TransactionFallback f))
 
 {- Instances -}
 
+-- | The base-case instance: a transaction with no arguments.
 instance (Typeable a, Show a) => TransactionBody (FaeTX a) where
-  type TransactionInputs (FaeTX a) = '[a]
   type TransactionResult (FaeTX a) = a
   type TransactionFallback (FaeTX a) = FaeTX ()
   callTransactionBody f [] = f
   callTransactionBody _ _ = throw TooManyInputs
 
+-- | The inductive-case instance: a transaction with one more argument.
 instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
-  type TransactionInputs (a -> f) = a : TransactionInputs f
   type TransactionResult (a -> f) = TransactionResult f
   type TransactionFallback (a -> f) = a -> TransactionFallback f
   callTransactionBody g [] = throw NotEnoughInputs
@@ -156,7 +156,7 @@ doTX f fallbacks x = do
   txID <- view _thisTXID
   (_2 %~ listToOutputs . force) <$> callTX (doFallbacks fallbacks) x f
 
--- | Performs all fallback transactions, ignoring errors.
+-- | Performs all fallback transactions, ignoring return values and errors.
 doFallbacks :: (TransactionBody g) => [g] -> [ReturnValue] -> FaeTXM [Output]
 doFallbacks fallbacks x = fmap concat . 
   forM fallbacks $ fmap snd . callTX (const $ return []) x
@@ -212,6 +212,8 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
       -- We don't update the contract if it didn't return cleanly
       when (successful iR) $ contractAtCID cID .= gAbsM
 
+      -- The nonce needs to be made explicit for the purpose of exporting
+      -- the return value with correct information of when it applies.
       return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
 
     Just (Left (x, iVersions, iStatus)) -> do
@@ -226,8 +228,7 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
 
 -- | Executes the contract function, returning the result, the structured
 -- outputs, the new map of all currently defined versions, and the
--- continuation function.  The 'ContractID' argument must have a 'Nonce
--- Int' and not a 'Current' nonce.
+-- continuation function.
 runContract ::
   ContractID ->
   InputVersionMap ->
