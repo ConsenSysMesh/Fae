@@ -33,6 +33,9 @@ main = do
 
   args <- getArgs
   case parseArgs args of
+    TransferQueryArgs{..} -> do
+      transferQuery transferTXID transferArgHost
+      putStrLn "wow"
     PostArgs{postArgFaeth = postArgFaeth@FaethArgs{..}, ..} -> do
       let buildTXSpec ::
             (MakesTXSpec m a) =>
@@ -63,7 +66,6 @@ main = do
     OngoingFaethArgs{..} -> resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
     ImportExportArgs{..} -> importExport exportTXID exportSCID exportHost importHost
-    TransferQueryArgs{..} -> transferQuery transferTXID transferTo
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess

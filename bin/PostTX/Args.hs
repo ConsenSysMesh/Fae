@@ -4,7 +4,6 @@
 module PostTX.Args where
 
 import Blockchain.Fae.FrontEnd
-
 import Common.Lens hiding (view)
 import Common.ProtocolT
 
@@ -42,7 +41,7 @@ data FinalizedPostTXArgs =
   TransferQueryArgs
   {
     transferTXID :: TransactionID,
-    transferTo :: String
+    transferArgHost :: String
   } |
   OngoingFaethArgs
   {
@@ -110,8 +109,8 @@ argGetter st "--resend" = st & _argResend .~ True
 argGetter st "--json" = st & _argJSON .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x
-  | ("--transfer-to", '=' : transferTo) <- break (== '=') x
-    = st & _argTransfer .~ readMaybe transferTo
+  | ("--transfer-to", '=' : transferTo) <- break (== '=')
+    x = st & _argTransfer .~ readMaybe transferTo
   | ("--export-host", '=' : exportHostArg) <- break (== '=') x
     = st & _argImportExport . _1 ?~ exportHostArg
   | ("--import-host", '=' : importHostArg) <- break (== '=') x
@@ -175,6 +174,15 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       isJust faethRecipient || isJust faethTo
     )
     = error "--resend is incompatible with --faeth-*"
+  | Just transferTXIDM <- argTransfer =
+    -- (\argData -> putStrLn "Args.hs.transferTXIDM")
+    TransferQueryArgs
+    {
+      transferTXID =
+        fromMaybe (error $ "Couldn't parse transaction ID: " ++ transferTXIDM) $
+        readMaybe transferTXIDM,
+        transferArgHost = justHost argHostM
+    }
   | argView, Nothing <- argDataM
     = UsageArgs $ UsageFailure "--view requires a transaction ID"
   | not (null newSigners), Just ethTXIDS <- argDataM =
@@ -194,11 +202,6 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
         readMaybe txIDS,
       viewArgHost = justHost argHostM,
       viewArgJSON = argJSON
-    }
-  | Just _transferTo <- argTransfer =
-    TransferQueryArgs
-    {
-      transferTo = _transferTo
     }
   | (exportHostM, importHostM) <- argImportExport,
     Just argData <- argDataM,

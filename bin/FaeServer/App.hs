@@ -24,6 +24,11 @@ import FaeServer.Concurrency
 import FaeServer.Fae
 import FaeServer.Modules
 
+import System.Directory
+import System.Environment
+import System.Exit
+import System.Process
+
 import Network.HTTP.Types.Header
 import Network.HTTP.Types.Method
 import Network.HTTP.Types.Status
@@ -84,21 +89,27 @@ transferApp :: TXExecApplication
 transferApp sendTXExecData = \request respond -> do
   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
   let
-    send ::
-      (Serialize a) =>
-      (TXExecData -> TMVar a) ->
-      (ThreadId -> TMVar a -> TXExecData) ->
-      TXQueueT IO ResponseReceived
-    send = waitResponse respond dataHeaders (byteString . S.encode) sendTXExecData
     getParams = getParameters params
-    -- parentM = getLast Nothing Just $ getParams "parent"
-    transferM = either error id . S.decode <$> getFileMaybe files "transfer"
-    -- transfer cases: [txid, hostname] inbound request or nothing [] response request
-  case transferM of
-    (Just (transferTXID)) ->
-      send transferResult $ \callerTID transferResult -> Transfer{..}
-    (Nothing) ->
-      error "Must specify a 'transferTXID' parameter in transferApp() "
+    transferToM = getLast Nothing Just $ getParams "transfer-to"
+
+  let transferParams = getParams "transfer-to"
+
+
+  let send = waitResponse respond stringHeaders stringUtf8 sendTXExecData resultVar
+  let queryResponse = runTransferQuery "HelloWorldTX"
+  liftIO $ putStrLn $ "@@@@@@@@@@@@@ at top -- transferToM=" ++ show transferToM
+  liftIO $ putStrLn $ "@@@@@@@@@@@@@ at top -- transferParams=" ++ show transferParams
+
+  case transferToM of
+    Just transferTXID -> do
+      let queryResponse = runTransferQuery transferTXID
+      let queryResponseString = "@@@@@@@@@@@@@ it worked"
+      liftIO $ putStrLn $ queryResponseString
+      send $ \callerTID queryResponse -> View{..}
+      -- send exportResultVar $ \callerTID exportResultVar -> ExportValue{..}
+    Nothing -> do
+      liftIO $ putStrLn $ "@@@@@@@@@@@@@ NoTHINGGGGG"
+      error "Expected a parameter called 'transfer-to' that contains a transaction id"
 
 importExportApp :: TXExecApplication
 importExportApp sendTXExecData = \request respond -> do
@@ -167,3 +178,30 @@ dataHeaders =
   [
     (hContentType, "application/octet-stream")
   ]
+
+runTransferQuery :: TransactionID -> IO ()
+runTransferQuery txID = do
+  liftIO $ putStrLn $ "@@@@@@@@@@@@@ runTransferQuery txid=" ++ show txID
+  setCurrentDirectory("./txs")
+  runTransferQueryWithArgs "postTX" ["" ++ show txID]
+
+runTransferQueryWithArgs :: String -> [String] -> IO ()
+runTransferQueryWithArgs cmd args = do
+  liftIO $ putStrLn $ "@@@@@@@@@@@@@ runTransferQueryWithArgs"
+  let fullArgs = "." : cmd : args
+  (exitCode, out, err) <- readProcessWithExitCode "stack exec" fullArgs ""
+  case exitCode of
+    ExitSuccess -> unless (null out) $ putStrLn $ unlines
+      [
+        "`--transfer " ++ cmd ++ "` was successful with the following output:",
+        out
+      ]
+    ExitFailure n -> do
+      putStrLn $ unlines $
+        ("`--transfer " ++ cmd ++ "` returned code " ++ show n) :
+        if null err then [] else
+          [
+            "Error message:",
+            err
+          ]
+      exitFailure
