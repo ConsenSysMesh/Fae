@@ -12,9 +12,15 @@ import Common.ProtocolT
 import Data.List
 import Data.Maybe
 import Data.Void
+import Data.Char
+import qualified Data.Text as T
+
+import Debug.Trace
 
 import Text.Megaparsec 
-import Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char as C
+import Text.Megaparsec.Byte
+import Text.Megaparsec.Perm
 
 import Text.Read
 
@@ -109,7 +115,7 @@ argGetter st x
   | ("--show-keys", '=' : csvKeysInput) <- break (== '=') x
     = st & _argShowKeys ?~ case parseKeysArgs csvKeysInput of
           Left err -> throw err
-          Right keyNamesList -> keyNamesList
+          Right keyNamesList -> T.unpack . T.strip . T.pack  <$> keyNamesList
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
@@ -245,6 +251,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
 -- Parses the comma separated list of keys to show.
 parseKeysArgs :: String -> Either (ParseError (Token String) Void) [String]
 parseKeysArgs input = runParser csvParser "" input
-  where csvParser = optional space1 *> many (lit $ symbol "," <|> endl) :: Parsec Void String [String]
+  where csvParser = (many (satisfy (/= ',')) ) `sepBy` char ',' :: Parsec Void String [String]
 
-lit end = resolveLine =<< someTill printChar (Text.Megaparsec.try end)
+
+    -- (optional C.space1 *> many (C.alphaNumChar) <* optional C.space1) `sepBy` char ',' :: Parsec Void String [String]
