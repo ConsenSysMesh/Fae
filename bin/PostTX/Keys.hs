@@ -35,7 +35,6 @@ showKeys faeHome [] = do  -- Empty list denotes that all keys should be shown
         storedKeys
 showKeys faeHome keyNamesList = 
   sequence_ $ showHomeKey faeHome <$> keyNamesList
-   
 
 -- Decodes and prints the contents of a given home key
 showHomeKey :: FilePath -> String -> IO ()

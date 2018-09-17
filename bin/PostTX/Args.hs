@@ -15,12 +15,8 @@ import Data.Void
 import Data.Char
 import qualified Data.Text as T
 
-import Debug.Trace
-
 import Text.Megaparsec 
 import qualified Text.Megaparsec.Char as C
-import Text.Megaparsec.Byte
-import Text.Megaparsec.Perm
 
 import Text.Read
 
@@ -173,11 +169,9 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
   | argFake && argView 
     = error "--fake is incompatible with --view"
   | argView && (argLazy || argResend || useFaeth)
-    = error $
-        "--view is incompatible with --lazy, --resend, and --faeth"
+    = error "--view is incompatible with --lazy, --resend, and --faeth"
   | argJSON && (argLazy || useFaeth)
-    = error $
-        "--json is incompatible with --lazy, --faeth*"
+    = error "--json is incompatible with --lazy, --faeth*"
   | not (null newSigners) && (isJust faethFee || isJust faethRecipient)
     = error $
       "--faeth-add-signature is incompatible with " ++
@@ -229,7 +223,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       postArgTXNameOrID = 
         if argResend
         then Left $
-          maybe (error $ "--resend requires a Fae transaction ID")
+          maybe (error "--resend requires a Fae transaction ID")
             (\argData -> 
               fromMaybe (error $ "Couldn't parse transaction ID: " ++ argData) $ 
               readMaybe argData
@@ -248,10 +242,6 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       | useFaeth && not argFake = fromMaybe "localhost:8546"
       | otherwise = fromMaybe "0.0.0.0:27182"
 
--- Parses the comma separated list of keys to show.
 parseKeysArgs :: String -> Either (ParseError (Token String) Void) [String]
 parseKeysArgs input = runParser csvParser "" input
-  where csvParser = (many (satisfy (/= ',')) ) `sepBy` char ',' :: Parsec Void String [String]
-
-
-    -- (optional C.space1 *> many (C.alphaNumChar) <* optional C.space1) `sepBy` char ',' :: Parsec Void String [String]
+  where csvParser = (many $ C.satisfy (/= ',')) `sepBy` C.char ',' :: Parsec Void String [String]
