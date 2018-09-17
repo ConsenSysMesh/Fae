@@ -104,16 +104,21 @@ runTransaction ::
   (TransactionConstraints f) =>
   f -> [TransactionFallback f] -> 
   Inputs -> TransactionID -> Signers -> Bool -> FaeStorage ()
-runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
-  atTX ?= defaultTransactionEntry txID (view _1 <$> inputArgs) txSigners
-  ~(result, outputs) <- runTX $ do
+runTransaction f fallback inputArgs txID txSigners isReward = 
+  runTX txID txSigners (view _1 <$> inputArgs) $ do
     inputs <- runInputContracts inputArgs 
     lift $ runTransactionBody isReward f fallback inputs
-  atTX %= fmap (\txE -> txE{result, outputs})
 
+runTX :: 
+  TransactionID -> Signers -> [ContractID] -> 
+  TXStorageM (Result, Outputs) -> FaeStorage ()
+runTX txID txSigners cIDs tx = FaeStorage $ do
+  atTX ?= defaultTransactionEntry txID cIDs txSigners
+  ~(result, outputs) <- run tx
+  atTX %= fmap (\txE -> txE{result, outputs})
   where 
     atTX = _getStorage . at txID
-    runTX = mapStateT $ Identity . fst . runFaeTXM (txData txID txSigners)
+    run = mapStateT $ Identity . fst . runFaeTXM (txData txID txSigners)
 
 runTransactionBody :: 
   (TransactionConstraints f) =>

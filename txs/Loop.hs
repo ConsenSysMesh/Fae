@@ -1,4 +1,4 @@
 import Control.Monad
 
-body :: Transaction Void ()
-body _ = forever $ return ()
+body :: FaeTX ()
+body = forever $ return ()
