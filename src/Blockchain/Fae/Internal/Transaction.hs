@@ -47,7 +47,7 @@ type Inputs = [(ContractID, String, Renames)]
 
 -- | Transaction monad with storage access, for executing contracts and
 -- saving the results.
-type TXStorageM = StateT Storage FaeTXM
+type TXStorageM = FaeStorageT FaeTXM
 
 -- * Typeclasses
 
@@ -105,55 +105,27 @@ runTransaction ::
   f -> [TransactionFallback f] -> 
   Inputs -> TransactionID -> Signers -> Bool -> FaeStorage ()
 runTransaction f fallback inputArgs txID txSigners isReward = FaeStorage $ do
-  txStorage ?= 
-    TransactionEntry
-    {
-      inputResults = 
-        Vector.fromList $ map (defaultInputResult . view _1) inputArgs,
-      outputs = mempty,
-      txSigners,
-      result = throw $ IncompleteTransaction txID
-    }
-  ~(result, outputs) <- runTX $ runInputContracts inputArgs >>= 
-    lift . (withReward >=> doTX f fallback)
-  txStorage %= fmap (\txE -> txE{result, outputs})
+  atTX ?= defaultTransactionEntry txID (view _1 <$> inputArgs) txSigners
+  ~(result, outputs) <- runTX $ do
+    inputs <- runInputContracts inputArgs 
+    lift $ runTransactionBody isReward f fallback inputs
+  atTX %= fmap (\txE -> txE{result, outputs})
 
   where 
-    txStorage = _getStorage . at txID
-    defaultInputResult cID = 
-      InputResults
-      {
-        iRealID = cID,
-        iStatus = Failed,
-        iResult = ReturnValue (),
-        iExportedResult = mempty,
-        iVersions = emptyVersionMap,
-        iOutputsM = mempty
-      }
-    
-    runTX = mapStateT $ 
-      fmap fst . runWriterT . flip runReaderT txData . flip evalStateT escrows
-    txData = 
-      TXData
-      {
-        thisTXSigners = txSigners,
-        localHash = txID,
-        thisTXID = txID
-      }
-    escrows = Escrows { escrowMap = Map.empty, nextID = txID }
+    atTX = _getStorage . at txID
+    runTX = mapStateT $ Identity . fst . runFaeTXM (txData txID txSigners)
 
-    withReward inputsL
-      | isReward = do
-          eID <- getFaeTX $ newEscrow RewardName
-          return $ ReturnValue (Reward eID) : inputsL
-      | otherwise = return inputsL
- 
+runTransactionBody :: 
+  (TransactionConstraints f) =>
+  Bool -> f -> [TransactionFallback f] -> 
+  [ReturnValue] -> FaeTXM (Result, Outputs)
+runTransactionBody isReward f fallback = withReward isReward >=> doTX f fallback
+
 -- | Actually perform the transaction.
 doTX :: 
   (TransactionConstraints f) => 
   f -> [TransactionFallback f] -> [ReturnValue] -> FaeTXM (Result, Outputs)
-doTX f fallbacks x = do
-  txID <- view _thisTXID
+doTX f fallbacks x = 
   (_2 %~ listToOutputs . force) <$> callTX (doFallbacks fallbacks) x f
 
 -- | Performs all fallback transactions, ignoring return values and errors.
@@ -206,7 +178,7 @@ nextInput ix (cID, arg, Renames renames) (results, vers) = do
       \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
     Just (Right OutputData{..}) -> do 
       ~(iR, gAbsM) <- lift $ 
-        local (_localHash .~ digest arg) . remapSigners renames $ 
+        pushArg arg . remapSigners renames $ 
           runContract cID vers outputContract arg
 
       -- We don't update the contract if it didn't return cleanly

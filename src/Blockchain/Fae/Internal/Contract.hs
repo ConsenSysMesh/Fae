@@ -257,6 +257,10 @@ instance MonadTX FaeTX where
   liftTX = id
 
 -- | -
+instance MonadTX FaeTXM where
+  liftTX = getFaeTX
+
+-- | -
 instance MonadTX (Fae argType valType) where
   liftTX = Fae . mapStateT lift . getFaeTX
 
@@ -359,7 +363,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 
 -- * Internal functions
 
--- ** Signers
+-- ** Calling
 
 -- | Temporarily changes the map of signers according to its first argument.
 remapSigners :: Map String String -> FaeTXM a -> FaeTXM a
@@ -367,7 +371,17 @@ remapSigners renames = local (_thisTXSigners . _getSigners %~ applyRenames) wher
   applyRenames keyMap = fmap (flip renameKey keyMap) renames `Map.union` keyMap
   renameKey oldName = Map.findWithDefault (throw $ MissingSigner oldName) oldName
 
--- ** Contract function converters
+pushArg :: (MonadReader TXData m) => String -> m a -> m a
+pushArg s = local (_localHash .~ digest s)
+
+txData :: TransactionID -> Signers -> TXData
+txData txID txSigners =
+  TXData
+  {
+    thisTXSigners = txSigners,
+    localHash = txID,
+    thisTXID = txID
+  }
 
 -- | Converts a deeply wrapped function returning an awkward type into
 -- a natural stepwise function call.
@@ -375,6 +389,8 @@ callContract ::
   ContractF argType valType -> 
   argType -> FaeTXM (valType, Maybe (ContractF argType valType))
 callContract (ContractF (SuspendStepF f)) = fmap (fmap (fmap ContractF)) . f
+
+-- ** Contract function converters
 
 -- | Generalizes an operationally-correct explicitly-typed contract into an
 -- abstract one suitable for calling within other contract code.
@@ -529,3 +545,10 @@ returnValueType (ReturnValue x) = typeRep (Just x)
 -- | Taking advantage of the existential type
 exportReturnValue :: ReturnValue -> FaeTXM ByteString
 exportReturnValue (ReturnValue x) = liftEscrowState $ exportValue x
+
+-- ** Running
+
+runFaeTXM :: TXData -> FaeTXM a -> (a, [Output])
+runFaeTXM txData = runWriter . flip runReaderT txData . flip evalStateT escrows
+  where escrows = Escrows Map.empty (thisTXID txData)
+
