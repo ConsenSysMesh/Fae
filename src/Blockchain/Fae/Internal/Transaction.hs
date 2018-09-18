@@ -23,6 +23,7 @@ import Common.Lens
 
 import Control.DeepSeq
 
+import Control.Monad.Fix
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
@@ -104,21 +105,14 @@ runTransaction ::
   (TransactionConstraints f) =>
   f -> [TransactionFallback f] -> 
   Inputs -> TransactionID -> Signers -> Bool -> FaeStorage ()
-runTransaction f fallback inputArgs txID txSigners isReward = 
-  runTX txID txSigners (view _1 <$> inputArgs) $ do
-    inputs <- runInputContracts inputArgs 
-    lift $ runTransactionBody isReward f fallback inputs
-
-runTX :: 
-  TransactionID -> Signers -> [ContractID] -> 
-  TXStorageM (Result, Outputs) -> FaeStorage ()
-runTX txID txSigners cIDs tx = FaeStorage $ do
-  atTX ?= defaultTransactionEntry txID cIDs txSigners
-  ~(result, outputs) <- run tx
-  atTX %= fmap (\txE -> txE{result, outputs})
-  where 
-    atTX = _getStorage . at txID
-    run = mapStateT $ Identity . fst . runFaeTXM (txData txID txSigners)
+runTransaction f fallback inputArgs txID txSigners isReward = runTX $ do
+  inputResults <- runInputContracts inputArgs 
+  let inputs = Vector.toList $ fmap iResult inputResults
+  ~(result, outputs) <- lift $ runTransactionBody isReward f fallback inputs
+  _getStorage . at txID ?= TransactionEntry{..}
+  where
+    runTX = FaeStorage . 
+      (mapStateT $ Identity . fst . runFaeTXM (txData txID txSigners))
 
 runTransactionBody :: 
   (TransactionConstraints f) =>
@@ -157,51 +151,51 @@ callTX g x f = do
 
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
-runInputContracts :: Inputs -> TXStorageM [ReturnValue]
-runInputContracts inputs = fmap fst $
-  foldl' (>>=) (return ([], emptyInputVersionMap $ length inputs)) $
-    zipWith nextInput [0 ..] inputs
+runInputContracts :: Inputs -> TXStorageM (Vector InputResults)
+runInputContracts inputs = mfix $ 
+  forM (Vector.fromList inputs) . nextInput . makeVers 
+  where makeVers = InputVersionMap . fmap iVersions
 
--- | If the contract function is available, run it as a monadic state
--- update, adding the result to the ongoing list and updating the map of
--- all defined versions.  If instead we have an imported value, just use
--- that.  Otherwise, this input is exceptional (and so, probably, is the
--- transaction result).
+-- | Looks up the contract ID and dispatches to the various possible
+-- actions (call, import, error) depending on what's found.
 nextInput ::
-  Int -> (ContractID, String, Renames) -> 
-  ([ReturnValue], InputVersionMap) -> 
-  TXStorageM ([ReturnValue], InputVersionMap)
-nextInput ix (cID, arg, Renames renames) (results, vers) = do
-  valEM <- use $ at cID 
+  InputVersionMap -> (ContractID, String, Renames) -> TXStorageM InputResults
+nextInput vers (cID, arg, renames) = do
+  valEM <- use $ at cID
+  maybe errInputResult (either importedCallResult cCall) valEM cID
+  where cCall = contractCallResult vers arg renames
 
-  -- Lazy because 'Nothing' throws an exception.
-  ~iR@InputResults{..} <- case valEM of
-    -- A quick way of assigning the same exception to all the fields of the
-    -- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
-    -- values, which are useful even if the contract itself is missing.
-    Nothing -> return $ (throw $ BadContractID cID) & 
-      \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
-    Just (Right OutputData{..}) -> do 
-      ~(iR, gAbsM) <- lift $ 
-        pushArg arg . remapSigners renames $ 
-          runContract cID vers outputContract arg
+-- | If the contract function is available, use it, update if it suceeds,
+-- and produce the results regardless.
+contractCallResult :: 
+  InputVersionMap -> String -> Renames -> 
+  OutputData -> ContractID -> TXStorageM InputResults
+contractCallResult vers arg (Renames rMap) OutputData{..} cID = do
+  ~(iR, gAbsM) <- lift $ 
+    pushArg arg . remapSigners rMap $ 
+      runContract cID vers outputContract arg
+  when (successful iR) $ contractAtCID cID .= gAbsM
 
-      -- We don't update the contract if it didn't return cleanly
-      when (successful iR) $ contractAtCID cID .= gAbsM
+  -- The nonce needs to be made explicit for the purpose of exporting
+  -- the return value with correct information of when it applies.
+  return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
 
-      -- The nonce needs to be made explicit for the purpose of exporting
-      -- the return value with correct information of when it applies.
-      return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
+-- | If instead we have an imported value, just use that.  
+importedCallResult :: ImportData -> ContractID -> TXStorageM InputResults
+importedCallResult (x, iVersions, iStatus) cID = do
+  at cID .= Nothing -- Just to make sure
+  iResult <- lift $ putEscrows x
+  iExportedResult <- lift $ exportReturnValue iResult
+  return InputResults{iRealID = cID, iOutputsM = Nothing, ..}
 
-    Just (Left (x, iVersions, iStatus)) -> do
-      at cID .= Nothing -- Just to make sure
-      iResult <- lift $ putEscrows x
-      iExportedResult <- lift $ exportReturnValue iResult
-      return InputResults{iRealID = cID, iOutputsM = Nothing, ..}
-
-  txID <- view _thisTXID
-  _getStorage . at txID . uncertain (txInputLens ix) ?= iR 
-  return (results |> iResult, addContractVersions ix iVersions vers)
+-- | Otherwise, this input is exceptional (and so, probably, is the
+-- transaction result).
+errInputResult :: ContractID -> TXStorageM InputResults
+-- A quick way of assigning the same exception to all the fields of the
+-- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
+-- values, which are useful even if the contract itself is missing.
+errInputResult cID = return $ (throw $ BadContractID cID) & 
+  \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
 
 -- | Executes the contract function, returning the result, the structured
 -- outputs, the new map of all currently defined versions, and the
@@ -213,13 +207,11 @@ runContract ::
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID vers fAbs arg = do
-  thisTXID <- view _thisTXID
   ~(~(~(result, vers), gAbsM), outputsL) <- 
     listen $ callContract fAbs (arg, vers)
   let 
     iResult = gAbsM `deepseq` outputsL `seq` result
     iOutputsM = Just $ listToOutputs outputsL
-    worked = unsafeIsDefined iResult
     iStatus
       | not (unsafeIsDefined iResult) = Failed
       | Nothing <- gAbsM = Deleted
@@ -227,9 +219,6 @@ runContract iRealID vers fAbs arg = do
     iVersions
       | hasNonce iRealID = vers
       | otherwise = vers `seq` emptyVersionMap
-  -- The actual result of the contract includes both 'result' and also
-  -- the outputs and continuation function, so we link their fates.
-  let 
   iExportedResult <- exportReturnValue iResult
   return (InputResults{..}, gAbsM)
 

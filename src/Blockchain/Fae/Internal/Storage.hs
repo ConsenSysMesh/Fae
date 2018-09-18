@@ -46,7 +46,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry,
-    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap, Status)
+    importedValues :: Map ContractID ImportData
   }
 
 -- | A general storage transformer; used for running transactions in IO.
@@ -104,6 +104,8 @@ type Outputs = Vector Output
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
 type ExportData = (ContractID, Status, [String], String, ByteString)
+
+type ImportData = (WithEscrows ReturnValue, VersionMap, Status)
 
 -- * Template Haskell
 
@@ -253,27 +255,4 @@ getExportedValue txID ix = do
 
 runStorageT :: (Monad m) => FaeStorageT m a -> m a
 runStorageT = flip evalStateT $ Storage Map.empty Map.empty
-
-defaultInputResults :: ContractID -> InputResults
-defaultInputResults cID = 
-  InputResults
-  {
-    iRealID = cID,
-    iStatus = Failed,
-    iResult = throw $ IncompleteContract cID,
-    iExportedResult = mempty,
-    iVersions = emptyVersionMap,
-    iOutputsM = mempty
-  }
-
-defaultTransactionEntry :: 
-  TransactionID -> [ContractID] -> Signers -> TransactionEntry
-defaultTransactionEntry txID cIDs txSigners =
-  TransactionEntry
-  {
-    inputResults = Vector.fromList $ map defaultInputResults cIDs,
-    outputs = mempty,
-    txSigners,
-    result = throw $ IncompleteTransaction txID
-  }
 
