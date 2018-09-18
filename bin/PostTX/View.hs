@@ -10,6 +10,6 @@ import Network.HTTP.Client.MultipartFormData
 
 view :: TransactionID -> String -> Bool -> IO ()
 view txID host isJSON = do
-  request <- flip formDataBody (requestURL host) $ 
+  request <- flip formDataBody (requestURL host) 
     [partLBS "view" $ LC8.pack $ show txID]
   sendReceiveJSONString isJSON request >>= putStrLn

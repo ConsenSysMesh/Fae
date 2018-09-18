@@ -59,7 +59,7 @@ instance FromJSON TXInputSummary where
         <*> readJSONField "txInputVersions" o
       
 instance FromJSON TXSummary where
-  parseJSON = withObject "TXSummary" $ \o -> do
+  parseJSON = withObject "TXSummary" $ \o ->
     TXSummary
       <$> o .: "transactionID"
       <*> readJSONField "txResult" o
@@ -68,14 +68,14 @@ instance FromJSON TXSummary where
       <*> o .: "txSSigners"
 
 instance FromJSON PublicKey where
-  parseJSON = withText "VersionID" $ \pKey -> do
+  parseJSON = withText "VersionID" $ \pKey ->
     either fail return $ readEither (T.unpack pKey)
 
 instance ToJSON PublicKey where
   toJSON = toJSON . T.pack . show
 
 instance FromJSON VersionID where
-  parseJSON = withText "VersionID" $ \vID -> do
+  parseJSON = withText "VersionID" $ \vID ->
     either fail return $ readEither (T.unpack vID)
 
 instance ToJSON VersionID where

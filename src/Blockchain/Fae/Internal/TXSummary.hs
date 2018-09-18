@@ -27,7 +27,7 @@ import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.Versions
 import Blockchain.Fae.Internal.TX
 
-import Common.Lens hiding ((.=))
+import Common.Lens
 
 import System.IO.Unsafe
 
@@ -148,7 +148,7 @@ prettyPairs = vcat . map prettyPair
 
 -- | Prints a key-value pair with a colon.
 prettyPair :: (Show v) => (String, v) -> Doc
-prettyPair (x, y) = text x <> colon <+> (text $ show y)
+prettyPair (x, y) = text x <> colon <+> text (show y)
 
 -- | Actually prints the exception nicely.  Due to call stack cruft we only
 -- take the first line.
