@@ -149,13 +149,12 @@ argGetter st x
       & _argFaeth . _useFaeth .~ True
       & _argFaeth . _faethRecipient .~ readMaybe faethRecipArg
   | "--" `isPrefixOf` x
-    = st & (_argUsage ?~ (UsageFailure $ "Unrecognized option: " ++ x))
+    = st & _argUsage ?~ UsageFailure ("Unrecognized option: " ++ x)
   | Nothing <- st ^. _argDataM = st & _argDataM ?~ x
   | Nothing <- st ^. _argHostM = st & _argHostM ?~ x
-  | otherwise = st & (_argUsage ?~
-  (UsageFailure $
-     unlines
-       ["Unknown argument: " ++ x, "TX name and host already given"]))
+  | otherwise = 
+    st & _argUsage ?~ UsageFailure
+      (unlines ["Unknown argument: " ++ x, "TX name and host already given"])
 
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
@@ -176,12 +175,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     = error $
       "--faeth-add-signature is incompatible with " ++
       "--faeth-fee and --faeth-recipient"
-  | argResend && 
-    (
-      not (null newSigners) || 
-      isJust faethFee || isJust faethValue || isJust faethArgument || 
-      isJust faethRecipient || isJust faethTo
-    )
+  | argResend && useFaeth
     = error "--resend is incompatible with --faeth-*"
   | argView, Nothing <- argDataM
     = UsageArgs $ UsageFailure "--view requires a transaction ID"

@@ -10,6 +10,7 @@ import Control.Lens
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Serialize as S
+import Data.List
 import Data.Maybe
 
 import PostTX.Args
@@ -27,12 +28,10 @@ showKeys :: FilePath -> [String] -> IO ()
 showKeys faeHome [] = do  -- Empty list denotes that all keys should be shown 
   storedKeys <- getHomeKeys faeHome
   if null storedKeys then print $ "No keys found at " ++ show faeHome else
-    putStrLn $
-      concatMap
-        (\(keyName, privKey) -> 
-          keyName ++ ": " ++
-              maybe "Couldn't validate key" show (public (privKey :: PrivateKey))  ++ "\n")
-        storedKeys
+    putStr . unlines $ 
+      storedKeys <&> \(keyName, privKey) -> 
+        keyName ++ ": " ++
+        maybe "Couldn't validate key" show (public privKey)
 showKeys faeHome keyNamesList = 
   sequence_ $ showHomeKey faeHome <$> keyNamesList
 
@@ -46,15 +45,16 @@ showHomeKey faeHome keyName = do
     Just file -> do
       keyBytes <- BS.readFile file
       case S.decode keyBytes of 
-        Left err ->
-          putStrLn $ show faeHome ++ keyName ++  " could not be decoded"  ++ " : " ++ show err 
-        Right key -> putStrLn $ maybe "Couldn't validate key" showKey (public (key :: PrivateKey))
+        Left err -> putStrLn $ 
+          show faeHome ++ keyName ++ " could not be decoded" ++ " : " ++ show err 
+        Right key -> putStrLn $ 
+          maybe "Couldn't validate key" showKey $ public key
           where showKey key = takeBaseName file ++ ": " ++ show key
 
--- Retrieves a key file from the FaeHome directory.
+-- Retrieves all valid key files from the FaeHome directory.
 getHomeKeys :: FilePath -> IO [(String, PrivateKey)]
 getHomeKeys path = do
   dirList <- getDirectoryContents path
   fileList <- filterM doesFileExist dirList
-  mapMaybe (_2 (preview _Right)) <$> 
+  sortOn (view _1) . mapMaybe (_2 (preview _Right)) <$> 
     traverse sequenceA [(takeBaseName a, S.decode <$> BS.readFile a) | a <- fileList]

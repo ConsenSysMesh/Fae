@@ -28,11 +28,11 @@ import Network.HTTP.Client.MultipartFormData
 import PostTX.TXSpec
 
 import Text.PrettyPrint.HughesPJClass
-  
+
 requestURL :: String -> Request
 requestURL host = fromMaybe (error $ "Bad host string: " ++ host) $ 
-  parseRequest $ "http://" ++ host     
-
+  parseRequest $ "http://" ++ host
+    
 sendReceive :: (LC8.ByteString -> a) -> Request -> IO a
 sendReceive decode request = do
   manager <- newManager defaultManagerSettings
@@ -65,3 +65,4 @@ modulePart param name = partFileRequestBody (T.pack param) name . RequestBodyBS
 
 moduleParts :: String -> Modules -> [Part]
 moduleParts param = Map.foldrWithKey (\name -> (:) . modulePart param name) []
+
