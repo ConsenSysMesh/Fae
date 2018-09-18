@@ -1,11 +1,10 @@
 -- Create a valuable (escrow) and deposit it with contract A
 -- Also create contract B that can have that valuable transfered to it
-body :: Transaction Void ()
-body _ = do
+body :: FaeTX ()
+body = do
   eID <- newEscrow $ Val 0
   newContract $ C1 eID -- Owns eID, when called, calls the escrow and returns it
   newContract C2 -- When called with an escrow ID, calls it
-
 
 data Val = Val Integer deriving (Generic)
 

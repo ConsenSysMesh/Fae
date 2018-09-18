@@ -46,19 +46,13 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry,
-    importedValues :: Map ContractID (WithEscrows ReturnValue, VersionMap, Status)
+    importedValues :: Map ContractID ImportData
   }
 
 -- | A general storage transformer; used for running transactions in IO.
-newtype FaeStorageT m a = FaeStorageT { getFaeStorageT :: StateT Storage m a }
-  deriving 
-    (
-      Functor, Applicative, Monad, 
-      MonadThrow, MonadCatch, MonadMask, MonadIO
-    )
--- | The version used for running pure transactions
+type FaeStorageT = StateT Storage
+-- | A newtype so that the interpreter doesn't need 'StateT' in scope.
 newtype FaeStorage a = FaeStorage { getFaeStorage :: State Storage a }
-  deriving (Functor, Applicative, Monad)
 
 -- | Each transaction can produce outputs in two different ways (cf.
 -- 'ContractID'), has an associated "signer" public key, and a result.
@@ -110,6 +104,8 @@ type Outputs = Vector Output
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
 type ExportData = (ContractID, Status, [String], String, ByteString)
+
+type ImportData = (WithEscrows ReturnValue, VersionMap, Status)
 
 -- * Template Haskell
 
@@ -244,7 +240,7 @@ addImportedValue valueImporter cID status = FaeStorage $ do
     (WithEscrows escrowMap (ReturnValue importedValue), vMap, status)
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
-getExportedValue txID ix = FaeStorageT $ do
+getExportedValue txID ix = do
   InputResults{..} <- use $ inputResultsAt txID ix .
     defaultLens (throw $ BadInputID txID ix)
   Output{..} <- use $ outputAt iRealID . 
@@ -256,4 +252,7 @@ getExportedValue txID ix = FaeStorageT $ do
     listTyCons :: TypeRep -> [TyCon]
     listTyCons rep = con : (reps >>= listTyCons) where
       (con, reps) = splitTyConApp rep
+
+runStorageT :: (Monad m) => FaeStorageT m a -> m a
+runStorageT = flip evalStateT $ Storage Map.empty Map.empty
 

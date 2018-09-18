@@ -1,3 +1,3 @@
-body :: Transaction Void String
-body _ = return "Hello, World!"
+body :: FaeTX String
+body = return "Hello, World!"
 

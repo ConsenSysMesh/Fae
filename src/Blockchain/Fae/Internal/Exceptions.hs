@@ -69,6 +69,8 @@ data ContractException =
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
+  IncompleteContract ContractID |
+  IncompleteTransaction TransactionID |
   NotEnoughInputs |
   TooManyInputs
 
@@ -137,6 +139,10 @@ instance Show ContractException where
 
 -- | -
 instance Show TransactionException where
+  show (IncompleteContract cID) =
+    "Contract " ++ show cID ++ " has missing result"
+  show (IncompleteTransaction txID) =
+    "Transaction " ++ show txID ++ " has missing result"
   show NotEnoughInputs = "Transaction expected more inputs"
   show TooManyInputs = "Transaction expected fewer inputs"
 

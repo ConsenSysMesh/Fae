@@ -74,9 +74,6 @@ instance (TXQueueM m) => TXQueueM (ReaderT r m) where
 instance (TXQueueM m, Monoid w) => TXQueueM (WriterT w m) where
   liftTXQueueT = lift . liftTXQueueT
 
-instance (TXQueueM m) => TXQueueM (FaeStorageT m) where
-  liftTXQueueT = FaeStorageT . liftTXQueueT
-
 instance (TXQueueM m) => TXQueueM (StateT s m) where
   liftTXQueueT = lift . liftTXQueueT
 

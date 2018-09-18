@@ -61,7 +61,8 @@ module Blockchain.Fae
     -- the literal arguments passed to the contracts with the given IDs.
     -- These are then 'read' into Haskell types, to prevent malicious
     -- authors from inserting nonterminating code into the contract calls.
-    Transaction, TransactionM, PublicKey, FaeTX, MonadTX,
+    TransactionBody, TransactionConstraints, 
+    PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
     Contract, ContractM, ContractName(..), Exportable, EGeneric, 
     Fae, MonadContract, WithEscrows, EscrowID, Reward,
@@ -76,8 +77,7 @@ module Blockchain.Fae
     -- Contract literal arguments can refer to these values by version.
     Versioned(Versioned, getVersioned),
     -- * Opaque classes
-    GetInputValues, HasEscrowIDs, Versionable, 
-    ContractArg, ContractVal, TransactionArg, TransactionVal,
+    HasEscrowIDs, Versionable, ContractArg, ContractVal, 
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
     Generic, Identity(..), Void
@@ -86,10 +86,10 @@ module Blockchain.Fae
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.GenericInstances
-import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Serialization
+import Blockchain.Fae.Internal.Transaction
 import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
@@ -110,10 +110,6 @@ type ContractVal a =
   (HasEscrowIDs a, Versionable a, EGeneric a, ESerialize a)
 -- | Constraint collection synonym
 type ContractArg a = (HasEscrowIDs a, Versionable a, Read a)
--- | Constraint collection synonym
-type TransactionArg a = (HasEscrowIDs a, GetInputValues a)
--- | Constraint collection synonym
-type TransactionVal a = (Typeable a, Show a)
 
 -- | A contract transformer to apply effects to 'Fae'
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =

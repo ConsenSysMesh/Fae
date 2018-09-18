@@ -15,7 +15,6 @@ module Blockchain.Fae.Internal
     module Blockchain.Fae.Internal.Crypto,
     module Blockchain.Fae.Internal.Exceptions,
     module Blockchain.Fae.Internal.GenericInstances,
-    module Blockchain.Fae.Internal.GetInputValues,
     module Blockchain.Fae.Internal.IDs,
     module Blockchain.Fae.Internal.Messages,
     module Blockchain.Fae.Internal.Reward,
@@ -32,7 +31,6 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.GenericInstances
-import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Messages
 import Blockchain.Fae.Internal.Reward
