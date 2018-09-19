@@ -107,7 +107,7 @@ runTransaction ::
   Inputs -> TransactionID -> Signers -> Bool -> FaeStorage ()
 runTransaction f fallback inputArgs txID txSigners isReward = runTX $ do
   inputResults <- runInputContracts inputArgs 
-  let inputs = Vector.toList $ fmap iResult inputResults
+  let inputs = Vector.toList $ fmap (getWithEscrows . iResult) inputResults
   ~(result, outputs) <- lift $ runTransactionBody isReward f fallback inputs
   _getStorage . at txID ?= TransactionEntry{..}
   where
@@ -154,7 +154,7 @@ callTX g x f = do
 runInputContracts :: Inputs -> TXStorageM (Vector InputResults)
 runInputContracts inputs = mfix $ 
   forM (Vector.fromList inputs) . nextInput . makeVers 
-  where makeVers = InputVersionMap . fmap iVersions
+  where makeVers = InputVersionMap . fmap makeInputVersions
 
 -- | Looks up the contract ID and dispatches to the various possible
 -- actions (call, import, error) depending on what's found.
@@ -181,12 +181,11 @@ contractCallResult vers arg (Renames rMap) OutputData{..} cID = do
   return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
 
 -- | If instead we have an imported value, just use that.  
-importedCallResult :: ImportData -> ContractID -> TXStorageM InputResults
-importedCallResult (x, iVersions, iStatus) cID = do
+importedCallResult :: InputResults -> ContractID -> TXStorageM InputResults
+importedCallResult iR@InputResults{..} cID = do
   at cID .= Nothing -- Just to make sure
-  iResult <- lift $ putEscrows x
-  iExportedResult <- lift $ exportReturnValue iResult
-  return InputResults{iRealID = cID, iOutputsM = Nothing, ..}
+  _ <- lift $ putEscrows iResult
+  return iR
 
 -- | Otherwise, this input is exceptional (and so, probably, is the
 -- transaction result).
@@ -207,18 +206,12 @@ runContract ::
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID vers fAbs arg = do
-  ~(~(~(result, vers), gAbsM), outputsL) <- 
-    listen $ callContract fAbs (arg, vers)
-  let 
-    iResult = gAbsM `deepseq` outputsL `seq` result
-    iOutputsM = Just $ listToOutputs outputsL
-    iStatus
-      | not (unsafeIsDefined iResult) = Failed
-      | Nothing <- gAbsM = Deleted
-      | otherwise = Updated
-    iVersions
-      | hasNonce iRealID = vers
-      | otherwise = vers `seq` emptyVersionMap
-  iExportedResult <- exportReturnValue iResult
+  ~(~(resultE, gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
+  let iResult = gAbsM `deepseq` outputsL `deepseq` resultE
+      iOutputsM = Just $ listToOutputs outputsL
+      iStatus
+        | not (unsafeIsDefined iResult) = Failed
+        | Nothing <- gAbsM = Deleted
+        | otherwise = Updated
   return (InputResults{..}, gAbsM)
 

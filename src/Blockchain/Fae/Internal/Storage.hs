@@ -46,7 +46,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry,
-    importedValues :: Map ContractID ImportData
+    importedValues :: Map ContractID InputResults
   }
 
 -- | A general storage transformer; used for running transactions in IO.
@@ -86,9 +86,10 @@ data InputResults =
     -- 'Right' means its nonce was incremented.
     iRealID :: ContractID,
     iStatus :: Status,
-    iResult :: ReturnValue,
-    iExportedResult :: ByteString,
-    iVersions :: VersionMap,
+    -- | This is /very dangerous/ because these escrows are duplicates.
+    -- This value /must not/ be used inside Fae, but only exposed to
+    -- external applications (such as import/export).
+    iResult :: WithEscrows ReturnValue,
     iOutputsM :: Maybe Outputs
   } deriving (Generic)
 
@@ -103,9 +104,16 @@ type Outputs = Vector Output
 -- different source trees using this type all have the same version of it.
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
-type ExportData = (ContractID, Status, [String], String, ByteString)
-
-type ImportData = (WithEscrows ReturnValue, VersionMap, Status)
+data ExportData = 
+  ExportData
+  {
+    exportedCID :: ContractID,
+    exportStatus :: Status,
+    neededModules :: [String],
+    exportNameType :: String,
+    exportedValue :: ByteString
+  }
+  deriving (Generic)
 
 -- * Template Haskell
 
@@ -121,6 +129,9 @@ instance Show Result where
 
 -- | -
 instance Serialize Status
+
+-- | -
+instance Serialize ExportData
 
 -- * Functions
 
@@ -138,8 +149,7 @@ contractAtCID cID = outputAtNonce cID . lens getter setter where
 -- | For the 'At' instance
 type instance Index Storage = ContractID
 -- | For the 'At' instance
-type instance IxValue Storage = 
-  Either (WithEscrows ReturnValue, VersionMap, Status) OutputData
+type instance IxValue Storage = Either InputResults OutputData
 -- | For the 'At' instance
 instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
@@ -224,6 +234,11 @@ successful InputResults{..}
   | Failed <- iStatus = False
   | otherwise = True
 
+makeInputVersions :: InputResults -> VersionMap
+makeInputVersions InputResults{iResult = WithEscrows{..},..} 
+  | hasNonce iRealID = versionMap (lookupWithEscrows withEscrows) getWithEscrows
+  | otherwise = emptyVersionMap
+
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not
 -- `FaeStorageT` because the former is not an instance of the latter, and
@@ -231,13 +246,13 @@ successful InputResults{..}
 addImportedValue :: 
   (Versionable a, HasEscrowIDs a, Exportable a) => 
   State Escrows a -> ContractID -> Status -> FaeStorage ()
-addImportedValue valueImporter cID status = FaeStorage $ do
-  unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
+addImportedValue valueImporter iRealID iStatus = FaeStorage $ do
+  unless (hasNonce iRealID) $ throw $ ImportWithoutNonce iRealID
   let (importedValue, Escrows{..}) = 
         runState valueImporter (Escrows Map.empty nullDigest)
-      vMap = versionMap (lookupWithEscrows escrowMap) importedValue
-  _importedValues . at cID ?= 
-    (WithEscrows escrowMap (ReturnValue importedValue), vMap, status)
+      iVersions = versionMap (lookupWithEscrows escrowMap) importedValue
+      iResult = WithEscrows escrowMap (ReturnValue importedValue)
+  _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = do
@@ -245,8 +260,16 @@ getExportedValue txID ix = do
     defaultLens (throw $ BadInputID txID ix)
   Output{..} <- use $ outputAt iRealID . 
     defaultLens (throw $ BadContractID iRealID)
-  let modNames = tyConModule <$> listTyCons outputType
-  return (iRealID, iStatus, modNames, show outputType, iExportedResult)
+  let neededModules = tyConModule <$> listTyCons outputType
+      WithEscrows eMap result = iResult
+      exportedValue = evalState (exportReturnValue result) eMap
+  return ExportData 
+    {
+      exportedCID = iRealID,
+      exportStatus = iStatus,
+      exportNameType = show outputType,
+      ..
+    }
 
   where
     listTyCons :: TypeRep -> [TyCon]

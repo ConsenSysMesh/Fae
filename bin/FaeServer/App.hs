@@ -92,9 +92,9 @@ importExportApp sendTXExecData = \request respond -> do
     importDataM = either error id . S.decode <$> getFileMaybe files "import"
     exportDataM = either error id . S.decode <$> getFileMaybe files "export"
   case (importDataM, exportDataM) of
-    (Just (importedCID, deleted, valueModules, valueType), Nothing) ->
-      let valuePackage = getFile files "valuePackage"
-          exportData = (importedCID, deleted, valueModules, valueType, valuePackage)
+    (Just (exportedCID, exportStatus, neededModules, exportNameType), Nothing) ->
+      let exportedValue = getFile files "valuePackage"
+          exportData = ExportData{..}
       in send signalVar $ \callerTID signalVar -> ImportValue{..}
     (Nothing, Just (calledInTX, ixInTX)) ->
       send exportResultVar $ \callerTID exportResultVar -> ExportValue{..}
