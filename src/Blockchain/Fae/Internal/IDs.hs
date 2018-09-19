@@ -150,9 +150,6 @@ instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i m f) where
 -- * Functions
 
 -- | Take the hash of a contract ID.
-shorten :: ContractID -> ShortContractID
-shorten = ShortContractID . digest . withoutNonce
-
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue 
@@ -173,16 +170,6 @@ bearerType (BearsValue x) = typeRep (Just x)
 defaultTraverseEscrowIDs :: EscrowIDTraversal a
 -- Not point-free to specialize forall
 defaultTraverseEscrowIDs _ x = return x
-
--- | Predicate for determining whether a required nonce was provided.
-hasNonce :: ContractID -> Bool
-hasNonce (_ :# n) = True
-hasNonce _ = False
-
--- | Normalizes a contract ID for storing with transaction inputs 
-withoutNonce :: ContractID -> ContractID
-withoutNonce (cID :# n) = cID
-withoutNonce cID = cID
 
 -- | Just accumulates all the entries in each of the objects as a map.
 -- Internally, this uses an imitation of the @lens@ function 'toList' for

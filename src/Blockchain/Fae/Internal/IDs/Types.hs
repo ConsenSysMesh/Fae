@@ -14,40 +14,44 @@ version IDs.
 module Blockchain.Fae.Internal.IDs.Types where
 
 import Blockchain.Fae.Internal.Crypto
+
 import Common.Lens
+
 import Control.DeepSeq
+
+import Data.List
 import Data.Map (Map)
 import Data.Serialize
 import Data.String
+
 import GHC.Generics
+
 import Text.ParserCombinators.ReadP
 
 -- | This identifier locates a contract in storage.  It is not intended to
 -- be used in contract code, as indeed, a contract can never be called
 -- explicitly but only as a transaction input, for which there is a special
 -- syntax outside Haskell.
-data ContractID =
-  -- | One way contracts can be created is by being directly output by
-  -- a transaction.  The outputs are indexed from 0 in order of creation.
-  TransactionOutput TransactionID Int |
-  -- | The other way contracts can be created is by being output during the
-  -- execution of one of its input contract calls.  The outputs are indexed
-  -- from 0 in order of creation, with the indexing specific to each input
-  -- contract.
-  InputOutput TransactionID ShortContractID Int |
-  -- | Contracts can be given with an optional /nonce/, denoting how many
-  -- times they have been called.  This infix constructor is for
-  -- convenience.  
-  ContractID :# Int
-  deriving (Read, Show, Generic, Eq, Ord)
+data ContractID = 
+  ContractID
+  {
+    parentTransaction :: TransactionID,
+    transactionPart :: TransactionPart,
+    creationIndex :: Int,
+    contractNonce :: Nonce
+  }
+  deriving (Read, Show, Eq, Ord, Generic)
 
--- | The hash of a 'ContractID', useful for abbreviating what would
--- otherwise be unboundedly long chains of contracts that are outputs of
--- contracts that are outputs of ... that are outputs of some long-ago
--- transaction.
-newtype ShortContractID = ShortContractID { getShortContractID :: Digest }
-  deriving (Eq, Ord, Serialize, IsString, Generic, NFData)
+-- | Contracts may be created either in the transaction body or in the body
+-- of a previous contract called by the transaction.
+data TransactionPart = Body | InputCall Int
+  deriving (Read, Show, Eq, Ord, Generic)
 
+-- | A contract ID can be specified without a nonce, meaning that whatever
+-- the current version of the contract is should be used.
+data Nonce = Current | Nonce Int
+  deriving (Read, Show, Eq, Ord, Generic)
+                         --
 -- | Transactions can have many named signatories, which are available in
 -- all contract code.  It has to be a newtype so that we don't need to
 -- import more modules in the interpreter to get 'Map'.
@@ -60,7 +64,7 @@ newtype Renames = Renames { getRenames :: Map String String }
   deriving (Serialize, NFData) 
 
 -- | For simplicity
-type TransactionID = ShortContractID
+type TransactionID = Digest
 -- | For simplicity
 type BlockID = Digest
 
@@ -85,22 +89,22 @@ newtype EscrowID name = EscrowID { entID :: EntryID }
 
 -- Instances
 
--- | Just so we can get 'Digestible'
+-- | There are various times a contract ID needs to be serialized: as part
+-- of a transaction, or as part of an exported return value.
 instance Serialize ContractID
--- | So we can get a 'ShortContractID' from a regular one.
+-- | -
 instance Digestible ContractID
 -- | -
 instance NFData ContractID
+-- | -
+instance Serialize TransactionPart
+-- | -
+instance NFData TransactionPart
 
--- | 'ShortContractID's and, by extension, 'TransactionIDs', are read as
--- the digests they wrap.
-instance Read ShortContractID where
-  readsPrec n = fmap (_1 %~ ShortContractID) . readsPrec n
-
--- | 'ShortContractID's and, by extension, 'TransactionIDs', show as hex
--- strings.  This should be inverse to the 'Read' instance.
-instance Show ShortContractID where
-  show (ShortContractID dig) = show dig
+-- | -
+instance Serialize Nonce
+-- | -
+instance NFData Nonce
 
 -- | -
 instance Read VersionID where
@@ -118,16 +122,29 @@ instance Show (EscrowID name) where
 
 makeLenses ''Signers
 makeLenses ''Renames
+makeLenses ''ContractID
+makeLenses ''TransactionPart
+makePrisms ''Nonce
 
 -- * Functions
 
 -- | The transaction ID of the "genesis transaction"
 nullID :: TransactionID
-nullID = ShortContractID nullDigest
+nullID = nullDigest
 
--- | Extracts the transaction in which the given contract originated.
-parentTX :: ContractID -> TransactionID
-parentTX (TransactionOutput txID _) = txID
-parentTX (InputOutput txID _ _) = txID
-parentTX (cID :# _) = parentTX cID
+hasNonce :: ContractID -> Bool
+hasNonce ContractID{..} =
+  case contractNonce of
+    Current -> False
+    _ -> True
+
+-- | Prints a contract ID as a "path" `txID/txPart/index/nonce`.
+prettyContractID :: ContractID -> String
+prettyContractID ContractID{..} = intercalate "/" $ 
+  [
+    show parentTransaction, 
+    show transactionPart, 
+    show creationIndex, 
+    show contractNonce
+  ]
 

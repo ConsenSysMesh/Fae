@@ -10,6 +10,8 @@ PostTX accepts transactions written in a yaml-like format, which is parsed by th
 -}
 module PostTX.Parser where
 
+import Blockchain.Fae.FrontEnd (ContractID(..))
+
 import Control.Applicative hiding (some)
 import Control.Monad
 import Control.Monad.Trans
@@ -29,16 +31,18 @@ import PostTX.TXSpec
     Inputs, Module, ModuleMap, Renames(..), TransactionID
   )
 
+import System.Environment
+import System.Exit
+
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Perm
 
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import System.Environment
-import System.Exit
-
 import Text.Read
+
+import Type.Reflection (typeRep, Typeable)
 
 -- | We don't use custom error types, but we do use IO because all the
 -- environment variable lookups have to occur in the middle of parsing.
@@ -111,8 +115,12 @@ fallback = titledList "fallback" $ listItem literal
 inputs :: SpecParser Inputs
 inputs = titledList "inputs" $ do
   ((cID, arg), renamesL) <- 
-    headedList (equalsItem readEnd literal) (equalsItem literalEnd literal)
+    headedList (equalsItem contractID literal) (equalsItem literalEnd literal)
   return (cID, arg, Renames $ Map.fromList renamesL)
+  where 
+    -- Matches the 'Show' instance in "Blockchain.Fae.Internal.IDs.Types"
+    contractID end = 
+      ContractID <$> readPath <*> readPath <*> readPath <*> readEnd end
 
 -- | >>> keys
 --   >>>   <global role name> = <private key name> | <public key hex string>
@@ -154,10 +162,12 @@ equalsName name p = fmap snd $ equalsItem (symbol name <*) p <* multilineBlank
 -- | Parses an expression like @a = b@, where at least the @a =@ part is on
 -- one line.  Its behavior with respect to following whitespace depends on
 -- the second parameter; if it doesn't absorb newlines, an 'equalsItem' may
--- be part of a list.
+-- be part of a list.  This reads right up to the equals, so if you want to
+-- absorb preceding spaces, the @lhsEnd@ must be like @literalEnd@, which
+-- does so.
 equalsItem :: 
   (SpecParser String -> SpecParser a) -> SpecParser b -> SpecParser (a,b)
-equalsItem lhsEnd = liftA2 (,) $ lhsEnd (lineBlank *> symbol "=")
+equalsItem lhsEnd = liftA2 (,) $ lhsEnd $ symbol "="
 
 -- | Parses an expression like @- a@, where the behavior with respect to
 -- following whitespace depends on the argument; if it doesn't absorb
@@ -186,9 +196,14 @@ headedList header p =
 
 -- ** Lexical parsers
 
+-- | Reads a /single/ path component, absorbing the slash (thus, not the
+-- "basename").
+readPath :: (Read a, Typeable a) => SpecParser a
+readPath = readEnd $ symbol "/"
+
 -- | Grabs text to the end of the line (but doesn't absorb the newline) and
 -- 'read's it.
-readWord :: (Read a) => SpecParser a
+readWord :: (Read a, Typeable a) => SpecParser a
 readWord = readEnd endl
 
 -- | Grabs text to the end of the line (but doesn't absorb the newline) and
@@ -198,13 +213,15 @@ literal = literalEnd endl
 
 -- | Grabs text until the argument succeeds in parsing what follows; the
 -- intermediate failures consume no characters.  Its behavior with respect
--- to newlines depends on that of the argument.
+-- to newlines depends on that of the argument.  The @end@ is modified to
+-- absorb preceding spaces.
 literalEnd :: SpecParser end -> SpecParser String
-literalEnd end = resolveLine =<< someTill printChar (try end)
+literalEnd end = resolveLine =<< someTill printChar (try $ lineBlank *> end)
 
 -- | To 'literalEnd' as 'readWord' is to 'literal'.
-readEnd :: (Read a) => SpecParser end -> SpecParser a
-readEnd end = either fail return . readEither =<< literalEnd end
+readEnd :: forall a end. (Read a, Typeable a) => SpecParser end -> SpecParser a
+readEnd end = (\s -> either (err s) return $ readEither s) =<< literalEnd end
+  where err s = error $ "Couldn't read " ++ s ++ " as type " ++ show (typeRep @a)
 
 -- | A lookahead newline, important since list items need to continue until
 -- a newline but not absorb it.

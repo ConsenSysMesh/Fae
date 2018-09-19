@@ -37,15 +37,10 @@ unsafeIsDefined act = unsafePerformIO $ catchAll
   (const $ return False)
 
 -- * Types
---
--- | Exceptions for ID-related errors.
--- There may be more exceptions in the future; shouldn't be a newtype
-data IDException =
-  InvalidContractID ContractID
 
 -- | Exceptions for version-related errors.
 data VersionException =
-  BadVersionID ShortContractID VersionID |
+  BadVersionID Int VersionID TypeRep |
   BadVersionedType VersionID TypeRep TypeRep |
   UnresolvedVersionID VersionID |
   UnexpectedResolvedVersion
@@ -54,14 +49,13 @@ data VersionException =
 data StorageException =
   BadTransactionID TransactionID |
   BadContractID ContractID |
-  BadInputID TransactionID ShortContractID |
+  BadInputID TransactionID Int |
   BadNonce ContractID Int Int |
   InvalidNonceAt ContractID |
-  ContractIDCollision ContractID ContractID ShortContractID |
-  MismatchedContractIDs ContractID ContractID |
-  ContractOmitted TransactionID ShortContractID |
+  ContractOmitted TransactionID Int |
   CantImport ByteString TypeRep |
-  ImportWithoutNonce ContractID
+  ImportWithoutNonce ContractID |
+  DeletedEntry 
 
 -- | Exceptions for contract-related errors.
 data ContractException =
@@ -75,9 +69,10 @@ data ContractException =
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
+  IncompleteContract ContractID |
+  IncompleteTransaction TransactionID |
   NotEnoughInputs |
-  TooManyInputs |
-  BadInput ContractID
+  TooManyInputs
 
 -- | Exceptions for formatting transaction summaries
 newtype TXFieldException = TXFieldException String
@@ -89,13 +84,11 @@ instance Show TXFieldException where
   show (TXFieldException e) = e
 
 -- | -
-instance Show IDException where
-  show (InvalidContractID cID) = "Invalid contract ID: " ++ show cID
-
--- | -
 instance Show VersionException where
-  show (BadVersionID scID vID) = 
-    "No version found in contract " ++ show scID ++ " with ID: " ++ show vID
+  show (BadVersionID ix vID rep) = 
+    "No version found in input contract #" ++ show ix ++ 
+    " with ID: " ++ show vID ++
+    " (expected type: " ++ show rep ++ ")"
   show (BadVersionedType vID bad good) = 
     "For value with version ID: " ++ show vID ++ 
     "; expected type: " ++ show good ++ 
@@ -107,27 +100,25 @@ instance Show VersionException where
 -- | -
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
-  show (BadContractID cID) = "Not a contract ID: " ++ show cID
-  show (BadInputID txID sID) = 
-    "No input contract with short ID " ++ show sID ++ 
+  show (BadContractID cID) = "Not a contract ID: " ++ prettyContractID cID
+  show (BadInputID txID ix) = 
+    "No input contract with index " ++ show ix ++ 
     " for transaction " ++ show txID
   show (BadNonce cID bad good) = 
-    "Contract " ++ show cID ++ " has nonce " ++ show good ++ "; got: " ++ show bad
-  show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ show cID
-  show (ContractIDCollision cID1 cID2 scID) =
-    "Contract " ++ show cID1 ++ " and contract " ++ show cID2 ++
-    " have the same short ID " ++ show scID ++ "!"
-  show (MismatchedContractIDs cID1 cID2) =
-    "Attempted to combine contract outputs for contracts " ++ 
-    show cID1 ++ " and " ++ show cID2 ++ " with different short contract IDs"
-  show (ContractOmitted txID scID) =
-    "Contract call " ++ show scID ++ 
+    "Contract " ++ prettyContractID cID ++ 
+    " has nonce " ++ show good ++ "; got: " ++ show bad
+  show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ prettyContractID cID
+  show (ContractOmitted txID ix) =
+    "Contract call #" ++ show ix ++ 
     " in transaction " ++ show txID ++ 
     " was replaced with an imported return value."
   show (CantImport bs ty) =
     "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
   show (ImportWithoutNonce cID) =
-    "Rejecting imported value for " ++ show cID ++ " that lacks a nonce value."
+    "Rejecting imported value for " ++ prettyContractID cID ++ 
+    " that lacks a nonce value."
+  show (DeletedEntry) =
+    "(internal error) Tried to delete an entry of the transaction results!"
 
 -- | -
 instance Show ContractException where
@@ -149,12 +140,13 @@ instance Show ContractException where
 
 -- | -
 instance Show TransactionException where
+  show (IncompleteContract cID) =
+    "Contract " ++ show cID ++ " has missing result"
+  show (IncompleteTransaction txID) =
+    "Transaction " ++ show txID ++ " has missing result"
   show NotEnoughInputs = "Transaction expected more inputs"
   show TooManyInputs = "Transaction expected fewer inputs"
-  show (BadInput cID) = "No input contract with ID: " ++ show cID
 
--- | -
-instance Exception IDException
 -- | -
 instance Exception VersionException
 -- | -

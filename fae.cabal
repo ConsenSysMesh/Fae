@@ -32,7 +32,6 @@ library
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.GenericInstances
-    Blockchain.Fae.Internal.GetInputValues
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
     Blockchain.Fae.Internal.Messages,
@@ -62,7 +61,8 @@ library
     pretty,
     template-haskell,
     text,
-    transformers
+    transformers,
+    vector
   default-language:    Haskell2010
   default-extensions:
     BangPatterns
@@ -159,6 +159,7 @@ executable postTX
     PostTX.Args
     PostTX.Faeth
     PostTX.ImportExport
+    PostTX.Keys
     PostTX.Network
     PostTX.Parser
     PostTX.Submit

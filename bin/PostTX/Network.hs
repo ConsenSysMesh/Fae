@@ -44,7 +44,7 @@ sendReceiveString = sendReceive LC8.unpack
 
 sendReceiveSerialize :: (Typeable a, Serialize a) => Request -> IO a
 sendReceiveSerialize = 
-  sendReceive $ either (responseError . printHex) id . S.decodeLazy 
+  sendReceive $ \bs -> either (error $ LC8.unpack bs) id $ S.decodeLazy bs
 
 sendReceiveJSON :: (Typeable a, FromJSON a) => Request -> IO (Either String a)
 sendReceiveJSON = sendReceive $ \bs ->
