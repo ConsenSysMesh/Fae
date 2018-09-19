@@ -90,7 +90,16 @@ type EscrowMap = Map EntryID EscrowEntry
 -- constructed automatically, and you can't construct it manually, so it is
 -- only useful in type signatures; it forces contracts to return values
 -- only via 'spend' and 'release'.
-data WithEscrows a = WithEscrows EscrowMap a deriving (Generic)
+--
+-- This is actually a 'Monad' isomorphic to @Writer EscrowMap@, but it is
+-- more work than it is worth to write the instances for that.
+data WithEscrows a = 
+  WithEscrows 
+  {
+    withEscrows :: EscrowMap,
+    getWithEscrows :: a
+  }
+  deriving (Generic)
 -- | How escrows are kept in each contract.  Contracts track their escrow
 -- ID sequence separately to prevent coupling between different ones.
 data Escrows =
@@ -166,7 +175,7 @@ type AbstractLocalContract = ContractF BearsValue BearsValue
 -- | The form of a contract function intended to be called from
 -- a transaction.
 type AbstractGlobalContract = 
-  ContractF (String, InputVersionMap) (ReturnValue, VersionMap)
+  ContractF (String, InputVersionMap) (WithEscrows ReturnValue, VersionMap)
 
 -- ** User-visible
 
@@ -239,6 +248,7 @@ class (Monad m) => MonadTX m where
 
 -- * Template Haskell
 
+makeLenses ''WithEscrows
 makeLenses ''Escrows
 makeLenses ''TXData
 makeLenses ''Output
@@ -446,11 +456,12 @@ acceptGlobal (argS, vers) = takeEscrows x where
 -- values.
 returnGlobal :: 
   (HasEscrowIDs valType, Versionable valType, Exportable valType) =>
-  WithEscrows valType -> FaeTXM (ReturnValue, VersionMap)
+  WithEscrows valType -> FaeTXM (WithEscrows ReturnValue, VersionMap)
 returnGlobal yE = do
   y <- putEscrows yE
   escrowMap <- use _escrowMap
-  return (ReturnValue y, versionMap (lookupWithEscrows escrowMap) y)
+  return (yERet, versionMap (lookupWithEscrows escrowMap) y)
+  where yERet = yE & _getWithEscrows %~ ReturnValue
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
@@ -543,8 +554,8 @@ returnValueType :: ReturnValue -> TypeRep
 returnValueType (ReturnValue x) = typeRep (Just x)
 
 -- | Taking advantage of the existential type
-exportReturnValue :: ReturnValue -> FaeTXM ByteString
-exportReturnValue (ReturnValue x) = liftEscrowState $ exportValue x
+exportReturnValue :: (MonadState EscrowMap m) => ReturnValue -> m ByteString
+exportReturnValue (ReturnValue x) = exportValue x
 
 -- ** Running
 

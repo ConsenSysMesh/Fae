@@ -46,7 +46,7 @@ data Storage =
   Storage 
   { 
     getStorage :: Map TransactionID TransactionEntry,
-    importedValues :: Map ContractID ImportData
+    importedValues :: Map ContractID InputResults
   }
 
 -- | A general storage transformer; used for running transactions in IO.
@@ -86,8 +86,10 @@ data InputResults =
     -- 'Right' means its nonce was incremented.
     iRealID :: ContractID,
     iStatus :: Status,
-    iResult :: ReturnValue,
-    iExportedResult :: ByteString,
+    -- | This is /very dangerous/ because these escrows are duplicates.
+    -- This value /must not/ be used inside Fae, but only exposed to
+    -- external applications (such as import/export).
+    iResult :: WithEscrows ReturnValue,
     iVersions :: VersionMap,
     iOutputsM :: Maybe Outputs
   } deriving (Generic)
@@ -138,8 +140,7 @@ contractAtCID cID = outputAtNonce cID . lens getter setter where
 -- | For the 'At' instance
 type instance Index Storage = ContractID
 -- | For the 'At' instance
-type instance IxValue Storage = 
-  Either (WithEscrows ReturnValue, VersionMap, Status) OutputData
+type instance IxValue Storage = Either InputResults OutputData
 -- | For the 'At' instance
 instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
@@ -231,13 +232,13 @@ successful InputResults{..}
 addImportedValue :: 
   (Versionable a, HasEscrowIDs a, Exportable a) => 
   State Escrows a -> ContractID -> Status -> FaeStorage ()
-addImportedValue valueImporter cID status = FaeStorage $ do
-  unless (hasNonce cID) $ throw $ ImportWithoutNonce cID
+addImportedValue valueImporter iRealID iStatus = FaeStorage $ do
+  unless (hasNonce iRealID) $ throw $ ImportWithoutNonce iRealID
   let (importedValue, Escrows{..}) = 
         runState valueImporter (Escrows Map.empty nullDigest)
-      vMap = versionMap (lookupWithEscrows escrowMap) importedValue
-  _importedValues . at cID ?= 
-    (WithEscrows escrowMap (ReturnValue importedValue), vMap, status)
+      iVersions = versionMap (lookupWithEscrows escrowMap) importedValue
+      iResult = WithEscrows escrowMap (ReturnValue importedValue)
+  _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = do
@@ -246,7 +247,9 @@ getExportedValue txID ix = do
   Output{..} <- use $ outputAt iRealID . 
     defaultLens (throw $ BadContractID iRealID)
   let modNames = tyConModule <$> listTyCons outputType
-  return (iRealID, iStatus, modNames, show outputType, iExportedResult)
+      WithEscrows eMap result = iResult
+      exported = evalState (exportReturnValue result) eMap
+  return (iRealID, iStatus, modNames, show outputType, exported)
 
   where
     listTyCons :: TypeRep -> [TyCon]
