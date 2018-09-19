@@ -206,14 +206,12 @@ runContract ::
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID vers fAbs arg = do
-  ~(~(resultE, gAbsM), outputsL) <- 
-    listen $ callContract fAbs (arg, vers)
-  let 
-    iResult = gAbsM `deepseq` outputsL `deepseq` resultE
-    iOutputsM = Just $ listToOutputs outputsL
-    iStatus
-      | not (unsafeIsDefined iResult) = Failed
-      | Nothing <- gAbsM = Deleted
-      | otherwise = Updated
+  ~(~(resultE, gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
+  let iResult = gAbsM `deepseq` outputsL `deepseq` resultE
+      iOutputsM = Just $ listToOutputs outputsL
+      iStatus
+        | not (unsafeIsDefined iResult) = Failed
+        | Nothing <- gAbsM = Deleted
+        | otherwise = Updated
   return (InputResults{..}, gAbsM)
 

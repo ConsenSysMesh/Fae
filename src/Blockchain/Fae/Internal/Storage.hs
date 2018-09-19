@@ -104,9 +104,16 @@ type Outputs = Vector Output
 -- different source trees using this type all have the same version of it.
 -- Since this type is exchanged in serialized form between different
 -- processes, type checking cannot verify it at compile time.
-type ExportData = (ContractID, Status, [String], String, ByteString)
-
-type ImportData = (WithEscrows ReturnValue, VersionMap, Status)
+data ExportData = 
+  ExportData
+  {
+    exportedCID :: ContractID,
+    exportStatus :: Status,
+    neededModules :: [String],
+    exportNameType :: String,
+    exportedValue :: ByteString
+  }
+  deriving (Generic)
 
 -- * Template Haskell
 
@@ -122,6 +129,9 @@ instance Show Result where
 
 -- | -
 instance Serialize Status
+
+-- | -
+instance Serialize ExportData
 
 -- * Functions
 
@@ -250,10 +260,16 @@ getExportedValue txID ix = do
     defaultLens (throw $ BadInputID txID ix)
   Output{..} <- use $ outputAt iRealID . 
     defaultLens (throw $ BadContractID iRealID)
-  let modNames = tyConModule <$> listTyCons outputType
+  let neededModules = tyConModule <$> listTyCons outputType
       WithEscrows eMap result = iResult
-      exported = evalState (exportReturnValue result) eMap
-  return (iRealID, iStatus, modNames, show outputType, exported)
+      exportedValue = evalState (exportReturnValue result) eMap
+  return ExportData 
+    {
+      exportedCID = iRealID,
+      exportStatus = iStatus,
+      exportNameType = show outputType,
+      ..
+    }
 
   where
     listTyCons :: TypeRep -> [TyCon]
