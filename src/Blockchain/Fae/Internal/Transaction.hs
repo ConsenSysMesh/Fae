@@ -154,7 +154,7 @@ callTX g x f = do
 runInputContracts :: Inputs -> TXStorageM (Vector InputResults)
 runInputContracts inputs = mfix $ 
   forM (Vector.fromList inputs) . nextInput . makeVers 
-  where makeVers = InputVersionMap . fmap iVersions
+  where makeVers = InputVersionMap . fmap makeInputVersions
 
 -- | Looks up the contract ID and dispatches to the various possible
 -- actions (call, import, error) depending on what's found.
@@ -206,7 +206,7 @@ runContract ::
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID vers fAbs arg = do
-  ~(~(~(resultE, vers), gAbsM), outputsL) <- 
+  ~(~(resultE, gAbsM), outputsL) <- 
     listen $ callContract fAbs (arg, vers)
   let 
     iResult = gAbsM `deepseq` outputsL `deepseq` resultE
@@ -215,8 +215,5 @@ runContract iRealID vers fAbs arg = do
       | not (unsafeIsDefined iResult) = Failed
       | Nothing <- gAbsM = Deleted
       | otherwise = Updated
-    iVersions
-      | hasNonce iRealID = vers
-      | otherwise = vers `seq` emptyVersionMap
   return (InputResults{..}, gAbsM)
 

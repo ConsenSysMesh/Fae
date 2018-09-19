@@ -112,10 +112,10 @@ collectTransaction txID = do
 -- | Get the 'TXInputSummary' for a given 'TransactionID' 
 getInputSummary :: 
   TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
-getInputSummary txID = Vector.imap $ \ix ~InputResults{..} -> 
+getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} -> 
   let txInputVersions = 
         over (traverse . _2) (show . bearerType) $ 
-          Map.toList $ getVersionMap iVersions
+          Map.toList $ getVersionMap $ makeInputVersions iR
       txInputOutputs = 
         maybe 
           (throw $ ContractOmitted txID ix) 

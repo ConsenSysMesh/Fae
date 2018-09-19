@@ -90,7 +90,6 @@ data InputResults =
     -- This value /must not/ be used inside Fae, but only exposed to
     -- external applications (such as import/export).
     iResult :: WithEscrows ReturnValue,
-    iVersions :: VersionMap,
     iOutputsM :: Maybe Outputs
   } deriving (Generic)
 
@@ -224,6 +223,11 @@ successful :: InputResults -> Bool
 successful InputResults{..}
   | Failed <- iStatus = False
   | otherwise = True
+
+makeInputVersions :: InputResults -> VersionMap
+makeInputVersions InputResults{iResult = WithEscrows{..},..} 
+  | hasNonce iRealID = versionMap (lookupWithEscrows withEscrows) getWithEscrows
+  | otherwise = emptyVersionMap
 
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not

@@ -175,7 +175,7 @@ type AbstractLocalContract = ContractF BearsValue BearsValue
 -- | The form of a contract function intended to be called from
 -- a transaction.
 type AbstractGlobalContract = 
-  ContractF (String, InputVersionMap) (WithEscrows ReturnValue, VersionMap)
+  ContractF (String, InputVersionMap) (WithEscrows ReturnValue)
 
 -- ** User-visible
 
@@ -261,6 +261,15 @@ instance NFData Output
 
 -- | -
 instance NFData OutputData
+
+instance HasEscrowIDs ReturnValue where
+  traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
+
+-- | -
+instance Versionable ReturnValue where
+  versionMap  f (ReturnValue x) = versionMap f x
+  versions    f (ReturnValue x) = versions f x
+  mapVersions m (ReturnValue x) = ReturnValue $ mapVersions m x
 
 -- | -
 instance MonadTX FaeTX where
@@ -456,12 +465,11 @@ acceptGlobal (argS, vers) = takeEscrows x where
 -- values.
 returnGlobal :: 
   (HasEscrowIDs valType, Versionable valType, Exportable valType) =>
-  WithEscrows valType -> FaeTXM (WithEscrows ReturnValue, VersionMap)
+  WithEscrows valType -> FaeTXM (WithEscrows ReturnValue)
 returnGlobal yE = do
   y <- putEscrows yE
   escrowMap <- use _escrowMap
-  return (yERet, versionMap (lookupWithEscrows escrowMap) y)
-  where yERet = yE & _getWithEscrows %~ ReturnValue
+  return $ yE & _getWithEscrows %~ ReturnValue
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
