@@ -6,18 +6,11 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module defines TXSummary type aswell as the Pretty Fae Class and associated pretty-printing instances.
-Note that the pretty-printing has to be done in a 'FaeStorage' monad, so the class can't just be 'Pretty'.
+This module defines a 'TXSummary' type as well as 'Pretty' instances.
 -}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Blockchain.Fae.Internal.TXSummary (
-    collectTransaction,
-    displayException,
-    TXSummary(..),
-    TXInputSummary(..),
-    TransactionID
-) where
+module Blockchain.Fae.Internal.TXSummary where
 
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
@@ -50,10 +43,13 @@ import GHC.Generics hiding (to)
 import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
--- | Serializable representation of a contract type
+-- * Types
+
+-- | Serializable representation of a contract type.
 type CType = UnquotedString
 
--- | Useful for Fae clients communicating with faeServer
+-- | Heavy-handed total information about the result of a transaction, in
+-- a relatively printable format
 data TXSummary = TXSummary {
   transactionID :: TransactionID,
   txResult :: String,
@@ -62,18 +58,19 @@ data TXSummary = TXSummary {
   txSSigners :: [(String, PublicKey)]
 } deriving (Show, Generic)
 
--- | Summarizes a single input contract call.
+-- | Printable results of calling a contract.
 data TXInputSummary = TXInputSummary {
   txInputStatus :: Status,
   txInputOutputs :: Vector CType,
   txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
 
+-- * Template Haskell
 makeLenses ''TXSummary
 
-instance Pretty ContractID where 
-  pPrint = text . prettyContractID
+{- Instances -}
 
+-- | -
 instance Pretty TXSummary where
   pPrint TXSummary{..} = prettyHeader header entry where 
     header = labelHeader "Transaction" transactionID
@@ -83,18 +80,22 @@ instance Pretty TXSummary where
     txSSigners' = prettyList "signers" txSSigners
     inputs = txInputSummaries & vcat . toList . Vector.imap
       (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
-        let printCID = pPrint cID <+> parens (text $ show txInputStatus) 
+        let printCID = 
+              text (prettyContractID cID) <+> parens (text $ show txInputStatus) 
             prettyInput = pPrint txInputSummary
         in prettyHeader 
              (prettyPair ("input #" ++ show ix, printCID))
              (displayException prettyInput))
     entry = vcat [ result, outputs, txSSigners', inputs ]
 
+-- | -
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat [ outputs, versions ] where 
     outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
     versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
       bimap show UnquotedString <$> txInputVersions
+
+-- * Functions
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
@@ -110,7 +111,7 @@ collectTransaction txID = do
       txInputSummaries = getInputSummary txID inputResults
   return $ TXSummary{..}
 
--- | Get the 'TXInputSummary' for a given 'TransactionID' 
+-- | Get the 'TXInputSummary' for a given 'TransactionID'.
 getInputSummary :: 
   TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
 getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} -> 
@@ -124,9 +125,12 @@ getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} ->
           iOutputsM
   in (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
 
+-- | Fetches the 'outputType' from each output as an 'UnquotedString'.
 showTypes :: Outputs -> Vector UnquotedString
 showTypes = fmap $ UnquotedString . show . outputType
 
+-- | Probably not necessary, as this kind of thing can always be replaced
+-- by 'Vector.imap'.
 toIxList :: Vector a -> [(Int, a)]
 toIxList = zip [0 ..] . toList
 

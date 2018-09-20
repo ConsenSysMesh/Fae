@@ -39,11 +39,7 @@ newtype Reward = Reward (EscrowID RewardName) deriving (Generic)
 instance ContractName RewardName where
   type ArgType RewardName = RewardToken
   type ValType RewardName = RewardValue
-  theContract RewardName = rewardContract
-
--- | This is global to support the 'ContractName' instance
-rewardContract :: Contract RewardToken RewardValue
-rewardContract Token = spend Value
+  theContract RewardName = \Token -> spend Value
 
 -- | This function destroys a reward token, validating it in the process.
 -- As the only interface to the `Reward` type, this /must/ be used by any
@@ -53,6 +49,9 @@ claimReward (Reward eID) = do
   Value <- useEscrow [] eID Token
   return ()
 
+-- | For the "Transaction" module, optionally fabricates a new reward token
+-- and prepends it to the "input" results.  It goes without saying that
+-- this should not be publicly visible.
 withReward :: (MonadTX m) => Bool -> [ReturnValue] -> m [ReturnValue]
 withReward isReward inputsL
   | isReward = do

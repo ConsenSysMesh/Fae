@@ -6,9 +6,10 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-There are several identifier types in Fae: two kinds of contract ID (one
-detailed, one convenient but lossy), transaction IDs, escrow IDs, and
-version IDs.
+There are several identifier types in Fae: contract IDs, transaction IDs,
+escrow IDs, and version IDs.  Previously there was also a "short contract
+ID" that was the hash of the regular one, but this was rendered unnecessary
+and has been removed.
 -}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.IDs.Types where
@@ -66,13 +67,9 @@ newtype Renames = Renames { getRenames :: Map String String }
 -- | For simplicity
 type TransactionID = Digest
 -- | For simplicity
-type BlockID = Digest
-
--- | For simplicity
 type EntryID = Digest
 -- | For convenience
-newtype VersionID = VersionID Digest 
-  deriving (Generic, Eq, Ord, Serialize, NFData)
+type VersionID = Digest
 
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
@@ -106,14 +103,6 @@ instance Serialize Nonce
 -- | -
 instance NFData Nonce
 
--- | -
-instance Read VersionID where
-  readsPrec n = map (_1 %~ VersionID) . readsPrec n
-
--- | -
-instance Show VersionID where
-  show (VersionID ver) = show ver
-
 -- | Useful for debugging
 instance Show (EscrowID name) where
   show = show . entID
@@ -132,13 +121,16 @@ makePrisms ''Nonce
 nullID :: TransactionID
 nullID = nullDigest
 
+-- | Avoids a boring pattern match to find the value of the nonce field.
+-- Necessary for creating versions in an input call result, and for
+-- securing imports.
 hasNonce :: ContractID -> Bool
 hasNonce ContractID{..} =
   case contractNonce of
     Current -> False
     _ -> True
 
--- | Prints a contract ID as a "path" `txID/txPart/index/nonce`.
+-- | Prints a contract ID as a "path" @txID/txPart/index/nonce@.
 prettyContractID :: ContractID -> String
 prettyContractID ContractID{..} = intercalate "/" $ 
   [

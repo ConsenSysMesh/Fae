@@ -114,13 +114,16 @@ runTransaction f fallback inputArgs txID txSigners isReward = runTX $ do
     runTX = FaeStorage . 
       (mapStateT $ Identity . fst . runFaeTXM (txData txID txSigners))
 
+-- | Before calling the transaction function, optionally adds a reward
+-- value to the inputs.
 runTransactionBody :: 
   (TransactionConstraints f) =>
   Bool -> f -> [TransactionFallback f] -> 
   [ReturnValue] -> FaeTXM (Result, Outputs)
 runTransactionBody isReward f fallback = withReward isReward >=> doTX f fallback
 
--- | Actually perform the transaction.
+-- | Actually execute the transaction function, followed if necessary by
+-- the fallbacks.
 doTX :: 
   (TransactionConstraints f) => 
   f -> [TransactionFallback f] -> [ReturnValue] -> FaeTXM (Result, Outputs)
@@ -149,8 +152,9 @@ callTX g x f = do
 
 -- ** Running contracts
 
--- | Runs all the input contracts in a state monad recording the
--- progressively increasing set of outputs.
+-- | Runs all the input contracts, accumulating a list of results that is
+-- recursively provided back to each call, so that they can use previously
+-- returned versioned values.
 runInputContracts :: Inputs -> TXStorageM (Vector InputResults)
 runInputContracts inputs = mfix $ 
   forM (Vector.fromList inputs) . nextInput . makeVers 
@@ -167,6 +171,17 @@ nextInput vers (cID, arg, renames) = do
 
 -- | If the contract function is available, use it, update if it suceeds,
 -- and produce the results regardless.
+--
+-- This used to update the nonce in 'iRealID' from 'Current' to @'Nonce'
+-- n@, where @n@ is the actual current nonce.  This allowed exporting and
+-- then importing return values of 'Current'-called contracts.  However,
+-- the removal of 'iVersions' made it clear that this is unsatisfactory,
+-- because a 'Current'-called contract never produces versions, and
+-- therefore the versions of its exported-imported result cannot be
+-- verified against the transaction message.
+--
+-- Even with the nonce, there is no guarantee that the version is ever used
+-- in the transaction.  This requires future improvements.
 contractCallResult :: 
   InputVersionMap -> String -> Renames -> 
   OutputData -> ContractID -> TXStorageM InputResults
@@ -175,10 +190,7 @@ contractCallResult vers arg (Renames rMap) OutputData{..} cID = do
     pushArg arg . remapSigners rMap $ 
       runContract cID vers outputContract arg
   when (successful iR) $ contractAtCID cID .= gAbsM
-
-  -- The nonce needs to be made explicit for the purpose of exporting
-  -- the return value with correct information of when it applies.
-  return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
+  return iR
 
 -- | If instead we have an imported value, just use that.  
 importedCallResult :: InputResults -> ContractID -> TXStorageM InputResults
@@ -196,9 +208,10 @@ errInputResult :: ContractID -> TXStorageM InputResults
 errInputResult cID = return $ (throw $ BadContractID cID) & 
   \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
 
--- | Executes the contract function, returning the result, the structured
--- outputs, the new map of all currently defined versions, and the
--- continuation function.
+-- | Executes the contract function, returning the result and the
+-- continuation function.  This is where the 'iStatus' field of the
+-- 'InputResults' value is set, because this is the last place where the
+-- 'Maybe' on the continuation is readily available.
 runContract ::
   ContractID ->
   InputVersionMap ->

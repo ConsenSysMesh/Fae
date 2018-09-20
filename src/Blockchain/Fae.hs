@@ -71,7 +71,7 @@ module Blockchain.Fae
     MonadContract, WithEscrows, EscrowID, Reward, 
     type (<-|), type (↤),
     -- ** Contract API
-    spend, release, useEscrow, newEscrow, 
+    release, spend, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
     lookupSigner, signer, signers, claimReward, 
     (<-|), (↤), 

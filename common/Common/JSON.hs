@@ -68,17 +68,10 @@ instance FromJSON TXSummary where
       <*> o .: "txSSigners"
 
 instance FromJSON PublicKey where
-  parseJSON = withText "VersionID" $ \pKey ->
+  parseJSON = withText "PublicKey" $ \pKey ->
     either fail return $ readEither (T.unpack pKey)
 
 instance ToJSON PublicKey where
-  toJSON = toJSON . T.pack . show
-
-instance FromJSON VersionID where
-  parseJSON = withText "VersionID" $ \vID ->
-    either fail return $ readEither (T.unpack vID)
-
-instance ToJSON VersionID where
   toJSON = toJSON . T.pack . show
 
 instance ToJSON ContractID where

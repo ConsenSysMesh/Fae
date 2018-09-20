@@ -133,6 +133,7 @@ data TXData =
 data Output =
   Output
   {
+    -- | 'Nothing' means the contract called 'spent' and was deleted.
     outputData :: Maybe OutputData,
     -- | This is not @Maybe@ because even when the contract is spent, we
     -- need its type for exporting.
@@ -140,6 +141,9 @@ data Output =
   }
   deriving (Generic)
 
+-- | If the contract can be called again, this contains its function (which
+-- is called) and nonce (which is verified when the contract ID used
+-- contains a nonce).
 data OutputData =
   OutputData
   {
@@ -250,7 +254,7 @@ class
 -- Instances of this class have access to the full Fae API, allowing them
 -- to define multi-stage contracts.  As for 'MonadTX', these instances must
 -- have their own evaluation function to get down to the base 'Fae' monad.
--- Notably, 'Transaction's are /not/ written in a 'MonadContract', because
+-- Notably, @Transaction@s are /not/ written in a 'MonadContract', because
 -- they are one-shot.
 class (MonadTX m) => MonadContract argType valType m | m -> argType valType where
   -- | Injects the Fae contract API into 'm'.
@@ -378,7 +382,7 @@ newContract x = liftTX $ FaeTX $ do
   tell [Output{..}]
 
 -- | Creates a new escrow with a given 'ContractName', whose backing
--- escrows are deposited into the escrow's context at the first call.
+-- escrows are deposited into the new escrow's context at the first call.
 newEscrow :: 
   (ContractName name, MonadTX m) =>
   name -> m (EscrowID name)
@@ -386,8 +390,7 @@ newEscrow contractName = liftTX $ FaeTX $ do
   (entID, contractNextID) <- forkNextID
   WithEscrows endowment _ <- takeEscrows contractName
   let escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
-      escrowVersion = VersionID entID
-  _escrowMap %= Map.insert entID EscrowEntry{..}
+  _escrowMap %= Map.insert entID EscrowEntry{escrowVersion = entID, ..}
   return $ EscrowID entID
 
 -- | Calls an escrow by ID, which must exist in the present context.  The
@@ -422,9 +425,16 @@ remapSigners renames = local (_thisTXSigners . _getSigners %~ applyRenames) wher
   applyRenames keyMap = fmap (flip renameKey keyMap) renames `Map.union` keyMap
   renameKey oldName = Map.findWithDefault (throw $ MissingSigner oldName) oldName
 
+-- | Morally speaking, records the arguments to the current contract call
+-- in the progressive list of all historical calls.  Technically, sets the
+-- 'localHash' to the hash of the argument string; this is then hashed into
+-- the sequence of 'nextID's and escrow versions to produce a summary that
+-- is almost certain to be unique.
 pushArg :: (MonadReader TXData m) => String -> m a -> m a
 pushArg s = local (_localHash .~ digest s)
 
+-- | Basically the 'TXData' constructor, except for the policy choice to
+-- initialize the 'localHash' to the transaction ID.
 txData :: TransactionID -> Signers -> TXData
 txData txID txSigners =
   TXData
@@ -599,6 +609,9 @@ exportReturnValue (ReturnValue x) = exportValue x
 
 -- ** Running
 
+-- | Abstracts away the monad stack to accept only the logical initial
+-- conditions (the 'TXData'; the escrows are initialized to empty and the
+-- output list defaults to the empty list).
 runFaeTXM :: TXData -> FaeTXM a -> (a, [Output])
 runFaeTXM txData = runWriter . flip runReaderT txData . flip evalStateT escrows
   where escrows = Escrows Map.empty (thisTXID txData)

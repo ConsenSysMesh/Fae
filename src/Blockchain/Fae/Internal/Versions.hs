@@ -43,7 +43,7 @@ import Numeric.Natural
 
 -- | The inverse to the map of subobjects to their versions.
 newtype VersionMap = VersionMap { getVersionMap :: Map VersionID BearsValue }
--- | Versions by contract ID
+-- | Versions by input call index.
 newtype InputVersionMap = 
   InputVersionMap { getInputVersionMap :: Vector VersionMap }
 -- | For marking a contract input to be passed by version ID, or a contract
@@ -52,10 +52,10 @@ data Versioned a =
   Versioned { getVersioned :: a } |
   -- | The 'Int' is the input index of the contract that produced the
   -- 'VersionID'.
-  VersionedID Int VersionID 
+  VersionID Int VersionID 
   deriving (Generic)
 
--- | Purely to have a nice syntax for entering VersionedIDs.
+-- | Purely to have a nice syntax for entering VersionIDs.
 data ReadVersioned = Int ::: VersionID deriving (Read)
 
 -- * Type classes
@@ -73,7 +73,7 @@ class (HasEscrowIDs a) => Versionable a where
     -- Same comment as in @GRecords m (K1 i c)@
     VersionMap $ Map.insert ver (bearer x) vers
 
-  -- | Sort of the inverse of 'versionMap', this resolves all 'VersionedID'
+  -- | Sort of the inverse of 'versionMap', this resolves all 'VersionID'
   -- variants of 'Versioned' to 'Versioned' variants.
   mapVersions :: InputVersionMap -> a -> a
 
@@ -81,14 +81,15 @@ class (HasEscrowIDs a) => Versionable a where
   versions :: (EntryID -> VersionID) -> a -> (VersionID, VersionMap)
 
 -- | The one-parameter analogue of 'Versionable', for 'Generic' instances.
--- The default instance is not to have a version.
 class GVersionable f where
   -- | Like 'versions'
   gVersions :: (EntryID -> VersionID) -> f p -> (VersionID, VersionMap)
   -- | Like 'mapVersions'
   gMapVersions :: InputVersionMap -> f p -> (f p)
 
--- | For traversing the records of a product type.
+-- | For traversing the fields of a product type; this introduces a state
+-- monad to track the index of the present field, which is hashed into the
+-- version.
 class GRecords f where
   -- | The 'VersionMap' is of all the records in self, not including self.
   gRecords :: (EntryID -> VersionID) -> f p -> State Int VersionMap
@@ -109,7 +110,7 @@ instance Foldable Versioned where
 -- | Like 'Maybe'.
 instance Functor Versioned where
   fmap f (Versioned x) = Versioned (f x)
-  fmap _ (VersionedID scID v) = VersionedID scID v
+  fmap _ (VersionID scID v) = VersionID scID v
 
 -- | Like 'Maybe'.  We don't provide a 'Monad' instance because, unlike
 -- 'Maybe', 'Versioned' values shouldn't go from one constructor to the
@@ -117,18 +118,18 @@ instance Functor Versioned where
 instance Applicative Versioned where
   pure = Versioned
   (Versioned f) <*> (Versioned x) = Versioned (f x)
-  _ <*> (VersionedID scID v) = VersionedID scID v
+  _ <*> (VersionID scID v) = VersionID scID v
 
 -- | -
 instance Traversable Versioned where
   traverse f (Versioned x) = Versioned <$> f x
-  traverse _ (VersionedID scID v) = pure $ VersionedID scID v
+  traverse _ (VersionID scID v) = pure $ VersionID scID v
 
 -- | Read 'Versioned' values as a 'ReadVersioned', i.e. of the form
 -- @Int ::: Digest@.  Regardless of whether 'a' has a 'Read' instance,
 -- @Versioned a@ always does, though the version may fail to be resolved.
 instance Read (Versioned a) where
-  readsPrec n s = [ (VersionedID ix v, x) | (ix ::: v, x) <- readsPrec n s ]
+  readsPrec n s = [ (VersionID ix v, x) | (ix ::: v, x) <- readsPrec n s ]
 
 -- | This instance enforces 'Versioned's as being opaque, unified types.
 -- Ideally this designation should be accompanied by actual data hiding.
@@ -137,10 +138,10 @@ instance (Versionable a) => Versionable (Versioned a) where
     (ver, _) = versions f x 
 
   versionMap f (Versioned x) = versionMap f x
-  versionMap f (VersionedID _ ver) = throw $ UnresolvedVersionID ver
+  versionMap f (VersionID _ ver) = throw $ UnresolvedVersionID ver
 
   mapVersions _ Versioned{} = throw UnexpectedResolvedVersion
-  mapVersions (InputVersionMap vVers) (VersionedID ix ver) =
+  mapVersions (InputVersionMap vVers) (VersionID ix ver) =
     Versioned $ 
     fromMaybe 
       (throw $ BadVersionedType ver (bearerType xDyn) (typeRep $ Proxy @a)) $ 
@@ -157,7 +158,7 @@ instance (Versionable a) => Versionable (Versioned a) where
 -- | Pass through the 'Versioned' constructor
 instance (HasEscrowIDs a) => HasEscrowIDs (Versioned a) where
   traverseEscrowIDs f (Versioned x) = Versioned <$> traverseEscrowIDs f x
-  traverseEscrowIDs _ (VersionedID _ ver) = throw $ UnresolvedVersionID ver
+  traverseEscrowIDs _ (VersionID _ ver) = throw $ UnresolvedVersionID ver
 
 -- | This key base case actually uses the function argument to 'versions'
 -- by applying it to the escrow ID.
@@ -319,10 +320,15 @@ emptyInputVersionMap n = InputVersionMap $ Vector.replicate n emptyVersionMap
 vUnion :: VersionMap -> VersionMap -> VersionMap
 vUnion (VersionMap m1) (VersionMap m2) = VersionMap $ Map.union m1 m2
 
--- | Utility
+-- | A legacy synonym from when 'VersionID' was a newtype.
 mkVersionID :: (Digestible a) => a -> VersionID
-mkVersionID = VersionID . digest
+mkVersionID = digest
 
+-- | Places a new version map into the list of all versions, at the
+-- requested index.  Note that the other values of this map (particularly
+-- the ones at larger indices) may not be defined, or may be defined in
+-- terms of this one.  This is handled in "Transaction" by 'mfix'.
 addContractVersions :: Int -> VersionMap -> InputVersionMap -> InputVersionMap
 addContractVersions ix vMap (InputVersionMap vVers) =
   InputVersionMap $ Vector.modify (\mv -> Vector.write mv ix vMap) vVers
+

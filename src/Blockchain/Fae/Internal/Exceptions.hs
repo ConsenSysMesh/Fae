@@ -50,11 +50,10 @@ data StorageException =
   BadTransactionID TransactionID |
   BadContractID ContractID |
   BadInputID TransactionID Int |
-  BadNonce ContractID Int Int |
-  InvalidNonceAt ContractID |
   ContractOmitted TransactionID Int |
   CantImport ByteString TypeRep |
   ImportWithoutNonce ContractID |
+  ExportWithoutNonce ContractID |
   DeletedEntry 
 
 -- | Exceptions for contract-related errors.
@@ -69,19 +68,14 @@ data ContractException =
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
-  IncompleteContract ContractID |
-  IncompleteTransaction TransactionID |
   NotEnoughInputs |
   TooManyInputs
 
 -- | Exceptions for formatting transaction summaries
-newtype TXFieldException = TXFieldException String
+data DisplayException = 
+  TXFieldException String
 
 -- * Instances
-
--- | - 
-instance Show TXFieldException where
-  show (TXFieldException e) = e
 
 -- | -
 instance Show VersionException where
@@ -104,10 +98,6 @@ instance Show StorageException where
   show (BadInputID txID ix) = 
     "No input contract with index " ++ show ix ++ 
     " for transaction " ++ show txID
-  show (BadNonce cID bad good) = 
-    "Contract " ++ prettyContractID cID ++ 
-    " has nonce " ++ show good ++ "; got: " ++ show bad
-  show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ prettyContractID cID
   show (ContractOmitted txID ix) =
     "Contract call #" ++ show ix ++ 
     " in transaction " ++ show txID ++ 
@@ -116,6 +106,9 @@ instance Show StorageException where
     "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
   show (ImportWithoutNonce cID) =
     "Rejecting imported value for " ++ prettyContractID cID ++ 
+    " that lacks a nonce value."
+  show (ExportWithoutNonce cID) =
+    "Rejecting exported value for " ++ prettyContractID cID ++ 
     " that lacks a nonce value."
   show (DeletedEntry) =
     "(internal error) Tried to delete an entry of the transaction results!"
@@ -140,12 +133,12 @@ instance Show ContractException where
 
 -- | -
 instance Show TransactionException where
-  show (IncompleteContract cID) =
-    "Contract " ++ show cID ++ " has missing result"
-  show (IncompleteTransaction txID) =
-    "Transaction " ++ show txID ++ " has missing result"
   show NotEnoughInputs = "Transaction expected more inputs"
   show TooManyInputs = "Transaction expected fewer inputs"
+
+-- | - 
+instance Show DisplayException where
+  show (TXFieldException e) = e
 
 -- | -
 instance Exception VersionException
@@ -156,4 +149,4 @@ instance Exception ContractException
 -- | -
 instance Exception TransactionException
 -- | -
-instance Exception TXFieldException
+instance Exception DisplayException

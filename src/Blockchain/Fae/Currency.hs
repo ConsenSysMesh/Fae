@@ -8,7 +8,8 @@ Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
 The primary motivating example of a smart contract is a currency such as
-Bitcoin.  This module provides a typeclass for currency values that can be safely exchanged through the Fae smart contract system.
+Bitcoin.  This module provides a typeclass for currency values that can be
+safely exchanged through the Fae smart contract system.
 -}
 module Blockchain.Fae.Currency 
   (
@@ -42,9 +43,7 @@ class
 
   data Valuation coin
 
-  -- | Like the name says.  Sometimes useful; should satisfy
-  -- 
-  -- prop> zero >>= value = return 0
+  -- | Like the name says.
   zero :: (MonadTX m) => m coin
   -- | Peek at the value inside.  The ID remains valid.  Careful!  For
   -- semantic correctness, this function must also validate the escrow to
