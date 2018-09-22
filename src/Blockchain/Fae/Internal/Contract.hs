@@ -267,7 +267,6 @@ instance HasEscrowIDs ReturnValue where
 
 -- | -
 instance Versionable ReturnValue where
-  versionMap  f (ReturnValue x) = versionMap f x
   versions    f (ReturnValue x) = versions f x
   mapVersions m (ReturnValue x) = ReturnValue $ mapVersions m x
 

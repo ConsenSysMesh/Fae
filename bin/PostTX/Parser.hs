@@ -28,7 +28,7 @@ import Data.Map (Map)
 import PostTX.TXSpec 
   (
     LoadedModules(..), TXData(TXData),
-    Inputs, Module, ModuleMap, Renames(..), TransactionID
+    InputSpec(..), Module, ModuleMap, Renames(..), TransactionID
   )
 
 import System.Environment
@@ -112,15 +112,18 @@ fallback = titledList "fallback" $ listItem literal
 -- @deposit@ that expect to authenticate the signers in specifically named
 -- roles, which may not be the names used in the transaction that calls
 -- it.
-inputs :: SpecParser Inputs
+inputs :: SpecParser [InputSpec]
 inputs = titledList "inputs" $ do
-  ((cID, arg), renamesL) <- 
-    headedList (equalsItem contractID literal) (equalsItem literalEnd literal)
-  return (cID, arg, Renames $ Map.fromList renamesL)
+  (inputResultVersionM, ((inputCID, inputArgS), renamesL)) <- 
+    liftA2 (,) (optional versSpec) (headedList argSpec renameSpec)
+  return InputSpec{inputRenames = Renames $ Map.fromList renamesL, ..}
   where 
     -- Matches the 'Show' instance in "Blockchain.Fae.Internal.IDs.Types"
     contractID end = 
       ContractID <$> readPath <*> readPath <*> readPath <*> readEnd end
+    argSpec = equalsItem contractID literal
+    renameSpec = equalsItem literalEnd literal
+    versSpec = equalsName "version" readWord
 
 -- | >>> keys
 --   >>>   <global role name> = <private key name> | <public key hex string>

@@ -69,6 +69,7 @@ data ContractException =
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
+  BadInputVersion (Maybe VersionID) VersionID |
   IncompleteContract ContractID |
   IncompleteTransaction TransactionID |
   NotEnoughInputs |
@@ -139,6 +140,9 @@ instance Show ContractException where
 
 -- | -
 instance Show TransactionException where
+  show (BadInputVersion badM good) =
+    "Expected input value version: " ++ show good ++ "; got: " ++
+    maybe "none" show badM
   show (IncompleteContract cID) =
     "Contract " ++ show cID ++ " has missing result"
   show (IncompleteTransaction txID) =

@@ -234,10 +234,11 @@ successful InputResults{..}
   | Failed <- iStatus = False
   | otherwise = True
 
-makeInputVersions :: InputResults -> VersionMap
+makeInputVersions :: InputResults -> Maybe (VersionID, VersionMap)
 makeInputVersions InputResults{iResult = WithEscrows{..},..} 
-  | hasNonce iRealID = versionMap (lookupWithEscrows withEscrows) getWithEscrows
-  | otherwise = emptyVersionMap
+  | hasNonce iRealID = Just $ 
+      versions (lookupWithEscrows withEscrows) getWithEscrows
+  | otherwise = Nothing
 
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not
@@ -250,7 +251,6 @@ addImportedValue valueImporter iRealID iStatus = FaeStorage $ do
   unless (hasNonce iRealID) $ throw $ ImportWithoutNonce iRealID
   let (importedValue, Escrows{..}) = 
         runState valueImporter (Escrows Map.empty nullDigest)
-      iVersions = versionMap (lookupWithEscrows escrowMap) importedValue
       iResult = WithEscrows escrowMap (ReturnValue importedValue)
   _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
 

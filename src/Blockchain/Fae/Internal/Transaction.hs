@@ -40,11 +40,22 @@ import qualified Data.Vector as Vector
 import qualified Data.Map as Map
 import Data.Map (Map)
 
+import GHC.Generics
+
 -- * Types
 
 -- | How inputs are provided to transactions.  The contract with a given ID
--- gets an argument and a (possibly empty) remapping of signer names.
-type Inputs = [(ContractID, String, Renames)]
+-- gets an argument, a (possibly empty) remapping of signer names, and
+-- an optional version identifying the entire result of the call.
+data InputSpec =
+  InputSpec
+  {
+    inputCID :: ContractID,
+    inputArgS :: String,
+    inputRenames :: Renames,
+    inputResultVersionM :: Maybe VersionID
+  }
+  deriving (Generic)
 
 -- | Transaction monad with storage access, for executing contracts and
 -- saving the results.
@@ -78,6 +89,9 @@ type TransactionConstraints f =
 
 {- Instances -}
 
+instance Serialize InputSpec
+instance NFData InputSpec
+
 -- | The base-case instance: a transaction with no arguments.
 instance (Typeable a, Show a) => TransactionBody (FaeTX a) where
   type TransactionResult (FaeTX a) = a
@@ -104,9 +118,9 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
 runTransaction :: 
   (TransactionConstraints f) =>
   f -> [TransactionFallback f] -> 
-  Inputs -> TransactionID -> Signers -> Bool -> FaeStorage ()
-runTransaction f fallback inputArgs txID txSigners isReward = runTX $ do
-  inputResults <- runInputContracts inputArgs 
+  [InputSpec] -> TransactionID -> Signers -> Bool -> FaeStorage ()
+runTransaction f fallback inputCalls txID txSigners isReward = runTX $ do
+  inputResults <- runInputContracts inputCalls 
   let inputs = Vector.toList $ fmap (getWithEscrows . iResult) inputResults
   ~(result, outputs) <- lift $ runTransactionBody isReward f fallback inputs
   _getStorage . at txID ?= TransactionEntry{..}
@@ -151,19 +165,40 @@ callTX g x f = do
 
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
-runInputContracts :: Inputs -> TXStorageM (Vector InputResults)
-runInputContracts inputs = mfix $ 
-  forM (Vector.fromList inputs) . nextInput . makeVers 
-  where makeVers = InputVersionMap . fmap makeInputVersions
+runInputContracts :: [InputSpec] -> TXStorageM (Vector InputResults)
+runInputContracts inputs = fmap (view _1 <$>) $ mfix $ 
+  forM (Vector.fromList inputs) . \resultsVersions input@InputSpec{..} -> do
+    -- Order of operations:
+    -- 1. Run the call, using the memoized version map
+    -- 2. Compute the resulting versions, including the top one
+    -- 3. Check the top version against the required one, or error
+    -- 4. Return result and versions for memoization
+    -- It is rather delicate to have the versions on both ends without
+    -- recomputing them.
+    let vers = InputVersionMap $ view _2 <$> resultsVersions
+    result0 <- nextInput vers input
+    let resultVersM = makeInputVersions result0
+    -- This is weirdly difficult to write with minimal repetition.
+    -- The positive case is a disjunction in 'inputResultVersionM';
+    -- the negative case is a disjunction in 'resultVersM'.
+    -- There are always three cases, two of which have the same outcome.
+    return $ case inputResultVersionM of
+      Nothing -> (result0,) $ maybe emptyVersionMap (view _2) resultVersM
+      Just vID
+        | Just p@(resultVID, resultVers) <- resultVersM, vID == resultVID 
+          -> (result0, resultVers)
+        | let ex = BadInputVersion (view _1 <$> resultVersM) vID, otherwise 
+          -> (errInputResult ex inputCID, throw ex)
 
 -- | Looks up the contract ID and dispatches to the various possible
 -- actions (call, import, error) depending on what's found.
-nextInput ::
-  InputVersionMap -> (ContractID, String, Renames) -> TXStorageM InputResults
-nextInput vers (cID, arg, renames) = do
-  valEM <- use $ at cID
-  maybe errInputResult (either importedCallResult cCall) valEM cID
-  where cCall = contractCallResult vers arg renames
+nextInput :: InputVersionMap -> InputSpec -> TXStorageM InputResults
+nextInput vers InputSpec{..} = do
+  valEM <- use $ at inputCID
+  maybe err (either importedCallResult cCall) valEM inputCID
+  where 
+    cCall = contractCallResult vers inputArgS inputRenames
+    err cID = return $ errInputResult (BadContractID cID) cID
 
 -- | If the contract function is available, use it, update if it suceeds,
 -- and produce the results regardless.
@@ -189,11 +224,11 @@ importedCallResult iR@InputResults{..} cID = do
 
 -- | Otherwise, this input is exceptional (and so, probably, is the
 -- transaction result).
-errInputResult :: ContractID -> TXStorageM InputResults
+errInputResult :: (Exception e) => e -> ContractID -> InputResults
 -- A quick way of assigning the same exception to all the fields of the
 -- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
--- values, which are useful even if the contract itself is missing.
-errInputResult cID = return $ (throw $ BadContractID cID) & 
+-- values, which are useful even if the call itself failed.
+errInputResult e cID = throw e & 
   \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
 
 -- | Executes the contract function, returning the result, the structured

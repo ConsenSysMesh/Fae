@@ -113,9 +113,8 @@ collectTransaction txID = do
 getInputSummary :: 
   TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
 getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} -> 
-  let txInputVersions = 
-        over (traverse . _2) (show . bearerType) $ 
-          Map.toList $ getVersionMap $ makeInputVersions iR
+  let mapShowVers = Map.toList . fmap (show . bearerType) . getVersionMap . view _2
+      txInputVersions = maybe [] mapShowVers $ makeInputVersions iR
       txInputOutputs = 
         maybe 
           (throw $ ContractOmitted txID ix) 

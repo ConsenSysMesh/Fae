@@ -40,7 +40,7 @@ data TXMessage a =
     salt :: a, -- ^ Needs to be the first field
     mainModulePreview :: ModulePreview,
     otherModulePreviews :: Map String ModulePreview,
-    inputCalls :: Inputs,
+    inputCalls :: [InputSpec],
     fallbackFunctions :: [String],
     signatures :: Map String (PublicKey, Maybe Signature)
   }

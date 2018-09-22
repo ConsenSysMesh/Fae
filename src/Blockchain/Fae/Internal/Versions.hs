@@ -18,15 +18,14 @@ import Blockchain.Fae.Internal.IDs
 import Control.Monad
 import Control.Monad.State
 
+import Data.Coerce
 import Data.Foldable
+import Data.Maybe
+import Data.Proxy
+import Data.Typeable
 
 import qualified Data.Map as Map
 import Data.Map (Map)
-
-import Data.Maybe
-
-import Data.Proxy
-import Data.Typeable
 
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector
@@ -63,18 +62,8 @@ data ReadVersioned = Int ::: VersionID deriving (Read)
 -- | Types that can be versioned, meaning a unique identifier is calculated
 -- for it and all subobjects (stopping at 'Versioned' fields).  Has an
 -- automatic, undecidable instance for any 'Generic' type.
-class (HasEscrowIDs a, Typeable a) => Versionable a where
-  -- | Returns the map of all versions, including self.
-  versionMap :: (EntryID -> VersionID) -> a -> VersionMap
-  versionMap f x =
-    -- Unlike in @GRecords m (K1 i c)@, the inherent version is actually
-    -- the one we want, since the top-level object is not a record.
-    let (ver, VersionMap vers) = versions f x in
-    -- Same comment as in @GRecords m (K1 i c)@
-    VersionMap $ Map.insert ver (bearer x) vers
-
-  -- | Sort of the inverse of 'versionMap', this resolves all 'VersionedID'
-  -- variants of 'Versioned' to 'Versioned' variants.
+class (HasEscrowIDs a) => Versionable a where
+  -- | Resolves all 'VersionedID' variants of 'Versioned' to 'Versioned' variants.
   mapVersions :: InputVersionMap -> a -> a
 
   -- | Returns the version and the map of all strictly sub-versions.
@@ -135,9 +124,6 @@ instance Read (Versioned a) where
 instance (Versionable a) => Versionable (Versioned a) where
   versions f (Versioned x) = (ver, emptyVersionMap) where
     (ver, _) = versions f x 
-
-  versionMap f (Versioned x) = versionMap f x
-  versionMap f (VersionedID _ ver) = throw $ UnresolvedVersionID ver
 
   mapVersions _ Versioned{} = throw UnexpectedResolvedVersion
   mapVersions (InputVersionMap vVers) (VersionedID ix ver) =
@@ -326,3 +312,8 @@ mkVersionID = VersionID . digest
 addContractVersions :: Int -> VersionMap -> InputVersionMap -> InputVersionMap
 addContractVersions ix vMap (InputVersionMap vVers) =
   InputVersionMap $ Vector.modify (\mv -> Vector.write mv ix vMap) vVers
+
+-- | Basically `Map.insert`, but with specific type-casting.
+insertVersion :: (HasEscrowIDs a) => VersionID -> a -> VersionMap -> VersionMap
+insertVersion v = coerce . Map.insert v . bearer 
+
