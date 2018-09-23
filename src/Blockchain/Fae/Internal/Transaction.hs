@@ -28,6 +28,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer hiding ((<>))
 
+import Data.Coerce
 import Data.Foldable
 import Data.Maybe
 import Data.Proxy
@@ -52,8 +53,7 @@ data InputSpec =
   {
     inputCID :: ContractID,
     inputArgS :: String,
-    inputRenames :: Renames,
-    inputResultVersionM :: Maybe VersionID
+    inputRenames :: Renames
   }
   deriving (Generic)
 
@@ -163,72 +163,80 @@ callTX g x f = do
 
 -- ** Running contracts
 
--- | Runs all the input contracts in a state monad recording the
--- progressively increasing set of outputs.
+-- | Collects all the input call results, ensuring that the versions
+-- produced by earlier calls are available in later ones.
 runInputContracts :: [InputSpec] -> TXStorageM (Vector InputResults)
 runInputContracts inputs = fmap (view _1 <$>) $ mfix $ 
-  forM (Vector.fromList inputs) . \resultsVersions input@InputSpec{..} -> do
-    -- Order of operations:
-    -- 1. Run the call, using the memoized version map
-    -- 2. Compute the resulting versions, including the top one
-    -- 3. Check the top version against the required one, or error
-    -- 4. Return result and versions for memoization
-    -- It is rather delicate to have the versions on both ends without
-    -- recomputing them.
-    let vers = InputVersionMap $ view _2 <$> resultsVersions
-    result0 <- nextInput vers input
-    let resultVersM = makeInputVersions result0
-    -- This is weirdly difficult to write with minimal repetition.
-    -- The positive case is a disjunction in 'inputResultVersionM';
-    -- the negative case is a disjunction in 'resultVersM'.
-    -- There are always three cases, two of which have the same outcome.
-    return $ case inputResultVersionM of
-      Nothing -> (result0,) $ maybe emptyVersionMap (view _2) resultVersM
-      Just vID
-        | Just p@(resultVID, resultVers) <- resultVersM, vID == resultVID 
-          -> (result0, resultVers)
-        | let ex = BadInputVersion (view _1 <$> resultVersM) vID, otherwise 
-          -> (errInputResult ex inputCID, throw ex)
+  forM (Vector.fromList inputs) . nextInput . makeVers
+  where makeVers = InputVersionMap . fmap (view _2)
+
+-- | Handles the various cases applying to the 'iRealID' (nonce requested,
+-- actual and required version match) to establish a policy for when
+-- versions are available.
+makeInputVersions :: 
+  InputResults -> (VersionID, Either TransactionException VersionMap)
+makeInputVersions iR@InputResults{iResult = WithEscrows{..},..} =
+  (topVersion, ) $ case contractNonce iRealID of
+    Current -> Right emptyVersionMap
+    Nonce _ requestedVersion
+      | requestedVersion == topVersion -> Right vMap'
+      | otherwise -> Left $ BadInputVersion topVersion requestedVersion
+
+  where 
+    ~(topVersion, vMap) = versions (lookupWithEscrows withEscrows) getWithEscrows
+    vMap' = coerce (Map.insert topVersion $ returnValueBearer getWithEscrows) vMap
 
 -- | Looks up the contract ID and dispatches to the various possible
 -- actions (call, import, error) depending on what's found.
-nextInput :: InputVersionMap -> InputSpec -> TXStorageM InputResults
+nextInput :: InputVersionMap -> InputSpec -> TXStorageM (InputResults, VersionMap)
 nextInput vers InputSpec{..} = do
   valEM <- use $ at inputCID
   maybe err (either importedCallResult cCall) valEM inputCID
   where 
     cCall = contractCallResult vers inputArgS inputRenames
-    err cID = return $ errInputResult (BadContractID cID) cID
+    err cID = return $ errInputResult cID (BadContractID cID) 
 
 -- | If the contract function is available, use it, update if it suceeds,
 -- and produce the results regardless.
 contractCallResult :: 
   InputVersionMap -> String -> Renames -> 
-  OutputData -> ContractID -> TXStorageM InputResults
-contractCallResult vers arg (Renames rMap) OutputData{..} cID = do
+  OutputData -> ContractID -> TXStorageM (InputResults, VersionMap)
+contractCallResult vers arg (Renames rMap) od cID = do
   ~(iR, gAbsM) <- lift $ 
-    pushArg arg . remapSigners rMap $ 
-      runContract cID vers outputContract arg
-  when (successful iR) $ contractAtCID cID .= gAbsM
-
-  -- The nonce needs to be made explicit for the purpose of exporting
-  -- the return value with correct information of when it applies.
-  return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
-
+    pushArg arg . remapSigners rMap $ runContract cID vers od arg
+  useResults iR $ contractAtCID cID .= gAbsM
+ 
 -- | If instead we have an imported value, just use that.  
-importedCallResult :: InputResults -> ContractID -> TXStorageM InputResults
+importedCallResult :: 
+  InputResults -> ContractID -> TXStorageM (InputResults, VersionMap)
 importedCallResult iR@InputResults{..} cID = do
   at cID .= Nothing -- Just to make sure
   _ <- lift $ putEscrows iResult
-  return iR
+  useResults iR $ return ()
+
+-- | An abstraction of the handler used both for a regular call and an
+-- imported result, the difference being whether other actions are taken
+-- upon success.
+useResults :: (Monad m) => InputResults -> m () -> m (InputResults, VersionMap)
+useResults iR act
+  | successful iR = case makeInputVersions iR ^. _2 of
+      Right vMap -> act >> return (iR, vMap)
+      Left e -> return $ errInputResult (iRealID iR) e
+  | otherwise = return (iR, emptyVersionMap)
 
 -- | Otherwise, this input is exceptional (and so, probably, is the
 -- transaction result).
-errInputResult :: (Exception e) => e -> ContractID -> InputResults
+errInputResult :: (Exception e) => ContractID -> e -> (InputResults, VersionMap)
 -- A quick way of assigning the same exception to all the fields of the
 -- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
 -- values, which are useful even if the call itself failed.
-errInputResult e cID = throw e & 
+-- 
+-- It is debatable whether the version map returned here should be
+-- empty or exceptional.  I'm going with the latter because it will
+-- still raise an exception anywhere a version from this call would
+-- be used, but that exception will not be a 'BadInputVersion' that
+-- refers (confusingly) to this call.
+errInputResult cID e = ( , emptyVersionMap) $ throw e & 
   \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
 
 -- | Executes the contract function, returning the result, the structured
@@ -237,16 +245,17 @@ errInputResult e cID = throw e &
 runContract ::
   ContractID ->
   InputVersionMap ->
-  AbstractGlobalContract -> 
+  OutputData ->
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
-runContract iRealID vers fAbs arg = do
-  ~(~(resultE, gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
+runContract iRealID vers OutputData{..} arg = do
+  ~(~(resultE, gAbsM), outputsL) <- listen $ callContract outputContract (arg, vers)
   let iResult = gAbsM `deepseq` outputsL `deepseq` resultE
       iOutputsM = Just $ listToOutputs outputsL
       iStatus
         | not (unsafeIsDefined iResult) = Failed
         | Nothing <- gAbsM = Deleted
         | otherwise = Updated
+      iRealNonce = outputNonce
   return (InputResults{..}, gAbsM)
 

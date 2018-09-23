@@ -10,7 +10,7 @@ PostTX accepts transactions written in a yaml-like format, which is parsed by th
 -}
 module PostTX.Parser where
 
-import Blockchain.Fae.FrontEnd (ContractID(..))
+import Blockchain.Fae.FrontEnd (ContractID(..), Nonce(..))
 
 import Control.Applicative hiding (some)
 import Control.Monad
@@ -114,16 +114,13 @@ fallback = titledList "fallback" $ listItem literal
 -- it.
 inputs :: SpecParser [InputSpec]
 inputs = titledList "inputs" $ do
-  (inputResultVersionM, ((inputCID, inputArgS), renamesL)) <- 
-    liftA2 (,) (optional versSpec) (headedList argSpec renameSpec)
+  ((inputCID, inputArgS), renamesL) <- 
+    headedList (equalsItem contractID literal) (equalsItem literalEnd literal)
   return InputSpec{inputRenames = Renames $ Map.fromList renamesL, ..}
   where 
     -- Matches the 'Show' instance in "Blockchain.Fae.Internal.IDs.Types"
     contractID end = 
       ContractID <$> readPath <*> readPath <*> readPath <*> readEnd end
-    argSpec = equalsItem contractID literal
-    renameSpec = equalsItem literalEnd literal
-    versSpec = equalsName "version" readWord
 
 -- | >>> keys
 --   >>>   <global role name> = <private key name> | <public key hex string>
@@ -223,7 +220,7 @@ literalEnd end = resolveLine =<< someTill printChar (try $ lineBlank *> end)
 
 -- | To 'literalEnd' as 'readWord' is to 'literal'.
 readEnd :: forall a end. (Read a, Typeable a) => SpecParser end -> SpecParser a
-readEnd end = (\s -> either (err s) return $ readEither s) =<< literalEnd end
+readEnd end = (\s -> fromMaybe (err s) $ readMaybe s) <$> literalEnd end
   where err s = error $ "Couldn't read " ++ s ++ " as type " ++ show (typeRep @a)
 
 -- | A lookahead newline, important since list items need to continue until

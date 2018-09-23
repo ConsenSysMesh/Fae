@@ -4,7 +4,7 @@ keys
   tom = $tom
 inputs
   -- Should return (0, $ryan, eID)
-  $txID/Body/0/Nonce 0 = ()
+  $txID/Body/0/$nonce = ()
     c1Role = ryan
 
   -- Should return (1, $tom)

@@ -49,7 +49,7 @@ data TransactionPart = Body | InputCall Int
 
 -- | A contract ID can be specified without a nonce, meaning that whatever
 -- the current version of the contract is should be used.
-data Nonce = Current | Nonce Int
+data Nonce = Current | Nonce Int VersionID
   deriving (Read, Show, Eq, Ord, Generic)
                          --
 -- | Transactions can have many named signatories, which are available in
@@ -132,19 +132,12 @@ makePrisms ''Nonce
 nullID :: TransactionID
 nullID = nullDigest
 
-hasNonce :: ContractID -> Bool
-hasNonce ContractID{..} =
-  case contractNonce of
-    Current -> False
-    _ -> True
-
 -- | Prints a contract ID as a "path" `txID/txPart/index/nonce`.
 prettyContractID :: ContractID -> String
 prettyContractID ContractID{..} = intercalate "/" $ 
   [
     show parentTransaction, 
     show transactionPart, 
-    show creationIndex, 
-    show contractNonce
+    show creationIndex
   ]
 

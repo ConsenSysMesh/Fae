@@ -85,6 +85,7 @@ data InputResults =
     -- | The 'Left' means the contract was deleted after this call; the
     -- 'Right' means its nonce was incremented.
     iRealID :: ContractID,
+    iRealNonce :: Int,
     iStatus :: Status,
     -- | This is /very dangerous/ because these escrows are duplicates.
     -- This value /must not/ be used inside Fae, but only exposed to
@@ -206,7 +207,7 @@ outputContractNonce nonce = lens getter setter . checkL where
   getter = (>>= outputData)
   setter mo mod = fmap (_outputData .~ ((_outputNonce +~ 1) <$> mod)) mo
   checkL | Current <- nonce = id
-         | Nonce n <- nonce = guardNonce n
+         | Nonce n _ <- nonce = guardNonce n
 
 guardNonce :: (MonadPlus m) => Int -> Lens' (m OutputData) (m OutputData)
 guardNonce n = (. (>>= g)) where
@@ -234,12 +235,6 @@ successful InputResults{..}
   | Failed <- iStatus = False
   | otherwise = True
 
-makeInputVersions :: InputResults -> Maybe (VersionID, VersionMap)
-makeInputVersions InputResults{iResult = WithEscrows{..},..} 
-  | hasNonce iRealID = Just $ 
-      versions (lookupWithEscrows withEscrows) getWithEscrows
-  | otherwise = Nothing
-
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not
 -- `FaeStorageT` because the former is not an instance of the latter, and
@@ -247,12 +242,14 @@ makeInputVersions InputResults{iResult = WithEscrows{..},..}
 addImportedValue :: 
   (Versionable a, HasEscrowIDs a, Exportable a) => 
   State Escrows a -> ContractID -> Status -> FaeStorage ()
-addImportedValue valueImporter iRealID iStatus = FaeStorage $ do
-  unless (hasNonce iRealID) $ throw $ ImportWithoutNonce iRealID
-  let (importedValue, Escrows{..}) = 
-        runState valueImporter (Escrows Map.empty nullDigest)
-      iResult = WithEscrows escrowMap (ReturnValue importedValue)
-  _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
+addImportedValue valueImporter iRealID iStatus = FaeStorage $ 
+  case contractNonce iRealID of
+    Current -> throw $ ImportWithoutNonce iRealID
+    Nonce iRealNonce _ -> do
+      let (importedValue, Escrows{..}) = 
+            runState valueImporter (Escrows Map.empty nullDigest)
+          iResult = WithEscrows escrowMap (ReturnValue importedValue)
+      _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = do

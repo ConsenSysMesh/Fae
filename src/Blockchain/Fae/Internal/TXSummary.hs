@@ -24,6 +24,7 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
+import Blockchain.Fae.Internal.Transaction (makeInputVersions)
 import Blockchain.Fae.Internal.Versions
 import Blockchain.Fae.Internal.TX
 
@@ -65,6 +66,7 @@ data TXSummary = TXSummary {
 data TXInputSummary = TXInputSummary {
   txInputStatus :: Status,
   txInputOutputs :: Vector CType,
+  txInputNonce :: Nonce,
   txInputVersions :: [(VersionID, String)]
 } deriving (Show, Generic)
 
@@ -90,7 +92,8 @@ instance Pretty TXSummary where
     entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat [ outputs, versions ] where 
+  pPrint TXInputSummary{..} = vcat [ nonce, outputs, versions ] where 
+    nonce = prettyPair ("nonce", txInputNonce)
     outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
     versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
       bimap show UnquotedString <$> txInputVersions
@@ -113,14 +116,13 @@ collectTransaction txID = do
 getInputSummary :: 
   TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
 getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} -> 
-  let mapShowVers = Map.toList . fmap (show . bearerType) . getVersionMap . view _2
-      txInputVersions = maybe [] mapShowVers $ makeInputVersions iR
-      txInputOutputs = 
-        maybe 
-          (throw $ ContractOmitted txID ix) 
-          showTypes 
-          iOutputsM
-  in (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
+  let mapShowVers = Map.toList . fmap (show . bearerType) . getVersionMap
+      (resultVID, vMapE) = makeInputVersions iR
+      txInputVersions = either throw mapShowVers vMapE
+      txInputOutputs = maybe (throw $ ContractOmitted txID ix) showTypes iOutputsM
+      txInputStatus = iStatus
+      txInputNonce = Nonce iRealNonce resultVID
+  in (iRealID, TXInputSummary{..})
 
 showTypes :: Outputs -> Vector UnquotedString
 showTypes = fmap $ UnquotedString . show . outputType

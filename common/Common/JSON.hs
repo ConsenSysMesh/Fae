@@ -40,6 +40,7 @@ instance ToJSON TXInputSummary where
     object [
       "txInputStatus" .= txInputStatus,
       "txInputOutputs" .= wrapExceptions txInputOutputs,
+      "txInputNonce" .= wrapExceptions txInputNonce,
       "txInputVersions" .= wrapExceptions txInputVersions ]
 
 instance ToJSON TXSummary where
@@ -56,6 +57,7 @@ instance FromJSON TXInputSummary where
       TXInputSummary
         <$> readJSONField "txInputStatus" o
         <*> readJSONField "txInputOutputs" o
+        <*> readJSONField "txInputNonce" o
         <*> readJSONField "txInputVersions" o
       
 instance FromJSON TXSummary where
@@ -103,6 +105,9 @@ instance FromJSON UnquotedString where
 
 instance ToJSON Status
 instance FromJSON Status
+
+instance ToJSON Nonce
+instance FromJSON Nonce
     
 encodeJSON :: (ToJSON a) => a -> String
 encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a

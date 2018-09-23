@@ -50,8 +50,6 @@ data StorageException =
   BadTransactionID TransactionID |
   BadContractID ContractID |
   BadInputID TransactionID Int |
-  BadNonce ContractID Int Int |
-  InvalidNonceAt ContractID |
   ContractOmitted TransactionID Int |
   CantImport ByteString TypeRep |
   ImportWithoutNonce ContractID |
@@ -69,7 +67,7 @@ data ContractException =
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
-  BadInputVersion (Maybe VersionID) VersionID |
+  BadInputVersion VersionID VersionID |
   IncompleteContract ContractID |
   IncompleteTransaction TransactionID |
   NotEnoughInputs |
@@ -100,14 +98,12 @@ instance Show VersionException where
 -- | -
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
-  show (BadContractID cID) = "Not a contract ID: " ++ prettyContractID cID
+  show (BadContractID cID) = 
+    "Couldn't retrieve contract ID: " ++ prettyContractID cID ++
+    " with nonce: " ++ show (contractNonce cID)
   show (BadInputID txID ix) = 
     "No input contract with index " ++ show ix ++ 
     " for transaction " ++ show txID
-  show (BadNonce cID bad good) = 
-    "Contract " ++ prettyContractID cID ++ 
-    " has nonce " ++ show good ++ "; got: " ++ show bad
-  show (InvalidNonceAt cID) = "Can't look up contract ID: " ++ prettyContractID cID
   show (ContractOmitted txID ix) =
     "Contract call #" ++ show ix ++ 
     " in transaction " ++ show txID ++ 
@@ -140,9 +136,8 @@ instance Show ContractException where
 
 -- | -
 instance Show TransactionException where
-  show (BadInputVersion badM good) =
-    "Expected input value version: " ++ show good ++ "; got: " ++
-    maybe "none" show badM
+  show (BadInputVersion bad good) =
+    "Expected input value version: " ++ show good ++ "; got: " ++ show bad
   show (IncompleteContract cID) =
     "Contract " ++ show cID ++ " has missing result"
   show (IncompleteTransaction txID) =

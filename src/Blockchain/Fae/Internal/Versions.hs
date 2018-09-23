@@ -18,7 +18,6 @@ import Blockchain.Fae.Internal.IDs
 import Control.Monad
 import Control.Monad.State
 
-import Data.Coerce
 import Data.Foldable
 import Data.Maybe
 import Data.Proxy
@@ -312,8 +311,4 @@ mkVersionID = VersionID . digest
 addContractVersions :: Int -> VersionMap -> InputVersionMap -> InputVersionMap
 addContractVersions ix vMap (InputVersionMap vVers) =
   InputVersionMap $ Vector.modify (\mv -> Vector.write mv ix vMap) vVers
-
--- | Basically `Map.insert`, but with specific type-casting.
-insertVersion :: (HasEscrowIDs a) => VersionID -> a -> VersionMap -> VersionMap
-insertVersion v = coerce . Map.insert v . bearer 
 

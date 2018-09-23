@@ -560,6 +560,9 @@ getReturnValue (ReturnValue x) x0 = fromMaybe x0 $ cast x
 returnValueType :: ReturnValue -> TypeRep
 returnValueType (ReturnValue x) = typeRep (Just x)
 
+returnValueBearer :: ReturnValue -> BearsValue
+returnValueBearer (ReturnValue x) = BearsValue x
+
 -- | Taking advantage of the existential type
 exportReturnValue :: (MonadState EscrowMap m) => ReturnValue -> m ByteString
 exportReturnValue (ReturnValue x) = exportValue x
