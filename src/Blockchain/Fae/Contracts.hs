@@ -17,8 +17,8 @@ module Blockchain.Fae.Contracts
     twoPartySwap, TwoPartySwap(..),
     -- * Direct selling
     -- $vendor
-    sell, redeem,
-    Sell(..), Redeem(..),
+    sell, --redeem,
+    Sell(..), --Redeem(..),
     -- * Possession
     -- $possession
     signOver, deposit,
@@ -201,37 +201,37 @@ instance (ContractVal a, Currency coin) => ContractName (Sell a coin) where
       throw $ NotOwner sender
     spend $ Left cost
 
--- | This is very similar to 'sell' except that instead of accepting
--- a currency and making change, it accepts an opaque token and
--- a validation function.
-redeem ::
-  forall a b m m'.
-  (ContractVal a, ContractVal b, ContractArg b, MonadTX m) =>
-  a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
-redeem x valid seller = newContract (Redeem seller x valid) where
-
-data Redeem a b = 
-  Redeem PublicKey a (b -> (Fae b (Either b a) Bool))
-  deriving (Generic)
-
-instance 
-  (ContractVal a, ContractVal b, ContractArg b) => 
-  ContractName (Redeem a b) where
-
-  type ArgType (Redeem a b) = b
-  type ValType (Redeem a b) = Either b a
-
-  theContract (Redeem seller x valid) = \tok -> do
-    claimedSeller <- signer "seller"
-    unless (claimedSeller == seller) $ 
-      throw $ UnauthorizedSeller claimedSeller
-    ok <- valid tok
-    unless ok $ throw BadToken
-    _ <- release $ Right x
-    sender <- signer "self"
-    unless (sender == seller) $
-      throw $ UnauthorizedSeller sender
-    spend $ Left tok
+-- -- | This is very similar to 'sell' except that instead of accepting
+-- -- a currency and making change, it accepts an opaque token and
+-- -- a validation function.
+-- redeem ::
+--   forall a b m m'.
+--   (ContractVal a, ContractVal b, ContractArg b, MonadTX m) =>
+--   a -> (b -> Fae b (Either b a) Bool) -> PublicKey -> m ()
+-- redeem x valid seller = newContract (Redeem seller x valid) where
+-- 
+-- data Redeem a b = 
+--   Redeem PublicKey a (b -> (Fae b (Either b a) Bool))
+--   deriving (Generic)
+-- 
+-- instance 
+--   (ContractVal a, ContractVal b, ContractArg b) => 
+--   ContractName (Redeem a b) where
+-- 
+--   type ArgType (Redeem a b) = b
+--   type ValType (Redeem a b) = Either b a
+-- 
+--   theContract (Redeem seller x valid) = \tok -> do
+--     claimedSeller <- signer "seller"
+--     unless (claimedSeller == seller) $ 
+--       throw $ UnauthorizedSeller claimedSeller
+--     ok <- valid tok
+--     unless ok $ throw BadToken
+--     _ <- release $ Right x
+--     sender <- signer "self"
+--     unless (sender == seller) $
+--       throw $ UnauthorizedSeller sender
+--     spend $ Left tok
 
 -- $possession
 -- A possession contract is simply one that marks a value as being owned by

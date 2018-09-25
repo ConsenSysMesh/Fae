@@ -152,33 +152,36 @@ callTX g x f = do
 -- | Runs all the input contracts in a state monad recording the
 -- progressively increasing set of outputs.
 runInputContracts :: Inputs -> TXStorageM (Vector InputResults)
-runInputContracts inputs = mfix $ 
-  forM (Vector.fromList inputs) . nextInput . makeVers 
-  where makeVers = InputVersionMap . fmap makeInputVersions
+runInputContracts = fmap Vector.fromList . mapM nextInput
 
 -- | Looks up the contract ID and dispatches to the various possible
 -- actions (call, import, error) depending on what's found.
 nextInput ::
-  InputVersionMap -> (ContractID, String, Renames) -> TXStorageM InputResults
-nextInput vers (cID, arg, renames) = do
+  (ContractID, String, Renames) -> TXStorageM InputResults
+nextInput (cID, arg, renames) = do
   valEM <- use $ at cID
   maybe errInputResult (either importedCallResult cCall) valEM cID
-  where cCall = contractCallResult vers arg renames
+  where cCall = contractCallResult arg renames
 
 -- | If the contract function is available, use it, update if it suceeds,
 -- and produce the results regardless.
 contractCallResult :: 
-  InputVersionMap -> String -> Renames -> 
-  OutputData -> ContractID -> TXStorageM InputResults
-contractCallResult vers arg (Renames rMap) OutputData{..} cID = do
+  String -> Renames -> StoredContract -> ContractID -> TXStorageM InputResults
+contractCallResult arg (Renames rMap) StoredContract{..} cID = do
+  unless (contractVersion cID == Version storedVersion) $ 
+    throw $ BadContractVersion cID storedVersion
   ~(iR, gAbsM) <- lift $ 
     pushArg arg . remapSigners rMap $ 
-      runContract cID vers outputContract arg
-  when (successful iR) $ contractAtCID cID .= gAbsM
-
-  -- The nonce needs to be made explicit for the purpose of exporting
-  -- the return value with correct information of when it applies.
-  return $ iR & _iRealID . _contractNonce .~ Nonce outputNonce
+      runContract cID storedFunction arg
+  let newStoredContractM = flip StoredContract nextVersion <$> gAbsM
+  when (successful iR) $ at cID .= (Right <$> newStoredContractM)
+  return iR
+  -- Previously also updated the contract version in 'iRealID', but that
+  -- muddles the summary output and also allows exporting things that were
+  -- not called by version, which is actually not a good idea since the
+  -- version should be explicit in the transaction message for
+  -- verification.
+  where nextVersion = mkVersionID (storedVersion, arg)
 
 -- | If instead we have an imported value, just use that.  
 importedCallResult :: InputResults -> ContractID -> TXStorageM InputResults
@@ -201,12 +204,11 @@ errInputResult cID = return $ (throw $ BadContractID cID) &
 -- continuation function.
 runContract ::
   ContractID ->
-  InputVersionMap ->
   AbstractGlobalContract -> 
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
-runContract iRealID vers fAbs arg = do
-  ~(~(resultE, gAbsM), outputsL) <- listen $ callContract fAbs (arg, vers)
+runContract iRealID fAbs arg = do
+  ~(~(resultE, gAbsM), outputsL) <- listen $ callContract fAbs arg
   let iResult = gAbsM `deepseq` outputsL `deepseq` resultE
       iOutputsM = Just $ listToOutputs outputsL
       iStatus

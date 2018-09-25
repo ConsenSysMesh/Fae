@@ -36,15 +36,7 @@ instance {-# OVERLAPPABLE #-}
   (HasEscrowIDs a, Typeable a, Generic a, GVersionable (Rep a)) => 
   Versionable a where
 
-  mapVersions vMap = to . gMapVersions vMap . from 
-  versions f = gVersions f . from
-
--- | /Not/ the 'Generic' instance, because that produces a version for each
--- character and each tail.  This is not an ideal solution; we should
--- really just use 'Text' instead, but it fixes a common situation.
-instance {-# OVERLAPPING #-} Versionable String where
-  versions f s = (mkVersionID $ map (fst . versions f) s, emptyVersionMap)
-  mapVersions _ = id
+  version f = gVersion f . from
 
 -- | /So/ undecidable
 instance {-# OVERLAPPABLE #-}

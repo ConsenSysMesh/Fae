@@ -128,18 +128,18 @@ data TXData =
 data Output =
   Output
   {
-    outputData :: Maybe OutputData,
+    storedContract :: Maybe StoredContract,
     -- | This is not @Maybe@ because even when the contract is spent, we
     -- need its type for exporting.
-    outputType :: TypeRep 
+    contractNameType :: TypeRep 
   }
   deriving (Generic)
 
-data OutputData =
-  OutputData
+data StoredContract =
+  StoredContract
   {
-    outputContract :: AbstractGlobalContract,
-    outputNonce :: Int
+    storedFunction :: AbstractGlobalContract,
+    storedVersion :: VersionID
   }
   deriving (Generic)
 
@@ -174,8 +174,7 @@ newtype ContractF argType valType =
 type AbstractLocalContract = ContractF BearsValue BearsValue
 -- | The form of a contract function intended to be called from
 -- a transaction.
-type AbstractGlobalContract = 
-  ContractF (String, InputVersionMap) (WithEscrows ReturnValue)
+type AbstractGlobalContract = ContractF String (WithEscrows ReturnValue)
 
 -- ** User-visible
 
@@ -252,7 +251,7 @@ makeLenses ''WithEscrows
 makeLenses ''Escrows
 makeLenses ''TXData
 makeLenses ''Output
-makeLenses ''OutputData
+makeLenses ''StoredContract
 
 {- Instances -}
 
@@ -260,16 +259,14 @@ makeLenses ''OutputData
 instance NFData Output
 
 -- | -
-instance NFData OutputData
+instance NFData StoredContract
 
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
 
 -- | -
 instance Versionable ReturnValue where
-  versionMap  f (ReturnValue x) = versionMap f x
-  versions    f (ReturnValue x) = versions f x
-  mapVersions m (ReturnValue x) = ReturnValue $ mapVersions m x
+  version f (ReturnValue x) = version f x
 
 -- | -
 instance MonadTX FaeTX where
@@ -335,17 +332,18 @@ newContract ::
   forall name m.
   (
     ContractName name, Read (ArgType name), Exportable (ValType name), 
-    MonadTX m
+    MonadTX m,
+    Versionable name
   ) => 
   name -> m ()
 newContract x = liftTX $ FaeTX $ do
   (_, nextID) <- forkNextID
-  WithEscrows escrowMap _ <- takeEscrows x
-  let outputContract = 
-        globalContract $ hideEscrows escrowMap nextID (theContract x)
-      outputType = typeRep $ Proxy @name
-      outputNonce = 0
-      outputData = Just OutputData{..}
+  xE <- takeEscrows x
+  let storedFunction = 
+        globalContract $ hideEscrows (withEscrows xE) nextID (theContract x)
+      contractNameType = typeRep $ Proxy @name
+      storedVersion = getVersion xE
+      storedContract = Just StoredContract{..}
   tell [Output{..}]
 
 -- | Creates a new escrow endowed with a given list of valuables.
@@ -356,7 +354,7 @@ newEscrow contractName = liftTX $ FaeTX $ do
   (entID, contractNextID) <- forkNextID
   WithEscrows endowment _ <- takeEscrows contractName
   let escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
-      escrowVersion = VersionID entID
+      escrowVersion = entID
   _escrowMap %= Map.insert entID EscrowEntry{..}
   return $ EscrowID entID
 
@@ -451,15 +449,12 @@ returnLocal = fmap bearer . putEscrows
 acceptGlobal :: 
   forall argType.
   (Read argType, Versionable argType, HasEscrowIDs argType) =>
-  (String, InputVersionMap) -> FaeTXM (WithEscrows argType)
-acceptGlobal (argS, vers) = takeEscrows x where
-  -- Laziness assurance: the 'maybe' function (which is not lazy) is
-  -- nonetheless safe here because 'argS' is not provided by user code, and
-  -- 'readMaybe' always returns a good value.
-  x = maybe 
-    (throw $ BadInputParse argS $ typeRep $ Proxy @argType) 
-    (mapVersions vers) 
-    (readMaybe argS)
+  String -> FaeTXM (WithEscrows argType)
+-- Laziness assurance: the 'fromMaybe' function (which is not lazy) is
+-- nonetheless safe here because 'argS' is not provided by user code, and
+-- 'readMaybe' always returns a good value.
+acceptGlobal argS = takeEscrows $ fromMaybe err $ readMaybe argS where
+  err = throw $ BadInputParse argS $ typeRep $ Proxy @argType
 
 -- | Prepares a value-bearing result together with its table of versioned
 -- values.
@@ -550,6 +545,9 @@ joinEscrowState = join . liftEscrowState
 lookupWithEscrows :: EscrowMap -> EntryID -> VersionID
 lookupWithEscrows escrowMap entID =
   maybe (throw $ BadEscrowID entID) escrowVersion $ Map.lookup entID escrowMap
+
+getVersion :: (Versionable a) => WithEscrows a -> VersionID
+getVersion (WithEscrows escrowMap x) = version (lookupWithEscrows escrowMap) x
 
 -- ** 'ReturnValue' manipulation
 

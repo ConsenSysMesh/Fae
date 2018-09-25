@@ -38,7 +38,7 @@ data ContractID =
     parentTransaction :: TransactionID,
     transactionPart :: TransactionPart,
     creationIndex :: Int,
-    contractNonce :: Nonce
+    contractVersion :: Version
   }
   deriving (Read, Show, Eq, Ord, Generic)
 
@@ -47,9 +47,9 @@ data ContractID =
 data TransactionPart = Body | InputCall Int
   deriving (Read, Show, Eq, Ord, Generic)
 
--- | A contract ID can be specified without a nonce, meaning that whatever
+-- | A contract ID can be specified without a version, meaning that whatever
 -- the current version of the contract is should be used.
-data Nonce = Current | Nonce Int
+data Version = Current | Version VersionID
   deriving (Read, Show, Eq, Ord, Generic)
                          --
 -- | Transactions can have many named signatories, which are available in
@@ -66,13 +66,9 @@ newtype Renames = Renames { getRenames :: Map String String }
 -- | For simplicity
 type TransactionID = Digest
 -- | For simplicity
-type BlockID = Digest
-
--- | For simplicity
 type EntryID = Digest
--- | For convenience
-newtype VersionID = VersionID Digest 
-  deriving (Generic, Eq, Ord, Serialize, NFData)
+-- | Previously a newtype, no longer necessary.
+type VersionID = Digest
 
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
 -- escrow is first created and are guaranteed to be globally unique and
@@ -89,30 +85,15 @@ newtype EscrowID name = EscrowID { entID :: EntryID }
 
 -- Instances
 
--- | There are various times a contract ID needs to be serialized: as part
--- of a transaction, or as part of an exported return value.
 instance Serialize ContractID
--- | -
 instance Digestible ContractID
--- | -
 instance NFData ContractID
--- | -
+
 instance Serialize TransactionPart
--- | -
 instance NFData TransactionPart
 
--- | -
-instance Serialize Nonce
--- | -
-instance NFData Nonce
-
--- | -
-instance Read VersionID where
-  readsPrec n = map (_1 %~ VersionID) . readsPrec n
-
--- | -
-instance Show VersionID where
-  show (VersionID ver) = show ver
+instance Serialize Version
+instance NFData Version
 
 -- | Useful for debugging
 instance Show (EscrowID name) where
@@ -124,7 +105,7 @@ makeLenses ''Signers
 makeLenses ''Renames
 makeLenses ''ContractID
 makeLenses ''TransactionPart
-makePrisms ''Nonce
+makePrisms ''Version
 
 -- * Functions
 
@@ -132,19 +113,18 @@ makePrisms ''Nonce
 nullID :: TransactionID
 nullID = nullDigest
 
-hasNonce :: ContractID -> Bool
-hasNonce ContractID{..} =
-  case contractNonce of
-    Current -> False
-    _ -> True
-
--- | Prints a contract ID as a "path" `txID/txPart/index/nonce`.
+-- | Prints a contract ID as a "path" `txID/txPart/index/version`, with the
+-- two hex strings abbreviated.
 prettyContractID :: ContractID -> String
 prettyContractID ContractID{..} = intercalate "/" $ 
   [
-    show parentTransaction, 
+    printShortHex parentTransaction, 
     show transactionPart, 
     show creationIndex, 
-    show contractNonce
+    printShortHex contractVersion
   ]
 
+-- | Temporary; to be removed
+hasVersion :: ContractID -> Bool
+hasVersion ContractID{contractVersion = Current} = False
+hasVersion _ = True

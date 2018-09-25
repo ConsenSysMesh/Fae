@@ -25,7 +25,7 @@ library
     Blockchain.Fae
     Blockchain.Fae.FrontEnd
     Blockchain.Fae.Internal
-    Blockchain.Fae.Contracts
+    --Blockchain.Fae.Contracts
     Blockchain.Fae.Currency
   other-modules:
     Blockchain.Fae.Internal.Contract

@@ -65,7 +65,7 @@ data TXSummary = TXSummary {
 data TXInputSummary = TXInputSummary {
   txInputStatus :: Status,
   txInputOutputs :: Vector CType,
-  txInputVersions :: [(VersionID, String)]
+  txInputVersion :: VersionID
 } deriving (Show, Generic)
 
 makeLenses ''TXSummary
@@ -90,10 +90,9 @@ instance Pretty TXSummary where
     entry = vcat [ result, outputs, txSSigners', inputs ]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat [ outputs, versions ] where 
+  pPrint TXInputSummary{..} = vcat [ version, outputs ] where 
+    version = prettyPair ("version", txInputVersion)
     outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
-    versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
-      bimap show UnquotedString <$> txInputVersions
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
@@ -113,9 +112,7 @@ collectTransaction txID = do
 getInputSummary :: 
   TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
 getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} -> 
-  let txInputVersions = 
-        over (traverse . _2) (show . bearerType) $ 
-          Map.toList $ getVersionMap $ makeInputVersions iR
+  let txInputVersion = getVersion iResult
       txInputOutputs = 
         maybe 
           (throw $ ContractOmitted txID ix) 
@@ -124,7 +121,7 @@ getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} ->
   in (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
 
 showTypes :: Outputs -> Vector UnquotedString
-showTypes = fmap $ UnquotedString . show . outputType
+showTypes = fmap $ UnquotedString . show . contractNameType
 
 toIxList :: Vector a -> [(Int, a)]
 toIxList = zip [0 ..] . toList
