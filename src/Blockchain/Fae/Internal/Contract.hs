@@ -17,7 +17,6 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Suspend
-import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
@@ -52,7 +51,7 @@ type a <-| b = (a, b)
 
 -- | Another dynamic type, this time including 'Exportable'.
 data ReturnValue =
-  forall a. (Versionable a, HasEscrowIDs a, Exportable a) => ReturnValue a
+  forall a. (HasEscrowIDs a, Exportable a) => ReturnValue a
 
 -- | Something like a closure for the initial state of a new contract
 -- (currently only escrows).  The actual contract function can be
@@ -216,7 +215,6 @@ class (Typeable a) => Exportable a where
 class 
   (
     HasEscrowIDs a,
-    Versionable (ArgType a), Versionable (ValType a),
     HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)
   ) => ContractName a where
 
@@ -263,10 +261,6 @@ instance NFData StoredContract
 
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
-
--- | -
-instance Versionable ReturnValue where
-  version f (ReturnValue x) = version f x
 
 -- | -
 instance MonadTX FaeTX where
@@ -332,17 +326,15 @@ newContract ::
   forall name m.
   (
     ContractName name, Read (ArgType name), Exportable (ValType name), 
-    MonadTX m,
-    Versionable name
+    MonadTX m
   ) => 
   name -> m ()
 newContract x = liftTX $ FaeTX $ do
-  (_, nextID) <- forkNextID
+  (storedVersion, nextID) <- forkNextID
   xE <- takeEscrows x
   let storedFunction = 
         globalContract $ hideEscrows (withEscrows xE) nextID (theContract x)
       contractNameType = typeRep $ Proxy @name
-      storedVersion = getVersion xE
       storedContract = Just StoredContract{..}
   tell [Output{..}]
 
@@ -372,7 +364,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
     -- The "local hash" corresponds either to the transaction ID (if not in
     -- a contract call) or to the arguments of the contract call, and so
     -- the version will accurately reflect the call history of the escrow.
-    let newVer = mkVersionID (escrowVersion, hash)
+    let newVer = digest (escrowVersion, hash)
     _escrowMap . at entID .= fmap (EscrowEntry newVer . Right) resultCFM
     return y
   where typeify f = fmap (_1 %~ returnTyped) . f . acceptTyped
@@ -422,7 +414,6 @@ localContract = ContractF .
 globalContract :: 
   (
     Read argType, Exportable valType,
-    Versionable argType, Versionable valType,
     HasEscrowIDs argType, HasEscrowIDs valType
   ) =>
   PreContractF argType valType -> AbstractGlobalContract
@@ -448,7 +439,7 @@ returnLocal = fmap bearer . putEscrows
 -- values for its version references.
 acceptGlobal :: 
   forall argType.
-  (Read argType, Versionable argType, HasEscrowIDs argType) =>
+  (Read argType, HasEscrowIDs argType) =>
   String -> FaeTXM (WithEscrows argType)
 -- Laziness assurance: the 'fromMaybe' function (which is not lazy) is
 -- nonetheless safe here because 'argS' is not provided by user code, and
@@ -459,7 +450,7 @@ acceptGlobal argS = takeEscrows $ fromMaybe err $ readMaybe argS where
 -- | Prepares a value-bearing result together with its table of versioned
 -- values.
 returnGlobal :: 
-  (HasEscrowIDs valType, Versionable valType, Exportable valType) =>
+  (HasEscrowIDs valType, Exportable valType) =>
   WithEscrows valType -> FaeTXM (WithEscrows ReturnValue)
 returnGlobal yE = do
   y <- putEscrows yE
@@ -545,9 +536,6 @@ joinEscrowState = join . liftEscrowState
 lookupWithEscrows :: EscrowMap -> EntryID -> VersionID
 lookupWithEscrows escrowMap entID =
   maybe (throw $ BadEscrowID entID) escrowVersion $ Map.lookup entID escrowMap
-
-getVersion :: (Versionable a) => WithEscrows a -> VersionID
-getVersion (WithEscrows escrowMap x) = version (lookupWithEscrows escrowMap) x
 
 -- ** 'ReturnValue' manipulation
 

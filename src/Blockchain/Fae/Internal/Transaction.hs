@@ -17,7 +17,6 @@ import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Storage
-import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
@@ -172,7 +171,7 @@ contractCallResult arg (Renames rMap) StoredContract{..} cID = do
     throw $ BadContractVersion cID storedVersion
   ~(iR, gAbsM) <- lift $ 
     pushArg arg . remapSigners rMap $ 
-      runContract cID storedFunction arg
+      runContract cID storedVersion storedFunction arg
   let newStoredContractM = flip StoredContract nextVersion <$> gAbsM
   when (successful iR) $ at cID .= (Right <$> newStoredContractM)
   return iR
@@ -181,7 +180,7 @@ contractCallResult arg (Renames rMap) StoredContract{..} cID = do
   -- not called by version, which is actually not a good idea since the
   -- version should be explicit in the transaction message for
   -- verification.
-  where nextVersion = mkVersionID (storedVersion, arg)
+  where nextVersion = digest (storedVersion, arg)
 
 -- | If instead we have an imported value, just use that.  
 importedCallResult :: InputResults -> ContractID -> TXStorageM InputResults
@@ -204,10 +203,11 @@ errInputResult cID = return $ (throw $ BadContractID cID) &
 -- continuation function.
 runContract ::
   ContractID ->
+  VersionID ->
   AbstractGlobalContract -> 
   String ->
   FaeTXM (InputResults, Maybe AbstractGlobalContract)
-runContract iRealID fAbs arg = do
+runContract iRealID iVersionID fAbs arg = do
   ~(~(resultE, gAbsM), outputsL) <- listen $ callContract fAbs arg
   let iResult = gAbsM `deepseq` outputsL `deepseq` resultE
       iOutputsM = Just $ listToOutputs outputsL

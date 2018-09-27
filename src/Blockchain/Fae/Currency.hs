@@ -32,7 +32,6 @@ import Data.Maybe
 -- | Interface for a currency type.
 class 
   (
-    Versionable coin, Versionable (Valuation coin),
     ContractVal coin, Integral (Valuation coin), 
     -- This one is because it should be reasonably common to have
     -- valuations inside of valuables, particularly 'ContractName's.

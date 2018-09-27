@@ -13,7 +13,6 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Serialization
-import Blockchain.Fae.Internal.Versions
 
 import Control.Monad.State
 
@@ -30,13 +29,6 @@ instance {-# OVERLAPPABLE #-}
   (Generic a, Typeable a, GHasEscrowIDs (Rep a)) => HasEscrowIDs a where
 
   traverseEscrowIDs f x = to <$> gTraverseEscrowIDs f (from x)
-
--- | /So/ undecidable
-instance {-# OVERLAPPABLE #-}
-  (HasEscrowIDs a, Typeable a, Generic a, GVersionable (Rep a)) => 
-  Versionable a where
-
-  version f = gVersion f . from
 
 -- | /So/ undecidable
 instance {-# OVERLAPPABLE #-}

@@ -15,7 +15,6 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Versions
 
 import Common.Lens 
 
@@ -84,6 +83,7 @@ data InputResults =
   {
     iRealID :: ContractID,
     iStatus :: Status,
+    iVersionID :: VersionID,
     -- | This is /very dangerous/ because these escrows are duplicates.
     -- This value /must not/ be used inside Fae, but only exposed to
     -- external applications (such as import/export).
@@ -212,14 +212,17 @@ successful InputResults{..}
 -- `FaeStorageT` because the former is not an instance of the latter, and
 -- the interpreter benefits from having a monomorphic type.
 addImportedValue :: 
-  (Versionable a, HasEscrowIDs a, Exportable a) => 
+  (HasEscrowIDs a, Exportable a) => 
   State Escrows a -> ContractID -> Status -> FaeStorage ()
-addImportedValue valueImporter iRealID iStatus = FaeStorage $ do
-  unless (hasVersion iRealID) $ throw $ ImportWithoutVersion iRealID
-  let (importedValue, Escrows{..}) = 
-        runState valueImporter (Escrows Map.empty nullDigest)
-      iResult = WithEscrows escrowMap (ReturnValue importedValue)
-  _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
+addImportedValue valueImporter iRealID iStatus = FaeStorage $ 
+  case contractVersion iRealID of
+    Current -> throw $ ImportWithoutVersion iRealID
+    Version iVersionID -> 
+      _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
+  where 
+    iResult = WithEscrows escrowMap (ReturnValue importedValue)
+    (importedValue, Escrows{..}) = 
+      runState valueImporter (Escrows Map.empty nullDigest)
 
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = do

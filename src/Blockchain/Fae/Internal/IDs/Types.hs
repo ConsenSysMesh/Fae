@@ -124,7 +124,3 @@ prettyContractID ContractID{..} = intercalate "/" $
     printShortHex contractVersion
   ]
 
--- | Temporary; to be removed
-hasVersion :: ContractID -> Bool
-hasVersion ContractID{contractVersion = Current} = False
-hasVersion _ = True

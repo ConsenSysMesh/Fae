@@ -162,7 +162,3 @@ defaultVersion ::
   (EntryID -> VersionID) -> a -> VersionID
 defaultVersion = const mkVersionID
 
--- | Utility; legacy synonym for 'digest'.
-mkVersionID :: (Digestible a) => a -> VersionID
-mkVersionID = digest
-
