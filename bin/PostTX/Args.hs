@@ -2,6 +2,8 @@
 
 module PostTX.Args where
 
+import Control.Monad.Reader
+  
 import Blockchain.Fae.FrontEnd
 import Common.Lens hiding (view)
 import Common.ProtocolT
@@ -85,12 +87,14 @@ makeLenses ''FaethArgs
 -- TODO: see debug.trace, tracem trace show module 
 -- get field of input, print them then return PostTXArgs unchanged
 -- TODO: finish function
--- printArgs :: PostTXArgs -> PostTXArgs
--- printArgs args = print . args
+-- printArgs :: PostTXArgs -> IO PostTXArgs -> PostTXArgs
+-- printArgs args = do
+--   putStrLn ("@@@ Args.hs.printArgs.")
+--   print args
+--   return args
 
 parseArgs :: [String] -> FinalizedPostTXArgs
 parseArgs = finalize . foldl argGetter
--- TODO: finish function
 --parseArgs = finalize . printArgs . foldl argGetter
   PostTXArgs
   {
@@ -191,7 +195,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       transferTXID =
         fromMaybe (error $ "Couldn't parse transaction ID: " ++ argData) $
         readMaybe argData,
-        transferToArg = transferToArg
+        transferToArg = justTX argTransferM
         -- TODO ADD A SIMILAR TRANSFER TO HOST TO EXECUTE ON -- JUST HOST 
     } 
   -- TODO catch transferToArg is specified and argTransferM is Nothing   
@@ -251,3 +255,8 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     justHost
       | useFaeth && not argFake = fromMaybe "localhost:8546"
       | otherwise = fromMaybe "0.0.0.0:27182"
+
+    justTX :: Maybe String -> String
+    justTX 
+      | argFake = fromMaybe "TX123"
+      | otherwise = fromMaybe "TXabs"
