@@ -1,5 +1,4 @@
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE NoMonadComprehensions #-}
 
 module PostTX.Args where
 
@@ -21,7 +20,6 @@ data PostTXArgs =
     argView :: Bool,
     argLazy :: Bool,
     argResend :: Bool,
-    argTransTo :: Bool,
     argTransferM :: Maybe String,
     argImportExport :: (Maybe String, Maybe String),
     argJSON :: Bool,
@@ -86,11 +84,14 @@ makeLenses ''FaethArgs
 
 -- TODO: see debug.trace, tracem trace show module 
 -- get field of input, print them then return PostTXArgs unchanged
-printArgs :: PostTXArgs -> PostTXArgs
-printArgs args = print . args
+-- TODO: finish function
+-- printArgs :: PostTXArgs -> PostTXArgs
+-- printArgs args = print . args
 
 parseArgs :: [String] -> FinalizedPostTXArgs
-parseArgs = finalize . printArgs . foldl argGetter
+parseArgs = finalize . foldl argGetter
+-- TODO: finish function
+--parseArgs = finalize . printArgs . foldl argGetter
   PostTXArgs
   {
     argDataM = Nothing,
@@ -99,7 +100,6 @@ parseArgs = finalize . printArgs . foldl argGetter
     argView = False,
     argLazy = False,
     argResend = False,
-    argTransTo = False,
     argTransferM = Nothing,
     argImportExport = (Nothing, Nothing),
     argJSON = False,
@@ -118,8 +118,6 @@ argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x
   | ("--transfer-to", '=' : transferTo) <- break (== '=')
     x = st & _argTransferM .~ readMaybe transferTo
-           --TODO if just then transfer else not 
-           & _argTransTo .~ True
   | ("--export-host", '=' : exportHostArg) <- break (== '=') x
     = st & _argImportExport . _1 ?~ exportHostArg
   | ("--import-host", '=' : importHostArg) <- break (== '=') x
@@ -185,7 +183,8 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     = error "--resend is incompatible with --faeth-*"
   | argView, Nothing <- argDataM
     = UsageArgs $ UsageFailure "--view requires a transaction ID"
-  | argTransTo, Just transferToArg <- argTransferM,
+  -- TODO if just then transfer else not. dont need argTransTo flag 
+  | Just transferToArg <- argTransferM,
     Just argData <- argDataM =
     TransferQueryArgs
     {

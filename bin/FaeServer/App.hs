@@ -54,15 +54,49 @@ runServer port makeApp sendTXExecData = do
   app <- bringOut $ makeApp sendTXExecData
   liftIO $ runSettings (faeSettings port) app
 
-runTransferServer :: TransferQueryApplication
-runTransferServer port makeApp sendTXExecData = do
-  app <- bringOut $ makeApp sendTXExecData
-  liftIO $ runSettings (faeSettings port) app
+-- runTransferServer :: Int -> TransferQueryApplication
+-- runTransferServer port = do
+--   liftIO $ run port runSimpleServer
+--   -- app <- bringOut $ makeApp
+--   -- liftIO $ runSettings (faeSettings port) app
+
+-- TODO: finish function
+runTransferServer _ respond = respond $
+  responseLBS status200 [("Content-Type", "text/plain")] "runTransferServer response. finish adding query"
+
+-- TODO: write end to end and unit tests. try to break it. see quick check package for unit tests
+--      debugging internal processes, see "inversion of control"
+--      can start writing postx expected argument test in isolation, then maybe faeserver expectations 
+-- 
   
-
-runSimpleServer _ respond = respond $
-  responseLBS status200 [("Content-Type", "text/plain")] "Hello World"
-
+-- transferApp is a listener that handels postTX queries
+-- it expects a payload of [txid, destinationAddress]
+-- it looks locally for txid and returns the result to the sender
+-- TODO: write end to end and unit tests. try to break it. see quick check package for unit tests
+--      debugging internal processes, see "inversion of control"
+--      can start writing postx expected argument test in isolation, then maybe faeserver expectations 
+-- transferApp :: TXExecApplication
+-- transferApp sendTXExecData = \request respond -> do
+--   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
+--   let
+--     getParams = getParameters params
+--     transferTXIDM = getParams "transferTXID"
+--     transferToM = getLast Nothing Just $ getParams "transferTo"
+--   -- transfer = getLast False id $ getParams "transfer"
+--   --let transferParams = getParams "transfer-to"
+--   --liftIO $ putStrLn ("@@@@@@@@@@@@@ at top -- transferToM=" ++ show transferToM)
+--   --liftIO $ putStrLn $ "@@@@@@@@@@@@@ at top -- transferParams=" ++ show transferParams
+--   --let send = respond stringUtf8 
+--   case transferToM of
+--     Just (transferTXID, transferTo) -> do
+--       result <- liftIO $ runTransferQuery transferTXID transferTo
+--       responseReceived <- respond $ responseLBS
+--         status200
+--         [("Content-Type", "text/plain")]
+--         "hello"
+--       (responseReceived)
+--     Nothing -> do
+--       error "Expected a parameter called 'transfer-to' that contains a transaction id"
 
 faeSettings :: Int -> Settings
 faeSettings port = defaultSettings &
@@ -95,35 +129,6 @@ serverApp _ sendTXExecData = \request respond -> do
           (tx, mainFile, modules) =
             makeFilesMap txMessage mainFile0 modules0 reward fake
       in send $ \callerTID resultVar -> TXExecData{..}
-
--- transferApp is a listener that handels postTX queries
--- it expects a payload of [txid, destinationAddress]
--- it looks locally for txid and returns the result to the sender
--- TODO: write end to end and unit tests. try to break it. see quick check package for unit tests
---      debugging internal processes, see "inversion of control"
---      can start writing postx expected argument test in isolation, then maybe faeserver expectations 
--- transferApp :: TXExecApplication
--- transferApp sendTXExecData = \request respond -> do
---   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
---   let
---     getParams = getParameters params
---     transferTXIDM = getParams "transferTXID"
---     transferToM = getLast Nothing Just $ getParams "transferTo"
---   -- transfer = getLast False id $ getParams "transfer"
---   --let transferParams = getParams "transfer-to"
---   --liftIO $ putStrLn ("@@@@@@@@@@@@@ at top -- transferToM=" ++ show transferToM)
---   --liftIO $ putStrLn $ "@@@@@@@@@@@@@ at top -- transferParams=" ++ show transferParams
---   --let send = respond stringUtf8 
---   case transferToM of
---     Just (transferTXID, transferTo) -> do
---       result <- liftIO $ runTransferQuery transferTXID transferTo
---       responseReceived <- respond $ responseLBS
---         status200
---         [("Content-Type", "text/plain")]
---         "hello"
---       (responseReceived)
---     Nothing -> do
---       error "Expected a parameter called 'transfer-to' that contains a transaction id"
 
 importExportApp :: TXExecApplication
 importExportApp sendTXExecData = \request respond -> do
