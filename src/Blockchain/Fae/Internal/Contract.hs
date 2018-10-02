@@ -213,10 +213,8 @@ class (Typeable a) => Exportable a where
 -- so this is effectively a contract that is portable between Fae
 -- instances.
 class 
-  (
-    HasEscrowIDs a,
-    HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)
-  ) => ContractName a where
+  (HasEscrowIDs a, HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)) =>
+  ContractName a where
 
   type ArgType a
   type ValType a

@@ -100,8 +100,7 @@ import Numeric.Natural (Natural)
 -- * Types
 
 -- | Constraint collection synonym
-type ContractVal a = 
-  (HasEscrowIDs a, EGeneric a, ESerialize a)
+type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a)
 -- | Constraint collection synonym
 type ContractArg a = (HasEscrowIDs a, Read a)
 

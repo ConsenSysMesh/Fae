@@ -121,6 +121,12 @@ prettyContractID ContractID{..} = intercalate "/" $
     printShortHex parentTransaction, 
     show transactionPart, 
     show creationIndex, 
-    printShortHex contractVersion
+    case contractVersion of
+      Current -> "Current"
+      Version vID -> "Version " ++ printShortHex vID
   ]
+
+matchesVersion :: Version -> Version -> Bool
+matchesVersion (Version vID1) (Version vID2) = vID1 == vID2
+matchesVersion _ _ = True
 

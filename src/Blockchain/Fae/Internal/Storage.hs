@@ -147,22 +147,25 @@ instance At Storage where
   at cID = lens getter setter where
     getter :: Storage -> Maybe (IxValue Storage)
     getter st = 
-      case st ^. outputAt cID of
+      case st ^. contractAt cID of
         Nothing -> Left <$> st ^. _importedValues . at cID
-        x -> Right <$> (storedContract =<< x)
+        x -> Right <$> x
     setter :: Storage -> Maybe (IxValue Storage) -> Storage
-    setter st (Just (Right x)) = st & outputAt cID %~ fmap (_storedContract .~ Just x)
+    setter st (Just (Right x)) = st & contractAt cID ?~ x
     setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
     setter st Nothing = st
-      & outputAt cID .~ Nothing
+      & contractAt cID .~ Nothing
       & _importedValues . at cID .~ Nothing
+
+contractAt :: ContractID -> Lens' Storage (Maybe StoredContract)
+contractAt cID = outputAt cID . uncertain _storedContract
 
 outputAt :: ContractID -> Lens' Storage (Maybe Output)
 outputAt cID@ContractID{..} =
   _getStorage .
   at parentTransaction .
   uncertain (txPartLens transactionPart) .
-  uncertain (vectorAt creationIndex)
+  vectorAt creationIndex
 
 txPartLens :: TransactionPart -> Lens' TransactionEntry (Maybe Outputs)
 txPartLens p = 
@@ -173,13 +176,12 @@ txPartLens p =
       uncertain _iOutputsM
 
 txInputLens :: Int -> Lens' TransactionEntry (Maybe InputResults)
-txInputLens n = _inputResults . vectorAt n
+txInputLens n = _inputResults . onlyJust DeletedEntry . vectorAt n
 
-vectorAt :: Int -> Lens' (Vector a) (Maybe a)
+vectorAt :: Int -> Lens' (Maybe (Vector a)) (Maybe a)
 vectorAt n = 
-  onlyJust DeletedEntry .
   lens ((=<<) (Vector.!? n)) (\mv my -> mv >>= (my >>=) . setter)
- where
+  where
     setter v y
       | 0 <= n && n < Vector.length v = 
         Just $ Vector.modify (\w -> Vector.unsafeWrite w n y) v

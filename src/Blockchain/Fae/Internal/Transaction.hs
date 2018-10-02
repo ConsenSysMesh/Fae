@@ -167,7 +167,7 @@ nextInput (cID, arg, renames) = do
 contractCallResult :: 
   String -> Renames -> StoredContract -> ContractID -> TXStorageM InputResults
 contractCallResult arg (Renames rMap) StoredContract{..} cID = do
-  unless (contractVersion cID == Version storedVersion) $ 
+  unless (contractVersion cID `matchesVersion` Version storedVersion) $ 
     throw $ BadContractVersion cID storedVersion
   ~(iR, gAbsM) <- lift $ 
     pushArg arg . remapSigners rMap $ 

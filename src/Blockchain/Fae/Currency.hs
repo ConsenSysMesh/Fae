@@ -32,7 +32,7 @@ import Data.Maybe
 -- | Interface for a currency type.
 class 
   (
-    ContractVal coin, Integral (Valuation coin), 
+    ContractVal coin, ContractVal (Valuation coin), Integral (Valuation coin), 
     -- This one is because it should be reasonably common to have
     -- valuations inside of valuables, particularly 'ContractName's.
     HasEscrowIDs (Valuation coin)
