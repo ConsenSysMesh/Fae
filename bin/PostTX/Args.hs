@@ -21,12 +21,13 @@ data PostTXArgs =
     argView :: Bool,
     argLazy :: Bool,
     argResend :: Bool,
-    argTransfer :: Maybe String,
+    argTransTo :: Bool,
+    argTransferM :: Maybe String,
     argImportExport :: (Maybe String, Maybe String),
     argJSON :: Bool,
     argFaeth :: FaethArgs,
     argUsage :: Maybe Usage
-  }
+  } deriving (Show, Read)
 
 data FinalizedPostTXArgs =
   PostArgs
@@ -41,7 +42,7 @@ data FinalizedPostTXArgs =
   TransferQueryArgs
   {
     transferTXID :: TransactionID,
-    transferArgHost :: String
+    transferToArg :: String
   } |
   OngoingFaethArgs
   {
@@ -66,7 +67,7 @@ data FinalizedPostTXArgs =
 
 data Usage =
   UsageFailure String |
-  UsageSuccess
+  UsageSuccess deriving (Show, Read)
 
 data FaethArgs =
   FaethArgs
@@ -78,13 +79,18 @@ data FaethArgs =
     faethTo :: Maybe EthAddress,
     faethArgument :: Maybe Hex,
     newSigners :: [(String, String)]
-  }
+  } deriving (Show, Read)
 
 makeLenses ''PostTXArgs
 makeLenses ''FaethArgs
 
+-- TODO: see debug.trace, tracem trace show module 
+-- get field of input, print them then return PostTXArgs unchanged
+printArgs :: PostTXArgs -> PostTXArgs
+printArgs args = print . args
+
 parseArgs :: [String] -> FinalizedPostTXArgs
-parseArgs = finalize . foldl argGetter
+parseArgs = finalize . printArgs . foldl argGetter
   PostTXArgs
   {
     argDataM = Nothing,
@@ -93,7 +99,8 @@ parseArgs = finalize . foldl argGetter
     argView = False,
     argLazy = False,
     argResend = False,
-    argTransfer = Nothing,
+    argTransTo = False,
+    argTransferM = Nothing,
     argImportExport = (Nothing, Nothing),
     argJSON = False,
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
@@ -110,7 +117,9 @@ argGetter st "--json" = st & _argJSON .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
 argGetter st x
   | ("--transfer-to", '=' : transferTo) <- break (== '=')
-    x = st & _argTransfer .~ readMaybe transferTo
+    x = st & _argTransferM .~ readMaybe transferTo
+           --TODO if just then transfer else not 
+           & _argTransTo .~ True
   | ("--export-host", '=' : exportHostArg) <- break (== '=') x
     = st & _argImportExport . _1 ?~ exportHostArg
   | ("--import-host", '=' : importHostArg) <- break (== '=') x
@@ -174,17 +183,19 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       isJust faethRecipient || isJust faethTo
     )
     = error "--resend is incompatible with --faeth-*"
-  | Just transferTXIDM <- argTransfer =
-    -- (\argData -> putStrLn "Args.hs.transferTXIDM")
+  | argView, Nothing <- argDataM
+    = UsageArgs $ UsageFailure "--view requires a transaction ID"
+  | argTransTo, Just transferToArg <- argTransferM,
+    Just argData <- argDataM =
     TransferQueryArgs
     {
       transferTXID =
-        fromMaybe (error $ "Couldn't parse transaction ID: " ++ transferTXIDM) $
-        readMaybe transferTXIDM,
-        transferArgHost = justHost argHostM
-    }
-  | argView, Nothing <- argDataM
-    = UsageArgs $ UsageFailure "--view requires a transaction ID"
+        fromMaybe (error $ "Couldn't parse transaction ID: " ++ argData) $
+        readMaybe argData,
+        transferToArg = transferToArg
+        -- TODO ADD A SIMILAR TRANSFER TO HOST TO EXECUTE ON -- JUST HOST 
+    } 
+  -- TODO catch transferToArg is specified and argTransferM is Nothing   
   | not (null newSigners), Just ethTXIDS <- argDataM =
     OngoingFaethArgs
     {

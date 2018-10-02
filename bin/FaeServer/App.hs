@@ -43,12 +43,26 @@ type ApplicationT m =
   Request -> (Response -> IO ResponseReceived) -> m ResponseReceived
 type TXExecApplicationT m = SendTXExecData m -> ApplicationT m
 type TXExecApplication = TXExecApplicationT (TXQueueT IO)
+type TransferQueryApplication =
+    Request ->
+    (Response -> IO ResponseReceived) ->
+    IO ResponseReceived
 
 runServer ::
   Int -> TXExecApplication -> SendTXExecData (TXQueueT IO) -> TXQueueT IO ()
 runServer port makeApp sendTXExecData = do
   app <- bringOut $ makeApp sendTXExecData
   liftIO $ runSettings (faeSettings port) app
+
+runTransferServer :: TransferQueryApplication
+runTransferServer port makeApp sendTXExecData = do
+  app <- bringOut $ makeApp sendTXExecData
+  liftIO $ runSettings (faeSettings port) app
+  
+
+runSimpleServer _ respond = respond $
+  responseLBS status200 [("Content-Type", "text/plain")] "Hello World"
+
 
 faeSettings :: Int -> Settings
 faeSettings port = defaultSettings &
@@ -80,36 +94,36 @@ serverApp _ sendTXExecData = \request respond -> do
             S.decode @(TXMessage a) $ getFile files "message"
           (tx, mainFile, modules) =
             makeFilesMap txMessage mainFile0 modules0 reward fake
-      in  send $ \callerTID resultVar -> TXExecData{..}
+      in send $ \callerTID resultVar -> TXExecData{..}
 
 -- transferApp is a listener that handels postTX queries
 -- it expects a payload of [txid, destinationAddress]
 -- it looks locally for txid and returns the result to the sender
-transferApp :: TXExecApplication
-transferApp sendTXExecData = \request respond -> do
-  (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
-  let
-    getParams = getParameters params
-    transferToM = getLast Nothing Just $ getParams "transfer-to"
-
-  let transferParams = getParams "transfer-to"
-
-
-  let send = waitResponse respond stringHeaders stringUtf8 sendTXExecData resultVar
-  let queryResponse = runTransferQuery "HelloWorldTX"
-  liftIO $ putStrLn $ "@@@@@@@@@@@@@ at top -- transferToM=" ++ show transferToM
-  liftIO $ putStrLn $ "@@@@@@@@@@@@@ at top -- transferParams=" ++ show transferParams
-
-  case transferToM of
-    Just transferTXID -> do
-      let queryResponse = runTransferQuery transferTXID
-      let queryResponseString = "@@@@@@@@@@@@@ it worked"
-      liftIO $ putStrLn $ queryResponseString
-      send $ \callerTID queryResponse -> View{..}
-      -- send exportResultVar $ \callerTID exportResultVar -> ExportValue{..}
-    Nothing -> do
-      liftIO $ putStrLn $ "@@@@@@@@@@@@@ NoTHINGGGGG"
-      error "Expected a parameter called 'transfer-to' that contains a transaction id"
+-- TODO: write end to end and unit tests. try to break it. see quick check package for unit tests
+--      debugging internal processes, see "inversion of control"
+--      can start writing postx expected argument test in isolation, then maybe faeserver expectations 
+-- transferApp :: TXExecApplication
+-- transferApp sendTXExecData = \request respond -> do
+--   (params, files) <- liftIO $ parseRequestBody lbsBackEnd request
+--   let
+--     getParams = getParameters params
+--     transferTXIDM = getParams "transferTXID"
+--     transferToM = getLast Nothing Just $ getParams "transferTo"
+--   -- transfer = getLast False id $ getParams "transfer"
+--   --let transferParams = getParams "transfer-to"
+--   --liftIO $ putStrLn ("@@@@@@@@@@@@@ at top -- transferToM=" ++ show transferToM)
+--   --liftIO $ putStrLn $ "@@@@@@@@@@@@@ at top -- transferParams=" ++ show transferParams
+--   --let send = respond stringUtf8 
+--   case transferToM of
+--     Just (transferTXID, transferTo) -> do
+--       result <- liftIO $ runTransferQuery transferTXID transferTo
+--       responseReceived <- respond $ responseLBS
+--         status200
+--         [("Content-Type", "text/plain")]
+--         "hello"
+--       (responseReceived)
+--     Nothing -> do
+--       error "Expected a parameter called 'transfer-to' that contains a transaction id"
 
 importExportApp :: TXExecApplication
 importExportApp sendTXExecData = \request respond -> do
@@ -140,6 +154,7 @@ bringOut :: ApplicationT (ReaderT r IO) -> ReaderT r IO Application
 bringOut txqApp =
   ReaderT $ \txq -> return $ \req resp -> runReaderT (txqApp req resp) txq
 
+-- waitResponse is used by the interperter only 
 waitResponse ::
   (TXQueueM m) =>
   (Response -> IO ResponseReceived) ->
@@ -179,29 +194,19 @@ dataHeaders =
     (hContentType, "application/octet-stream")
   ]
 
-runTransferQuery :: TransactionID -> IO ()
-runTransferQuery txID = do
+-- add --lazy cli option for this logic 
+runTransferQuery :: TransactionID -> String -> IO String
+runTransferQuery txID transferTo = do
   liftIO $ putStrLn $ "@@@@@@@@@@@@@ runTransferQuery txid=" ++ show txID
   setCurrentDirectory("./txs")
-  runTransferQueryWithArgs "postTX" ["" ++ show txID]
+  runTransferQueryWithArgs "postTX" [show txID, transferTo, "--", "--resend"]
 
-runTransferQueryWithArgs :: String -> [String] -> IO ()
+runTransferQueryWithArgs :: String -> [String] -> IO String
 runTransferQueryWithArgs cmd args = do
-  liftIO $ putStrLn $ "@@@@@@@@@@@@@ runTransferQueryWithArgs"
-  let fullArgs = "." : cmd : args
-  (exitCode, out, err) <- readProcessWithExitCode "stack exec" fullArgs ""
+  putStrLn $ "@@@@@@@@@@@@@ runTransferQueryWithArgs"
+  let fullArgs = cmd : args
+  (exitCode, out, err) <- liftIO $ readProcessWithExitCode "stack" ("exec" : fullArgs) ""
   case exitCode of
-    ExitSuccess -> unless (null out) $ putStrLn $ unlines
-      [
-        "`--transfer " ++ cmd ++ "` was successful with the following output:",
-        out
-      ]
-    ExitFailure n -> do
-      putStrLn $ unlines $
-        ("`--transfer " ++ cmd ++ "` returned code " ++ show n) :
-        if null err then [] else
-          [
-            "Error message:",
-            err
-          ]
-      exitFailure
+    ExitSuccess -> return $ "`--transfer " ++ cmd ++ "` was successful with the following output:"
+    ExitFailure n -> do 
+      return $ "`--transfer " ++ cmd ++ "` returned code " ++ show n
