@@ -42,7 +42,6 @@ library
     Blockchain.Fae.Internal.Suspend
     Blockchain.Fae.Internal.Transaction
     Blockchain.Fae.Internal.TX
-    Blockchain.Fae.Internal.Versions
     Common.Lens
   build-depends:       
     base >= 4.10 && < 5,

@@ -70,14 +70,8 @@ module Blockchain.Fae
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
     lookupSigner, signer, signers, (<-|), claimReward, 
-    -- * Versioning
-    -- | In order to ensure that transaction authors can rely on getting
-    -- the escrow-backed values they expect, contract outputs are
-    -- "versioned" and any change to any escrow ID alters the version.
-    -- Contract literal arguments can refer to these values by version.
-    Versioned(Versioned, getVersioned),
     -- * Opaque classes
-    HasEscrowIDs, Versionable, ContractArg, ContractVal, 
+    HasEscrowIDs, {- Versionable,-} ContractArg, ContractVal, 
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
     Generic, Identity(..), Void
@@ -90,7 +84,7 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Serialization
 import Blockchain.Fae.Internal.Transaction
-import Blockchain.Fae.Internal.Versions
+--import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
@@ -106,10 +100,9 @@ import Numeric.Natural (Natural)
 -- * Types
 
 -- | Constraint collection synonym
-type ContractVal a = 
-  (HasEscrowIDs a, Versionable a, EGeneric a, ESerialize a)
+type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a)
 -- | Constraint collection synonym
-type ContractArg a = (HasEscrowIDs a, Versionable a, Read a)
+type ContractArg a = (HasEscrowIDs a, Read a)
 
 -- | A contract transformer to apply effects to 'Fae'
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =
