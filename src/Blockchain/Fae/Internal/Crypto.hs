@@ -334,6 +334,8 @@ public (PrivateKey pubKey@(PublicKey edPublicKey) (EdSecretKey secKey))
 printHex :: (Serialize a) => a -> String
 printHex = C8.unpack . B16.encode . Ser.encode
 
+-- | Our hex strings are 64 bytes long; for merely informational purposes,
+-- it is enough to show just a few, say 4.
 printShortHex :: (Serialize a) => a -> String
 printShortHex = (++ "...") . C8.unpack . C8.take 4 . B16.encode . Ser.encode
 

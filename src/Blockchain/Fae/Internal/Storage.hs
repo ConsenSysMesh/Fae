@@ -170,11 +170,11 @@ instance At Storage where
       & contractAt cID .~ Nothing
       & _importedValues . at cID .~ Nothing
 
+-- | Accesses just the contract entry at a given ID.
 contractAt :: ContractID -> Lens' Storage (Maybe StoredContract)
 contractAt cID = outputAt cID . uncertain _storedContract
 
--- | Accesses the full 'Output' without checking the nonce (as makes
--- sense, as that is only available in the 'OutputData' below it).
+-- | Accesses the full 'Output' at a contract ID.
 outputAt :: ContractID -> Lens' Storage (Maybe Output)
 outputAt cID@ContractID{..} =
   _getStorage .
@@ -210,10 +210,6 @@ vectorAt n =
       | 0 <= n && n < Vector.length v = 
         Just $ Vector.modify (\w -> Vector.unsafeWrite w n y) v
       | otherwise = Nothing
-
-joinUncertainty :: 
-  (Monad m) => Lens s (m (m t)) (m (m a)) (m b) -> Lens s (m t) (m a) (m b)
-joinUncertainty = ((fmap join .) .) . (. (. join))
 
 -- | Upgrades a lens that starts from a definite value to one that starts
 -- from an "uncertain" (i.e. monadic) one.  Useful for chaining with 'at'.

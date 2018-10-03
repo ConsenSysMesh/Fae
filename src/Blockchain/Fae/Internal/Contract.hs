@@ -275,13 +275,17 @@ makeLenses ''StoredContract
 
 {- Instances -}
 
+-- | -
 instance NFData Output
 
+-- | -
 instance NFData StoredContract
 
+-- | -
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
 
+-- | -
 instance (HasEscrowIDs a, HasEscrowIDs b) => ContractName (Contract a b) where
   type ArgType (Contract a b) = a
   type ValType (Contract a b) = b

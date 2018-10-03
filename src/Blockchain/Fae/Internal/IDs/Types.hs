@@ -86,14 +86,21 @@ newtype EscrowID name = EscrowID { entID :: EntryID }
 
 -- Instances
 
+-- | -
 instance Serialize ContractID
+-- | -
 instance Digestible ContractID
+-- | -
 instance NFData ContractID
 
+-- | -
 instance Serialize TransactionPart
+-- | -
 instance NFData TransactionPart
 
+-- | -
 instance Serialize Version
+-- | -
 instance NFData Version
 
 -- | Useful for debugging
@@ -127,6 +134,8 @@ prettyContractID ContractID{..} = intercalate "/" $
       Version vID -> "Version " ++ printShortHex vID
   ]
 
+-- | A semantic equality for versions; the 'Current' version always matches
+-- whatever is there.
 matchesVersion :: Version -> Version -> Bool
 matchesVersion (Version vID1) (Version vID2) = vID1 == vID2
 matchesVersion _ _ = True

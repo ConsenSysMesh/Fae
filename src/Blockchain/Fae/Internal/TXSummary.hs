@@ -114,6 +114,8 @@ getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} ->
           iOutputsM
   in (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
 
+-- | If outputs showed more detailed information, like contract types, this
+-- would construct it.  As it is, it just grabs the version.
 makeOut :: Output -> VersionID
 -- We assume (justifiably!) that a new output does, in fact, store a live
 -- contract.
@@ -127,6 +129,7 @@ labelHeader h l = text h <+> text (show l)
 prettyHeader :: Doc -> Doc -> Doc
 prettyHeader header body = header $+$ nest 2 body 
 
+-- | Prints a vector as an @Int@-indexed list.
 prettyVector :: (Show v) => String -> Vector v -> Doc
 prettyVector headString v 
   | Vector.null v = empty
