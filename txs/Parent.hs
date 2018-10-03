@@ -1,7 +1,7 @@
 body :: Transaction Void ()
-body _ = newContract [] ParentContract
+body _ = newContract ParentContract
 
-data ParentContract = ParentContract
+data ParentContract = ParentContract deriving (Generic)
 
 instance ContractName ParentContract where
   type ArgType ParentContract = ()

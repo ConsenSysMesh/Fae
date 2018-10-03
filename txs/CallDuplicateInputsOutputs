@@ -1,5 +1,6 @@
-inputs =
-  InputOutput $tx2ID $scID 0 = ()
-  InputOutput $tx2ID $scID 1 = ()
-  InputOutput $tx2ID $scID 2 = ()
-  InputOutput $tx2ID $scID 3 = ()
+body = CallDuplicateInputsOutputs
+inputs
+  $tx2ID/InputCall 0/0/Current = ()
+  $tx2ID/InputCall 0/0/Current = ()
+  $tx2ID/InputCall 0/0/Current = ()
+  $tx2ID/InputCall 0/0/Current = ()

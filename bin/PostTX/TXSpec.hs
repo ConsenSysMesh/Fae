@@ -1,9 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
-module PostTX.TXSpec (module PostTX.TXSpec, Module, ModuleMap, getTXID) where
+module PostTX.TXSpec 
+  (
+    module PostTX.TXSpec, 
+    Inputs, Module, ModuleMap, Renames(..), TransactionID, getTXID
+  ) where
 
 import Blockchain.Fae.FrontEnd
 
-import Common.Lens hiding ((<.>))
+import Common.Lens
 import Common.ProtocolT
 
 import Control.Monad.Reader
@@ -29,12 +33,12 @@ import System.Directory
 import Text.Read
 
 -- * Spec types
-data TXData a =
+data TXData =
   TXData
   {
-    dataModules :: a,
+    dataModules :: LoadedModules,
     fallback :: [String],
-    inputs :: [(ContractID, String)],
+    inputs :: Inputs,
     keys :: [(String, String)],
     reward :: Bool,
     parent :: Maybe TransactionID
@@ -50,13 +54,6 @@ data TXSpec a =
   }
   deriving (Generic)
 
-data ParsedModules =
-  ParsedModules
-  {
-    bodyM :: Maybe String,
-    others :: [String]
-  }
-
 data LoadedModules =
   LoadedModules
   {
@@ -71,12 +68,11 @@ type Keys = Map String (Either PublicKey PrivateKey)
 type Identifier = String
 
 class (Monad m, Serialize a) => MakesTXSpec m a where
-  txDataToTXSpec :: TXData LoadedModules -> m (TXSpec a)
+  txDataToTXSpec :: TXData -> m (TXSpec a)
 
 -- * Template Haskell
 makeLenses ''TXData
 makeLenses ''TXSpec
-makeLenses ''ParsedModules
 
 instance Serialize LoadedModules
 instance (Serialize a) => Serialize (TXSpec a)
@@ -99,13 +95,13 @@ instance MakesTXSpec (ReaderT FaethArgs IO) Salt where
     liftIO $ txSpecTimeSalt makeSalt txData
 
 txSpecTimeSalt :: 
-  (Serialize a) => (String -> a) -> TXData LoadedModules -> IO (TXSpec a)
+  (Serialize a) => (String -> a) -> TXData -> IO (TXSpec a)
 txSpecTimeSalt makeSalt txData = do
   now <- getCurrentTime
   go <- getMakeTXSpec txData
   return $ go $ makeSalt $ show now
 
-getMakeTXSpec :: (Serialize a) => TXData LoadedModules -> IO (a -> TXSpec a)
+getMakeTXSpec :: (Serialize a) => TXData -> IO (a -> TXSpec a)
 getMakeTXSpec TXData{..} = do
   let 
     keys' = if null keys then [("self", "self")] else keys
@@ -122,7 +118,7 @@ makeTXSpec ::
 makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt = 
   TXSpec
   {
-    txMessage = addSignatures keys $
+    txMessage = addSignatures keys
       TXMessage
       {
         mainModulePreview = uncurry makePreview mainModule,

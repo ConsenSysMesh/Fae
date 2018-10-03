@@ -32,8 +32,7 @@ import Data.Maybe
 -- | Interface for a currency type.
 class 
   (
-    Versionable coin, ContractVal coin, 
-    Integral (Valuation coin), 
+    ContractVal coin, ContractVal (Valuation coin), Integral (Valuation coin), 
     -- This one is because it should be reasonably common to have
     -- valuations inside of valuables, particularly 'ContractName's.
     HasEscrowIDs (Valuation coin)
@@ -53,7 +52,14 @@ class
   -- | Close the given accounts and make a new one with their sum.
   add :: (MonadTX m) => coin -> coin -> m coin
   -- | Take off the given amount and return it and the change if both are
-  -- nonnegative, otherwise @empty@.
+  -- nonnegative, otherwise @empty@.  For understanding, the signature is
+  -- better understood as
+  --
+  -- @ change :: coin -> Valuation coin -> m (Maybe (coin, Maybe coin)) @
+  --
+  -- Despite appearances, the double-'Maybe', as opposed to just returning
+  -- various 'zero's, is preferable because it is more Haskellish: a sum
+  -- type rather than a nullable type.
   change :: 
     (Alternative f, Alternative f', MonadTX m) =>
     coin -> Valuation coin -> m (f (coin, f' coin))
@@ -93,6 +99,13 @@ class
         (Monad m, Traversable t) =>
         (a -> b -> m (c, a)) -> m a -> t b -> m (t c, a)
       mapMAccumL g y0 xs = runStateT (mapM (StateT . flip g) xs) =<< y0
+
+  -- | Rounds a coin down to the nearest multiple of some number, returning
+  -- this rounded coin and the remainder.
+  round :: (MonadTX m) => coin -> Natural -> m (coin, Maybe coin)
+  round c n = do
+    ([c'], rM) <- split c [n] -- Can't fail, the lists are the same length
+    return (c', rM)
 
   -- | A mixed 'Ord'-style comparison
   valCompare :: (MonadTX m) => coin -> Valuation coin -> m Ordering
@@ -134,14 +147,6 @@ class
   losesTo :: (MonadTX m) => coin -> coin -> m Bool
   losesTo c1 c2 = (== LT) <$> coinCompare c1 c2
 
-  -- | Rounds a coin down to the nearest multiple of some number, returning
-  -- this rounded coin and the remainder.
-  round :: (MonadTX m) => 
-    coin -> Natural -> m (Maybe coin, coin)
-  round c n = do
-    (l, rM) <- split c [n]
-    return (listToMaybe l, fromMaybe c rM)
-
 {- The basic example -}
 
 -- | The newtype both hides the escrow ID (important for contract safety)
@@ -179,11 +184,11 @@ instance Currency Coin where
 
   zero = mint 0
 
-  value (Coin eID) = CoinValuation <$> useEscrow eID False
+  value (Coin eID) = CoinValuation <$> useEscrow [] eID False
 
   add (Coin eID1) (Coin eID2) = do
-    n1 <- useEscrow eID1 True
-    n2 <- useEscrow eID2 True
+    n1 <- useEscrow [] eID1 True
+    n2 <- useEscrow [] eID2 True
     mint $ n1 + n2
 
   change c@(Coin eID) nV@(CoinValuation n) = do
@@ -191,7 +196,7 @@ instance Currency Coin where
     case ord of
       EQ -> return $ pure (c, empty)
       GT -> do
-        m <- useEscrow eID True
+        m <- useEscrow [] eID True
         amt <- mint n
         rem <- mint $ m - n
         return $ pure (amt, pure rem)
@@ -210,7 +215,7 @@ instance Show (Valuation Coin) where
 -- destroys the reward token.  So this function can be seen as reifying
 -- rewards as a true currency, albeit one that cannot necessarily be used
 -- to claim rewards from anywhere else.
-reward :: (MonadTX m) => RewardEscrowID -> m Coin
+reward :: (MonadTX m) => Reward -> m Coin
 reward eID = do
   claimReward eID 
   mint 1

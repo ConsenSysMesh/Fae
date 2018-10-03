@@ -1,15 +1,24 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module PostTX.Args where
-
-import Control.Monad.Reader
   
 import Blockchain.Fae.FrontEnd
 import Common.Lens hiding (view)
+import Control.Exception (throw)
+import Control.Monad (replicateM)
+import Control.Monad.Reader
+
+import Common.Lens
 import Common.ProtocolT
 
 import Data.List
 import Data.Maybe
+import Data.Void
+import Data.Char
+import qualified Data.Text as T
+
+import Text.Megaparsec 
+import qualified Text.Megaparsec.Char as C
 
 import Text.Read
 
@@ -26,7 +35,8 @@ data PostTXArgs =
     argImportExport :: (Maybe String, Maybe String),
     argJSON :: Bool,
     argFaeth :: FaethArgs,
-    argUsage :: Maybe Usage
+    argUsage :: Maybe Usage,
+    argShowKeys :: Maybe [String]
   } deriving (Show, Read)
 
 data FinalizedPostTXArgs =
@@ -56,10 +66,11 @@ data FinalizedPostTXArgs =
     viewArgJSON :: Bool,
     viewArgHost :: String
   } |
+  ShowKeysArgs [String] |
   ImportExportArgs
   {
     exportTXID :: TransactionID,
-    exportSCID :: ShortContractID,
+    exportIx :: Int,
     exportHost :: String,
     importHost :: String
   } |
@@ -108,11 +119,18 @@ parseArgs = finalize . foldl argGetter
     argImportExport = (Nothing, Nothing),
     argJSON = False,
     argFaeth = FaethArgs False Nothing Nothing Nothing Nothing Nothing [],
-    argUsage = Nothing
+    argUsage = Nothing,
+    argShowKeys = Nothing
   }
 
 argGetter :: PostTXArgs -> String -> PostTXArgs
-argGetter st "--help" = st & _argUsage .~ Just UsageSuccess
+argGetter st "--help" = st & (_argUsage ?~ UsageSuccess)
+argGetter st "--show-keys" = st & _argShowKeys ?~ []
+argGetter st x 
+  | ("--show-keys", '=' : csvKeysInput) <- break (== '=') x
+    = st & _argShowKeys ?~ case parseKeysArgs csvKeysInput of
+          Left err -> throw err
+          Right keyNamesList -> T.unpack . T.strip . T.pack  <$> keyNamesList
 argGetter st "--fake" = st & _argFake .~ True
 argGetter st "--view" = st & _argView .~ True
 argGetter st "--lazy" = st & _argLazy .~ True
@@ -152,16 +170,18 @@ argGetter st x
       & _argFaeth . _useFaeth .~ True
       & _argFaeth . _faethRecipient .~ readMaybe faethRecipArg
   | "--" `isPrefixOf` x
-    = st & _argUsage .~ Just (UsageFailure $ "Unrecognized option: " ++ x)
+    = st & _argUsage ?~ UsageFailure ("Unrecognized option: " ++ x)
   | Nothing <- st ^. _argDataM = st & _argDataM ?~ x
   | Nothing <- st ^. _argHostM = st & _argHostM ?~ x
-  | otherwise = st & _argUsage .~ Just (UsageFailure $ unlines
-      ["Unknown argument: " ++ x, "TX name and host already given"])
+  | otherwise = 
+    st & _argUsage ?~ UsageFailure
+      (unlines ["Unknown argument: " ++ x, "TX name and host already given"])
 
 finalize :: PostTXArgs -> FinalizedPostTXArgs
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
   | Just u <- argUsage = UsageArgs u
-  | (Just _, Just _) <- argImportExport,
+  | Just u <- argShowKeys = ShowKeysArgs u
+  | (Just _, Just _) <- argImportExport, 
     argView || argLazy || argFake || argResend || useFaeth
     = error $
         "--import-host and --export-host are incompatible with " ++
@@ -169,21 +189,14 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
   | argFake && argView
     = error "--fake is incompatible with --view"
   | argView && (argLazy || argResend || useFaeth)
-    = error $
-        "--view is incompatible with --lazy, --resend, and --faeth"
+    = error "--view is incompatible with --lazy, --resend, and --faeth"
   | argJSON && (argLazy || useFaeth)
-    = error $
-        "--json is incompatible with --lazy, --faeth*"
+    = error "--json is incompatible with --lazy, --faeth*"
   | not (null newSigners) && (isJust faethFee || isJust faethRecipient)
     = error $
       "--faeth-add-signature is incompatible with " ++
       "--faeth-fee and --faeth-recipient"
-  | argResend &&
-    (
-      not (null newSigners) ||
-      isJust faethFee || isJust faethValue || isJust faethArgument ||
-      isJust faethRecipient || isJust faethTo
-    )
+  | argResend && useFaeth
     = error "--resend is incompatible with --faeth-*"
   | argView, Nothing <- argDataM
     = UsageArgs $ UsageFailure "--view requires a transaction ID"
@@ -219,15 +232,15 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     }
   | (exportHostM, importHostM) <- argImportExport,
     Just argData <- argDataM,
-    (exportTXIDS, ':' : exportSCIDS) <- break (== ':') argData =
+    (exportTXIDS, ':' : exportIxS) <- break (== ':') argData =
     ImportExportArgs
     {
       exportTXID =
         fromMaybe (error $ "Couldn't parse transaction ID: " ++ exportTXIDS) $
         readMaybe exportTXIDS,
-      exportSCID =
-        fromMaybe (error $ "Couldn't parse short contract ID: " ++ exportSCIDS) $
-        readMaybe exportSCIDS,
+      exportIx = 
+        fromMaybe (error $ "Couldn't parse input call index: " ++ exportIxS) $ 
+        readMaybe exportIxS,
       exportHost = justHost exportHostM,
       importHost = justHost importHostM
     }
@@ -237,9 +250,9 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
       postArgTXNameOrID =
         if argResend
         then Left $
-          maybe (error $ "--resend requires a Fae transaction ID")
-            (\argData ->
-              fromMaybe (error $ "Couldn't parse transaction ID: " ++ argData) $
+          maybe (error "--resend requires a Fae transaction ID")
+            (\argData -> 
+              fromMaybe (error $ "Couldn't parse transaction ID: " ++ argData) $ 
               readMaybe argData
             ) argDataM
         else Right $ fromMaybe "TX" argDataM,
@@ -260,3 +273,7 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     justTX 
       | argFake = fromMaybe "TX123"
       | otherwise = fromMaybe "TXabs"
+
+parseKeysArgs :: String -> Either (ParseError (Token String) Void) [String]
+parseKeysArgs input = runParser csvParser "" input
+  where csvParser = (many $ C.satisfy (/= ',')) `sepBy` C.char ',' :: Parsec Void String [String]

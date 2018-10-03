@@ -102,9 +102,9 @@ instance Show UnquotedString where
 
 -- | -
 instance (Monad m) => MonadState Storage (FaeInterpretT m) where
-  state = lift . FaeStorageT . state
-  put = lift . FaeStorageT . put
-  get = lift $ FaeStorageT get
+  state = lift . state
+  put = lift . put
+  get = lift  get
 
 -- * Functions
 
@@ -142,14 +142,15 @@ interpretTX TX{..} = do
 -- have been run.
 interpretImportedValue :: 
   (Typeable m, MonadMask m, MonadIO m) => ExportData -> FaeInterpretT m ()
-interpretImportedValue (cID, moduleNames, typeS, valBS) = 
-  faeInterpret moduleNames runString $ \f -> f (WrappedByteString valBS) cID
+interpretImportedValue ExportData{..} = 
+  faeInterpret neededModules runString $ 
+    \f -> f (WrappedByteString exportedValue) exportedCID exportStatus
   where
     runString = unwords
       [
         "addImportedValue",
         ".",
-        "importValueThrow @(ValType (" ++ typeS ++ "))"
+        "importValueThrow @(ValType (" ++ exportNameType ++ "))"
       ]
 
 -- | A top-level function (so that it can be in scope in the interpreter of
@@ -188,22 +189,18 @@ faeInterpret moduleNames runString apply = handle fixGHCErrors $ do
     fixGHCErrors (NotAllowed e) = error e
     fixGHCErrors (GhcException e) = error e
 
-    liftFaeStorage = 
-      lift . FaeStorageT . mapStateT (return . runIdentity) . getFaeStorage
+    liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
 
 -- | runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
-  fmap (either throw id) $
-    flip evalStateT (Storage Map.empty Map.empty Map.empty) $ 
-      getFaeStorageT $ 
-        (case ghcLibdirM of
-          Nothing -> unsafeRunInterpreterWithArgs args
-          Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir
-        ) $ Int.set opts >> x
+  fmap (either throw id) . runStorageT . run ghcLibdirM args $ Int.set opts >> x
   
   where
+    run = maybe 
+      unsafeRunInterpreterWithArgs 
+      (flip unsafeRunInterpreterWithArgsLibdir)
     args = 
       -- We error on orphan instances because the import/export
       -- capability relies on the 'ContractName' instance being in scope
