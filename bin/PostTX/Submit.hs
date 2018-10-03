@@ -1,3 +1,14 @@
+{- |
+Module: PostTX.Submit
+Description: Handler for postTX's normal or view modes
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+Converts a 'TXSpec' to a request, sends it to the server, and prints the
+response to the screen.
+-}
 module PostTX.Submit where
 
 import qualified Data.ByteString.Char8 as C8
@@ -19,6 +30,9 @@ submit ::
 submit host fake lazy isJson txSpec = 
   buildRequest host fake lazy txSpec >>= sendReceiveJSONString isJson >>= putStrLn
 
+-- | Constructs a request whose parts are the various Haskell modules that
+-- are part of the transaction, and whose query parameters are the other
+-- pieces of metadata in the transaction file or from the command line.
 buildRequest :: 
   (Serialize a) => 
   String -> Bool -> Bool -> TXSpec a -> IO Request

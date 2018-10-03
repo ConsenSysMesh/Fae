@@ -1,3 +1,20 @@
+{- |
+Module: PostTX.Args
+Description: Parser for postTX's command-line arguments
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This is an ad-hoc, but relatively straightforward, command-line parser.
+For "historical" (i.e. obsolete) reasons, postTX has a slightly odd
+convention for passing the mandatory data identifying the transaction and
+the server to connect to.  In addition, because of the ad-hoc nature of the
+parser, the argument format, which superficially resembles the *nix
+conventions, is inflexible and does not have for all arguments both long
+and short variants, or with-equals or as-separate-args conventions for
+flags taking arguments.
+-}
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.Args where
 
@@ -20,10 +37,15 @@ import qualified Text.Megaparsec.Char as C
 
 import Text.Read
 
+-- | This blob of data just records in memory the content of the command
+-- line arguments as they are passed.
 data PostTXArgs =
   PostTXArgs
   {
+    -- | Could be several things that affect the operational mode; see the
+    -- usage.
     argDataM :: Maybe String,
+    -- | The server to connect to, defaulting to localhost:27182
     argHostM :: Maybe String,
     argFake :: Bool,
     argView :: Bool,
@@ -36,7 +58,10 @@ data PostTXArgs =
     argShowKeys :: Maybe [String]
   }
 
+-- | This more nuanced structure describes the mode that we decided to use
+-- based on the command line, and its relevant parameters.
 data FinalizedPostTXArgs =
+  -- | Send a transaction normally, or possibly via Faeth
   PostArgs  
   {
     postArgTXNameOrID :: Either TransactionID String,
@@ -46,19 +71,24 @@ data FinalizedPostTXArgs =
     postArgJSON :: Bool,
     postArgFaeth :: FaethArgs
   } |
+  -- | Add metadata to an existing Faeth transaction
   OngoingFaethArgs
   {
     ongoingFaethHost :: String,
     ongoingEthTXID :: EthTXID,
     ongoingFaethArgs :: FaethArgs
   } |
+  -- | Recall the results of a previously run transaction (need not have
+  -- been sent by this postTX)
   ViewArgs
   {
     viewArgTXID :: TransactionID,
     viewArgJSON :: Bool,
     viewArgHost :: String
   } |
+  -- | Just report the public keys we are aware of
   ShowKeysArgs [String] |
+  -- | Pipe the result of a contract call between two servers.
   ImportExportArgs
   {
     exportTXID :: TransactionID,
@@ -66,15 +96,23 @@ data FinalizedPostTXArgs =
     exportHost :: String,
     importHost :: String
   } |
+  -- | Print the usage.
   UsageArgs Usage
 
+-- | The usage can be requested explicitly, or printed to correct an
+-- invalid command line, in the latter case with an associated error
+-- message.
 data Usage =
   UsageFailure String |
   UsageSuccess
 
+-- | Various things to do with Faeth.
 data FaethArgs =
   FaethArgs
   {
+    -- | Regardless of the other flags, a single indicator whether or not
+    -- Faeth is activated.  TODO: this should actually be a separate
+    -- constructor.
     useFaeth :: Bool,
     faethFee :: Maybe Integer,
     faethValue :: Maybe Integer,
@@ -87,6 +125,9 @@ data FaethArgs =
 makeLenses ''PostTXArgs
 makeLenses ''FaethArgs
 
+-- | Entry point to this module: traverses the command line arguments to
+-- produce a 'PostTXArgs', then processes it to produce
+-- a 'FinalizedPostTXArgs'.
 parseArgs :: [String] -> FinalizedPostTXArgs
 parseArgs = finalize . foldl argGetter 
   PostTXArgs
@@ -104,6 +145,11 @@ parseArgs = finalize . foldl argGetter
     argShowKeys = Nothing
   }
 
+-- | Gives meaning to each command-line flag.  One shortcoming of the
+-- method used here is that it is not so easy to accept multiple forms of
+-- the same flag, particularly those that actually combine two different
+-- command-line arguments (as in @--flag value@, which is quite standard
+-- elsewhere).
 argGetter :: PostTXArgs -> String -> PostTXArgs
 argGetter st "--help" = st & (_argUsage ?~ UsageSuccess)
 argGetter st "--show-keys" = st & _argShowKeys ?~ []
@@ -118,6 +164,8 @@ argGetter st "--lazy" = st & _argLazy .~ True
 argGetter st "--resend" = st & _argResend .~ True
 argGetter st "--json" = st & _argJSON .~ True
 argGetter st "--faeth" = st & _argFaeth . _useFaeth .~ True
+-- The case that handles all the flags with arguments, subject to the issue
+-- described above.
 argGetter st x 
   | ("--export-host", '=' : exportHostArg) <- break (== '=') x
     = st & _argImportExport . _1 ?~ exportHostArg
@@ -156,7 +204,15 @@ argGetter st x
     st & _argUsage ?~ UsageFailure
       (unlines ["Unknown argument: " ++ x, "TX name and host already given"])
 
+-- | An unwieldy logic tree that validates the flags that were actually
+-- present against each other, and selects a mode based on what they
+-- require.
 finalize :: PostTXArgs -> FinalizedPostTXArgs
+-- When understanding this, it should be kept in mind that each case is the
+-- @else@ clause of the previous ones.  Therefore it is not just the
+-- positive condition in the case that selects it, but also all previous
+-- negative conditions.  Take care when entering new cases, and don't
+-- reorder anything.
 finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..} 
   | Just u <- argUsage = UsageArgs u
   | Just u <- argShowKeys = ShowKeysArgs u
@@ -231,11 +287,16 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     }
 
   where
+    -- | Establishes the default hostnames.  This may have system-dependent
+    -- issues: for instance, sometimes @localhost@ causes a lookup failure,
+    -- and sometimes (particularly with Faeth) @0.0.0.0@ is rejected for
+    -- safety reasons.
     justHost :: Maybe String -> String
     justHost
       | useFaeth && not argFake = fromMaybe "localhost:8546"
       | otherwise = fromMaybe "0.0.0.0:27182"
 
+-- | Auxiliary function for @--show-keys@
 parseKeysArgs :: String -> Either (ParseError (Token String) Void) [String]
 parseKeysArgs input = runParser csvParser "" input
   where csvParser = (many $ C.satisfy (/= ',')) `sepBy` C.char ',' :: Parsec Void String [String]

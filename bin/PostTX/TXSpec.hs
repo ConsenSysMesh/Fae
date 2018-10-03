@@ -1,3 +1,18 @@
+{- |
+Module: PostTX.TXSpec
+Description: Handler for postTX's Faeth mode
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+A 'TXSpec' contains a complete Fae transaction message, the associated
+modules (which are not part of the basic message), and the metadata of
+whether this is a reward transaction and what its parent is.  If and when
+Fae is managed by a blockchain, both of the latter will be inferred from
+the blocks, and the modules will be sent in a separate communication from
+the message.
+-}
 {-# LANGUAGE TemplateHaskell #-}
 module PostTX.TXSpec 
   (
@@ -33,6 +48,8 @@ import System.Directory
 import Text.Read
 
 -- * Spec types
+
+-- | The structure that 'PostTX.Parser' parses a transaction file into.
 data TXData =
   TXData
   {
@@ -44,6 +61,12 @@ data TXData =
     parent :: Maybe TransactionID
   }
 
+-- | All transaction information appropriately organized.  Recall that the
+-- reason the modules are not part of the message is that it is designed to
+-- make it possible for a recipient to opt out of incurring significant
+-- data costs by discriminating based on file size.  In one-off postTX
+-- operation, this dynamic is not present, so the modules are sent
+-- alongside the transaction.
 data TXSpec a =
   TXSpec
   {
@@ -54,19 +77,28 @@ data TXSpec a =
   }
   deriving (Generic)
 
+-- | Modules having been read from disk
 data LoadedModules =
   LoadedModules
   {
     mainModule :: (FileName, Module),
-    otherModules :: ModuleMap
+    otherModules :: Modules
   }
   deriving (Generic)
 
-type Modules = ModuleMap
+-- | Less generic.
 type FileName = String
-type Keys = Map String (Either PublicKey PrivateKey)
+-- | Less generic.
 type Identifier = String
+-- | Convenient.
+type Modules = ModuleMap
+-- | Definitely convenient.
+type Keys = Map String (Either PublicKey PrivateKey)
 
+-- | This is a class in the sense of being actually an overloaded function
+-- more than an interface.  Depending on the format of the transaction's
+-- "salt", constructing the message may require alternative steps.
+-- Presumably the rest of the message is constructed the same way.
 class (Monad m, Serialize a) => MakesTXSpec m a where
   txDataToTXSpec :: TXData -> m (TXSpec a)
 
@@ -74,12 +106,16 @@ class (Monad m, Serialize a) => MakesTXSpec m a where
 makeLenses ''TXData
 makeLenses ''TXSpec
 
+-- | -
 instance Serialize LoadedModules
+-- | -
 instance (Serialize a) => Serialize (TXSpec a)
 
+-- | Just uses the time as the salt value.
 instance MakesTXSpec IO String where
   txDataToTXSpec = txSpecTimeSalt id
 
+-- | Makes a Faeth salt with Ethereum metadata.
 instance MakesTXSpec (ReaderT FaethArgs IO) Salt where
   txDataToTXSpec txData = do
     FaethArgs{..} <- ask
@@ -94,6 +130,8 @@ instance MakesTXSpec (ReaderT FaethArgs IO) Salt where
         }
     liftIO $ txSpecTimeSalt makeSalt txData
 
+-- | Given a partially constructed salt, finishes it off by inserting the
+-- current time, then constructs the 'TXSpec' containing it.
 txSpecTimeSalt :: 
   (Serialize a) => (String -> a) -> TXData -> IO (TXSpec a)
 txSpecTimeSalt makeSalt txData = do
@@ -101,6 +139,9 @@ txSpecTimeSalt makeSalt txData = do
   go <- getMakeTXSpec txData
   return $ go $ makeSalt $ show now
 
+-- | This higher-order function fills in the private keys requested in the
+-- 'TXData', then returns a partially constructed 'TXSpec' that expects
+-- only the salt, to be provided by 'txSpecTimeSalt'.
 getMakeTXSpec :: (Serialize a) => TXData -> IO (a -> TXSpec a)
 getMakeTXSpec TXData{..} = do
   let 
@@ -110,6 +151,9 @@ getMakeTXSpec TXData{..} = do
   let privKeyMap = Map.fromList $ zip signerNames privKeys 
   return $ makeTXSpec dataModules inputs privKeyMap fallback parent reward 
 
+-- | Fills in the 'TXMessage' with the supplied parameters, and also
+-- extracts file previews for each module, then signs the whole thing with
+-- the provided keys.
 makeTXSpec ::
   (Serialize a) => 
   LoadedModules -> Inputs -> Keys -> [Identifier] -> 
@@ -133,6 +177,7 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
     LoadedModules{..} = specModules
     keyErr = error "Bad private key"
 
+    -- | Just processes the module as a byte string
     makePreview :: FileName -> Module -> ModulePreview
     makePreview fName moduleBS =
       ModulePreview
@@ -144,6 +189,10 @@ makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt =
     addSignatures :: (Serialize a) => Keys -> TXMessage a -> TXMessage a
     addSignatures keys m = Map.foldrWithKey addSigner m keys
 
+-- | Signs a 'TXMessage' with a single key in a given role.  This allows
+-- for the possibility that the role was /not/ provided with a key, thus
+-- producing an incomplete message.  This will be, strictly speaking,
+-- invalid, but when sent with @--fake@ is admissible for testing purposes.
 addSigner :: 
   (Serialize a) =>
   String -> Either PublicKey PrivateKey -> TXMessage a -> TXMessage a

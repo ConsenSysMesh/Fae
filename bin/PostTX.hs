@@ -1,3 +1,19 @@
+{- |
+Module: PostTX
+Description: Command-line utility for creating and sending Fae transactions
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This utility pairs with 'faeServer' by constructing an HTTP query of the
+form that it expects in order to send a transaction specified in
+human-readable form in a file on disk.  It has several additional modes
+where it can operate on a transaction that has already been sent, or send
+the transaction through an Ethereum client using 'faeServer''s Faeth
+protocol.
+-}
+
 import Common.ProtocolT (Salt)
 
 import Control.Monad.Reader
@@ -42,6 +58,8 @@ main = do
       let buildTXSpec :: 
             (MakesTXSpec m a) => 
             (m (TXSpec a) -> IO (TXSpec a)) -> IO (TXSpec a)
+          -- Actually quite simple: either reads a new transaction file, or
+          -- fetches an existing 'TXSpec' by id.
           buildTXSpec f = case postArgTXNameOrID of
             Left txID ->
               either (error $ "Bad transaction file: " ++ show txID) id .
@@ -92,11 +110,11 @@ usage = do
       "where args = data [host[:port]] [options]",
       "where the available options are:",
       "  Help",
-      "    --help           Print this usage",
+      "    --help      Print this usage",
       "",
       "  Viewing Stored Public Keys:",
-      "    --show-keys              Show all keys.",
-      "    --show-keys=key1,key2,.. Show one or more keys",
+      "    --show-keys                   Show all keys.",
+      "    --show-keys=key1,key2,..      Show one or more keys",
       "",
       "  Regular Fae operation:",
       "    with data = (tx name)",
@@ -133,8 +151,8 @@ usage = do
       "    --faeth-eth-argument          Set the input that the Ethereum contract",
       "                                  will see, i.e. the contract argument",
       "",
-      "  Import/Export operation:" ++
-      "    with data = (Fae tx ID):(Fae short contract ID)",
+      "  Import/Export operation:",
+      "    with data = (Fae tx ID):(input index)",
       "    --import-host=host[:port]     Set host to send import data",
       "    --export-host=host[:port]     Set host to request export data",
       "",
@@ -144,20 +162,21 @@ usage = do
       "A (tx name) reads the transaction spec file of that name.  Format is:",
       "",
       "  Simple fields:",
-      "    body = (module name)     The main module of the transaction.  Must",
-      "                             define 'body :: Transaction argType valType'.",
-      "                             Defaults to 'TX'",
+      "    body = (module name)     The main module of the transaction, which must",
+      "                             define 'body :: a -> b -> ... -> FaeTX c'.",
+      "                             Required.",
       "    reward = (True | False)  For testing; enables transaction rewards",
       "                             Defaults to 'False'",
       "    parent = (Fae tx ID)     Immediately follow a previous transaction",
-      "                             Defaults to the end of the longest chain",
+      "                             If absent, postTX takes no decision but",
+      "                             faeServer defaults to the end of the longest chain",
       "",
       "  Optional list blocks:",
       "    others                   Additional modules for this transaction",
       "      (- module name)+",
       "    fallback                 Top-level values in the main (body) module",
       "      (- name)+              to be run as fallbacks in case of exceptions.",
-      "                             Each type is 'name :: Transaction argType ()'",
+      "                             Each type is 'name :: a -> b -> ... -> FaeTX ()",
       "",
       "  Optional key-value blocks:",
       "    keys                              Sign the transaction with each role",
@@ -166,45 +185,36 @@ usage = do
       "                                      require a signature by a key.",
       "                                      Keys are created on demand",
       "    inputs                            Set the contract call list, each one",
-      "      (Fae contract path = arg)+      called with the given argument",
+      "      (Fae contract path = arg        called with the given argument and with",
+      "         [newRole = oldRole]+ )+      the roles remapped as optionally indicated.",
       "",
-      "The 'parent' field, and each line of the key-value blocks, are scanned for",
-      "environment variables ($envvar), which are expanded.",
+      "Environment variables $var are expanded in each component of the",
+      "input paths, in the others and fallback lists, and on the right-hand",
+      "side of equals signs.",
       "",
-      "Contract arguments may include literals for a type 'Versioned a', which",
-      "are of the format:",
+      "A (Fae contract path) is a four-component 'path' of the form",
       "",
-      "  (Fae contract ID) ::: (version ID)",
+      "  (Fae txID) / (Body | Input n) / (output index) / (Current | Version hex)",
       "",
-      "  referring to a version taken from a call to a contract.",
-      "",
-      "The format of a (Fae contract path) is any of:",
-      "",
-      "  TransactionOutput (Fae tx ID) n",
-      "    The n'th contract created by the body of a transaction",
-      "",
-      "  InputOutput (Fae tx ID) (Fae contract ID) n",
-      "    The n'th contract created by a transaction's call to some contract",
-      "",
-      "  (One of the above) :# n",
-      "    A contract after exactly n successful calls",
+      "indicating, respectively, the transaction in which the contract was",
+      "created, the component of the transaction that created it, which",
+      "output of that component it was, and whether it should be required to",
+      "match a particular version ID or not.",
       "",
       "The format of the transaction results is:",
       "",
       "  Transaction (Fae tx ID)",
       "    result: 'body' return value",
       "    outputs",
-      "      (n: Fae contract ID)*",
+      "      (n: initial version hex)*",
       "    signers",
       "      (role name : public key)*",
-      "   (input (Fae contract ID)",
-      "      nonce: number",
+      "   (input (Fae contract ID) ((Updated|Failed|Deleted))",
+      "      version: new version hex (only if (Updated))",
       "      outputs",
-      "        (n: Fae contract ID)*",
-      "      versions",
-      "        (version ID: type)",
+      "        (n: initial version hex)*",
       "   )*",
       "",
-      "  All IDs, and public keys, are 32-byte unprefixed hex strings"
+      "  All hex strings, and public keys, are 32 bytes without a leading '0x'."
     ]
 
