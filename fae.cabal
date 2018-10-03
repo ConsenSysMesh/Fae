@@ -165,6 +165,7 @@ executable postTX
     PostTX.Submit
     PostTX.TXSpec
     PostTX.View
+    PostTX.Transfer
   build-depends:
     aeson,
     base,

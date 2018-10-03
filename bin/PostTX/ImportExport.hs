@@ -23,7 +23,7 @@ importExport exportTXID exportSCID exportHost importHost = do
     " called in transaction " ++ show exportTXID ++
     " from " ++ exportHost ++ " to " ++ importHost
 
-buildExportRequest :: (TransactionID, ShortContractID) -> String -> IO Request 
+buildExportRequest :: (TransactionID, ShortContractID) -> String -> IO Request
 buildExportRequest exportData exportHost =
   flip formDataBody (requestURL exportHost) $
     modulePart "export" "export" (S.encode exportData) : []
@@ -33,4 +33,3 @@ buildImportRequest (cID, modNames, typeS, valueBS) importHost =
   flip formDataBody (requestURL importHost) $
     modulePart "import" "import" (S.encode (cID, modNames, typeS)) :
     modulePart "valuePackage" "valuePackage" valueBS : []
-
