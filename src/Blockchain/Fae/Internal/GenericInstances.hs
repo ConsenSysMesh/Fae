@@ -13,7 +13,6 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Serialization
-import Blockchain.Fae.Internal.Versions
 
 import Control.Monad.State
 
@@ -30,21 +29,6 @@ instance {-# OVERLAPPABLE #-}
   (Generic a, Typeable a, GHasEscrowIDs (Rep a)) => HasEscrowIDs a where
 
   traverseEscrowIDs f x = to <$> gTraverseEscrowIDs f (from x)
-
--- | /So/ undecidable
-instance {-# OVERLAPPABLE #-}
-  (HasEscrowIDs a, Typeable a, Generic a, GVersionable (Rep a)) => 
-  Versionable a where
-
-  mapVersions vMap = to . gMapVersions vMap . from 
-  versions f = gVersions f . from
-
--- | /Not/ the 'Generic' instance, because that produces a version for each
--- character and each tail.  This is not an ideal solution; we should
--- really just use 'Text' instead, but it fixes a common situation.
-instance {-# OVERLAPPING #-} Versionable String where
-  versions f s = (mkVersionID $ map (fst . versions f) s, emptyVersionMap)
-  mapVersions _ = id
 
 -- | /So/ undecidable
 instance {-# OVERLAPPABLE #-}

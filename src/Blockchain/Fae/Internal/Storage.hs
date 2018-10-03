@@ -15,7 +15,6 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.Versions
 
 import Common.Lens 
 
@@ -91,6 +90,7 @@ data InputResults =
     -- 'iResult', it is not possible to detect 'Deleted' from the other
     -- fields here, so this one is necessary.
     iStatus :: Status,
+    iVersionID :: VersionID,
     -- | This is /very dangerous/ because these escrows are duplicates.
     -- This value /must not/ be used inside Fae, but only exposed to
     -- external applications (such as import/export).
@@ -146,28 +146,10 @@ instance Serialize ExportData
 
 -- * Functions
 
--- ** 'Storage'-specific lenses
-
--- | Accessor partway down the hierarchy, stopping at the full
--- 'InputResults' and not checking the nonce.
-inputResultsAt :: TransactionID -> Int -> Lens' Storage (Maybe InputResults)
-inputResultsAt txID ix = 
-  _getStorage . 
-  at txID .
-  uncertain (txInputLens ix)
-
--- | Simplified accessor for just the contract function, since often one
--- does not want to bother with the imported values or the nonce.  This
--- does check the nonce, however.
-contractAtCID :: ContractID -> Lens' Storage (Maybe AbstractGlobalContract)
-contractAtCID cID = outputAtNonce cID . lens getter setter where
-  getter = fmap outputContract
-  setter = flip . liftA2 $ set _outputContract 
-
 -- | For the 'At' instance
 type instance Index Storage = ContractID
 -- | For the 'At' instance
-type instance IxValue Storage = Either InputResults OutputData
+type instance IxValue Storage = Either InputResults StoredContract
 -- | For the 'At' instance
 instance Ixed Storage
 -- | We define this instance /in addition to/ the natural 'TransactionID'
@@ -176,22 +158,20 @@ instance Ixed Storage
 -- which may fail (in different ways).
 instance At Storage where
   at cID = lens getter setter where
+    getter :: Storage -> Maybe (IxValue Storage)
     getter st = 
-      case st ^. outputAtNonce cID of
+      case st ^. contractAt cID of
         Nothing -> Left <$> st ^. _importedValues . at cID
         x -> Right <$> x
-    setter st (Just (Right x)) = st & outputAtNonce cID ?~ x
+    setter :: Storage -> Maybe (IxValue Storage) -> Storage
+    setter st (Just (Right x)) = st & contractAt cID ?~ x
     setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
     setter st Nothing = st
-      & outputAtNonce cID .~ Nothing
+      & contractAt cID .~ Nothing
       & _importedValues . at cID .~ Nothing
 
--- | Accesses down to the output data without bothering with the imported
--- results, and checking the nonce.
-outputAtNonce :: ContractID -> Lens' Storage (Maybe OutputData)
-outputAtNonce cID = 
-  outputAt cID . 
-  outputContractNonce (contractNonce cID)
+contractAt :: ContractID -> Lens' Storage (Maybe StoredContract)
+contractAt cID = outputAt cID . uncertain _storedContract
 
 -- | Accesses the full 'Output' without checking the nonce (as makes
 -- sense, as that is only available in the 'OutputData' below it).
@@ -200,7 +180,7 @@ outputAt cID@ContractID{..} =
   _getStorage .
   at parentTransaction .
   uncertain (txPartLens transactionPart) .
-  uncertain (vectorAt creationIndex)
+  vectorAt creationIndex
 
 -- | Routes to the correct outputs list depending on where in the
 -- transaction it happened.
@@ -215,40 +195,22 @@ txPartLens p =
 -- | Kind of redundant but used as a piece in several places, so worth
 -- a named synonym.
 txInputLens :: Int -> Lens' TransactionEntry (Maybe InputResults)
-txInputLens n = _inputResults . vectorAt n
+txInputLens n = _inputResults . onlyJust DeletedEntry . vectorAt n
 
 -- | This is a bit of a fake lens, as it slightly fails the law that
 -- setting following getting is the identity; if you go out-of-bounds, the
 -- former is an exception and the latter is, of course, a no-op.  Barring
 -- that, this just marshals 'Vector.!?' and 'Vector.modify' to get and
 -- set.
-vectorAt :: Int -> Lens' (Vector a) (Maybe a)
+vectorAt :: Int -> Lens' (Maybe (Vector a)) (Maybe a)
 vectorAt n = 
-  onlyJust DeletedEntry .
   lens ((=<<) (Vector.!? n)) (\mv my -> mv >>= (my >>=) . setter)
- where
+  where
     setter v y
       | 0 <= n && n < Vector.length v = 
         Just $ Vector.modify (\w -> Vector.unsafeWrite w n y) v
       | otherwise = Nothing
 
--- | Descends into the 'OutputData' mindfully.  On getting, checks the
--- nonce (if one was specified); on setting, increments it (regardless).
-outputContractNonce :: Nonce -> Lens' (Maybe Output) (Maybe OutputData) 
-outputContractNonce nonce = lens getter setter . checkL where
-  getter = (>>= outputData)
-  setter mo mod = fmap (_outputData .~ ((_outputNonce +~ 1) <$> mod)) mo
-  checkL | Current <- nonce = id
-         | Nonce n <- nonce = guardNonce n
-
--- | Filters an 'OutputData' through a nonce check, but just for getting.
-guardNonce :: (MonadPlus m) => Int -> Lens' (m OutputData) (m OutputData)
-guardNonce n = (. (>>= g)) where
-  g od@OutputData{..} = guard (n == outputNonce) >> return od
-
--- ** General lens combinators
-
--- | Basically, runs 'join' on the result of both a get and a set.
 joinUncertainty :: 
   (Monad m) => Lens s (m (m t)) (m (m a)) (m b) -> Lens s (m t) (m a) (m b)
 joinUncertainty = ((fmap join .) .) . (. (. join))
@@ -280,52 +242,50 @@ successful InputResults{..}
   | Failed <- iStatus = False
   | otherwise = True
 
--- | This function, formerly in 'acceptGlobal' from
--- "Blockchain.Fae.Internal.Contract", constructs the version map from the
--- basic results, following the policy that the result is null if the
--- contract ID didn't specify an exact nonce value. 
-makeInputVersions :: InputResults -> VersionMap
-makeInputVersions InputResults{iResult = WithEscrows{..},..} 
-  | hasNonce iRealID = versionMap (lookupWithEscrows withEscrows) getWithEscrows
-  | otherwise = emptyVersionMap
-
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not
 -- `FaeStorageT` because the former is not an instance of the latter, and
 -- the interpreter benefits from having a monomorphic type.
 addImportedValue :: 
-  (Versionable a, HasEscrowIDs a, Exportable a) => 
+  (HasEscrowIDs a, Exportable a) => 
   State Escrows a -> ContractID -> Status -> FaeStorage ()
-addImportedValue valueImporter iRealID iStatus = FaeStorage $ do
-  unless (hasNonce iRealID) $ throw $ ImportWithoutNonce iRealID
-  let (importedValue, Escrows{..}) = 
-        runState valueImporter (Escrows Map.empty nullDigest)
-      iVersions = versionMap (lookupWithEscrows escrowMap) importedValue
-      iResult = WithEscrows escrowMap (ReturnValue importedValue)
-  _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
+addImportedValue valueImporter iRealID iStatus = FaeStorage $ 
+  case contractVersion iRealID of
+    Current -> throw $ ImportWithoutVersion iRealID
+    Version iVersionID -> 
+      _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
+  where 
+    iResult = WithEscrows escrowMap (ReturnValue importedValue)
+    (importedValue, Escrows{..}) = 
+      runState valueImporter (Escrows Map.empty nullDigest)
 
 -- | Converts the stored 'InputResults', which could actually have been the
 -- result of a previous import, into the serialized return value plus other
 -- metadata necessary for import elsewhere.
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = do
-  InputResults{..} <- use $ inputResultsAt txID ix .
+  InputResults{..} <- use $ getInputResults .
     defaultLens (throw $ BadInputID txID ix)
-  unless (hasNonce iRealID) $ throw $ ExportWithoutNonce iRealID
   Output{..} <- use $ outputAt iRealID . 
     defaultLens (throw $ BadContractID iRealID)
-  let neededModules = tyConModule <$> listTyCons outputType
+  let neededModules = tyConModule <$> listTyCons contractNameType
       WithEscrows eMap result = iResult
       exportedValue = evalState (exportReturnValue result) eMap
   return ExportData 
     {
       exportedCID = iRealID,
       exportStatus = iStatus,
-      exportNameType = show outputType,
+      exportNameType = show contractNameType,
       ..
     }
 
   where
+    getInputResults :: Lens' Storage (Maybe InputResults)
+    getInputResults = 
+      _getStorage . 
+      at txID .
+      uncertain (txInputLens ix)
+
     listTyCons :: TypeRep -> [TyCon]
     listTyCons rep = con : (reps >>= listTyCons) where
       (con, reps) = splitTyConApp rep

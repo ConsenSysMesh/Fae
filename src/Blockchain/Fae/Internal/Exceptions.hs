@@ -50,14 +50,16 @@ data StorageException =
   BadTransactionID TransactionID |
   BadContractID ContractID |
   BadInputID TransactionID Int |
+  BadVersion ContractID Int Int |
+  InvalidVersionAt ContractID |
   ContractOmitted TransactionID Int |
   CantImport ByteString TypeRep |
-  ImportWithoutNonce ContractID |
-  ExportWithoutNonce ContractID |
+  ImportWithoutVersion ContractID |
   DeletedEntry 
 
 -- | Exceptions for contract-related errors.
 data ContractException =
+  BadContractVersion VersionID ContractID |
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
@@ -98,23 +100,27 @@ instance Show StorageException where
   show (BadInputID txID ix) = 
     "No input contract with index " ++ show ix ++ 
     " for transaction " ++ show txID
+  show (BadVersion cID bad good) = 
+    "Contract " ++ prettyContractID cID ++ 
+    " has nonce " ++ show good ++ "; got: " ++ show bad
+  show (InvalidVersionAt cID) = "Can't look up contract ID: " ++ prettyContractID cID
   show (ContractOmitted txID ix) =
     "Contract call #" ++ show ix ++ 
     " in transaction " ++ show txID ++ 
     " was replaced with an imported return value."
   show (CantImport bs ty) =
     "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
-  show (ImportWithoutNonce cID) =
+  show (ImportWithoutVersion cID) =
     "Rejecting imported value for " ++ prettyContractID cID ++ 
-    " that lacks a nonce value."
-  show (ExportWithoutNonce cID) =
-    "Rejecting exported value for " ++ prettyContractID cID ++ 
     " that lacks a nonce value."
   show (DeletedEntry) =
     "(internal error) Tried to delete an entry of the transaction results!"
 
 -- | -
 instance Show ContractException where
+  show (BadContractVersion ver cID) =
+    "Incorrect version in contract ID: " ++ prettyContractID cID ++
+    "; correct version is: " ++ show ver
   show (BadInputParse input inputType) = 
     "Unable to parse '" ++ show input ++ "' as type: " ++ show inputType
   show (BadArgType bad good) = 

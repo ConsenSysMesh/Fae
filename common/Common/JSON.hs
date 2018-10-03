@@ -40,7 +40,7 @@ instance ToJSON TXInputSummary where
     object [
       "txInputStatus" .= txInputStatus,
       "txInputOutputs" .= wrapExceptions txInputOutputs,
-      "txInputVersions" .= wrapExceptions txInputVersions ]
+      "txInputVersion" .= wrapExceptions txInputVersion ]
 
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
@@ -56,7 +56,7 @@ instance FromJSON TXInputSummary where
       TXInputSummary
         <$> readJSONField "txInputStatus" o
         <*> readJSONField "txInputOutputs" o
-        <*> readJSONField "txInputVersions" o
+        <*> readJSONField "txInputVersion" o
       
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o ->

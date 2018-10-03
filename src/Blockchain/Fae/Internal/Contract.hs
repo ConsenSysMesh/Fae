@@ -17,7 +17,6 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Suspend
-import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
@@ -57,7 +56,7 @@ type a ↤ b = a <-| b
 
 -- | Another dynamic type, this time including 'Exportable'.
 data ReturnValue =
-  forall a. (Versionable a, HasEscrowIDs a, Exportable a) => ReturnValue a
+  forall a. (HasEscrowIDs a, Exportable a) => ReturnValue a
 
 -- | Something like a closure for the initial state of a new contract
 -- (currently only escrows).  The actual contract function can be
@@ -133,22 +132,21 @@ data TXData =
 data Output =
   Output
   {
-    -- | 'Nothing' means the contract called 'spent' and was deleted.
-    outputData :: Maybe OutputData,
+    storedContract :: Maybe StoredContract,
     -- | This is not @Maybe@ because even when the contract is spent, we
     -- need its type for exporting.
-    outputType :: TypeRep 
+    contractNameType :: TypeRep 
   }
   deriving (Generic)
 
 -- | If the contract can be called again, this contains its function (which
 -- is called) and nonce (which is verified when the contract ID used
 -- contains a nonce).
-data OutputData =
-  OutputData
+data StoredContract =
+  StoredContract
   {
-    outputContract :: AbstractGlobalContract,
-    outputNonce :: Int
+    storedFunction :: AbstractGlobalContract,
+    storedVersion :: VersionID
   }
   deriving (Generic)
 
@@ -183,8 +181,7 @@ newtype ContractF argType valType =
 type AbstractLocalContract = ContractF BearsValue BearsValue
 -- | The form of a contract function intended to be called from
 -- a transaction.
-type AbstractGlobalContract = 
-  ContractF (String, InputVersionMap) (WithEscrows ReturnValue)
+type AbstractGlobalContract = ContractF String (WithEscrows ReturnValue)
 
 -- ** User-visible
 
@@ -240,11 +237,8 @@ class (Typeable a) => Exportable a where
 -- /including/ valuables that it is supposed to "own".  Their escrows are
 -- deposited at the beginning of the contract.
 class 
-  (
-    HasEscrowIDs a,
-    Versionable (ArgType a), Versionable (ValType a),
-    HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)
-  ) => ContractName a where
+  (HasEscrowIDs a, HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)) =>
+  ContractName a where
 
   type ArgType a
   type ValType a
@@ -277,24 +271,21 @@ makeLenses ''WithEscrows
 makeLenses ''Escrows
 makeLenses ''TXData
 makeLenses ''Output
-makeLenses ''OutputData
+makeLenses ''StoredContract
 
 {- Instances -}
 
--- | -
 instance NFData Output
 
--- | -
-instance NFData OutputData
+instance NFData StoredContract
 
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
 
--- | -
-instance Versionable ReturnValue where
-  versionMap  f (ReturnValue x) = versionMap f x
-  versions    f (ReturnValue x) = versions f x
-  mapVersions m (ReturnValue x) = ReturnValue $ mapVersions m x
+instance (HasEscrowIDs a, HasEscrowIDs b) => ContractName (Contract a b) where
+  type ArgType (Contract a b) = a
+  type ValType (Contract a b) = b
+  theContract = id
 
 -- | -
 instance MonadTX FaeTX where
@@ -372,13 +363,12 @@ newContract ::
   ) => 
   name -> m ()
 newContract x = liftTX $ FaeTX $ do
-  (_, nextID) <- forkNextID
-  WithEscrows escrowMap _ <- takeEscrows x
-  let outputContract = 
-        globalContract $ hideEscrows escrowMap nextID (theContract x)
-      outputType = typeRep $ Proxy @name
-      outputNonce = 0
-      outputData = Just OutputData{..}
+  (storedVersion, nextID) <- forkNextID
+  xE <- takeEscrows x
+  let storedFunction = 
+        globalContract $ hideEscrows (withEscrows xE) nextID (theContract x)
+      contractNameType = typeRep $ Proxy @name
+      storedContract = Just StoredContract{..}
   tell [Output{..}]
 
 -- | Creates a new escrow with a given 'ContractName', whose backing
@@ -390,7 +380,8 @@ newEscrow contractName = liftTX $ FaeTX $ do
   (entID, contractNextID) <- forkNextID
   WithEscrows endowment _ <- takeEscrows contractName
   let escrowNameOrFunction = Left $ AnyNamedContract NamedContract{..}
-  _escrowMap %= Map.insert entID EscrowEntry{escrowVersion = entID, ..}
+      escrowVersion = entID
+  _escrowMap %= Map.insert entID EscrowEntry{..}
   return $ EscrowID entID
 
 -- | Calls an escrow by ID, which must exist in the present context.  The
@@ -409,7 +400,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
     -- The "local hash" corresponds either to the transaction ID (if not in
     -- a contract call) or to the arguments of the contract call, and so
     -- the version will accurately reflect the call history of the escrow.
-    let newVer = mkVersionID (escrowVersion, hash)
+    let newVer = digest (escrowVersion, hash)
     _escrowMap . at entID .= fmap (EscrowEntry newVer . Right) resultCFM
     return y
   where typeify f = fmap (_1 %~ returnTyped) . f . acceptTyped
@@ -466,7 +457,6 @@ localContract = ContractF .
 globalContract :: 
   (
     Read argType, Exportable valType,
-    Versionable argType, Versionable valType,
     HasEscrowIDs argType, HasEscrowIDs valType
   ) =>
   PreContractF argType valType -> AbstractGlobalContract
@@ -492,21 +482,18 @@ returnLocal = fmap bearer . putEscrows
 -- values for its version references.
 acceptGlobal :: 
   forall argType.
-  (Read argType, Versionable argType, HasEscrowIDs argType) =>
-  (String, InputVersionMap) -> FaeTXM (WithEscrows argType)
-acceptGlobal (argS, vers) = takeEscrows x where
-  -- Laziness assurance: the 'maybe' function (which is not lazy) is
-  -- nonetheless safe here because 'argS' is not provided by user code, and
-  -- 'readMaybe' always returns a good value.
-  x = maybe 
-    (throw $ BadInputParse argS $ typeRep $ Proxy @argType) 
-    (mapVersions vers) 
-    (readMaybe argS)
+  (Read argType, HasEscrowIDs argType) =>
+  String -> FaeTXM (WithEscrows argType)
+-- Laziness assurance: the 'fromMaybe' function (which is not lazy) is
+-- nonetheless safe here because 'argS' is not provided by user code, and
+-- 'readMaybe' always returns a good value.
+acceptGlobal argS = takeEscrows $ fromMaybe err $ readMaybe argS where
+  err = throw $ BadInputParse argS $ typeRep $ Proxy @argType
 
 -- | Prepares a value-bearing result together with its table of versioned
 -- values.
 returnGlobal :: 
-  (HasEscrowIDs valType, Versionable valType, Exportable valType) =>
+  (HasEscrowIDs valType, Exportable valType) =>
   WithEscrows valType -> FaeTXM (WithEscrows ReturnValue)
 returnGlobal yE = do
   y <- putEscrows yE

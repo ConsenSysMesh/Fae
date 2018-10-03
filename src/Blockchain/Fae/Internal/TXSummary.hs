@@ -17,7 +17,6 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Storage
-import Blockchain.Fae.Internal.Versions
 import Blockchain.Fae.Internal.TX
 
 import Common.Lens
@@ -43,30 +42,22 @@ import GHC.Generics hiding (to)
 import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
--- * Types
-
--- | Serializable representation of a contract type.
-type CType = UnquotedString
-
 -- | Heavy-handed total information about the result of a transaction, in
 -- a relatively printable format
 data TXSummary = TXSummary {
   transactionID :: TransactionID,
   txResult :: String,
-  txOutputs:: Vector CType,
+  txOutputs:: Vector VersionID,
   txInputSummaries :: Vector (ContractID, TXInputSummary),
   txSSigners :: [(String, PublicKey)]
-} deriving (Show, Generic)
+} deriving (Generic)
 
 -- | Printable results of calling a contract.
 data TXInputSummary = TXInputSummary {
   txInputStatus :: Status,
-  txInputOutputs :: Vector CType,
-  txInputVersions :: [(VersionID, String)]
-} deriving (Show, Generic)
-
--- * Template Haskell
-makeLenses ''TXSummary
+  txInputOutputs :: Vector VersionID,
+  txInputVersion :: VersionID
+} deriving (Generic)
 
 {- Instances -}
 
@@ -75,8 +66,7 @@ instance Pretty TXSummary where
   pPrint TXSummary{..} = prettyHeader header entry where 
     header = labelHeader "Transaction" transactionID
     result = prettyPair ("result", displayException $ text txResult)
-    outputs = displayException $ 
-      prettyList "outputs" $ (_1 %~ show) <$> toIxList txOutputs
+    outputs = displayException $ prettyVector "outputs" txOutputs
     txSSigners' = prettyList "signers" txSSigners
     inputs = txInputSummaries & vcat . toList . Vector.imap
       (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
@@ -90,10 +80,11 @@ instance Pretty TXSummary where
 
 -- | -
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat [ outputs, versions ] where 
-    outputs = prettyList "outputs" $ (_1 %~ show) <$> toIxList txInputOutputs
-    versions = prettyHeader (text "versions" <> colon) $ prettyPairs $
-      bimap show UnquotedString <$> txInputVersions
+  pPrint TXInputSummary{..} = vcat $ pVersion [outputs] where 
+    pVersion
+      | Updated <- txInputStatus = (prettyPair ("version", txInputVersion) :)
+      | otherwise = id
+    outputs = prettyVector  "outputs" txInputOutputs
 
 -- * Functions
 
@@ -107,7 +98,7 @@ collectTransaction txID = do
   let transactionID = txID
       txSSigners = Map.toList $ getSigners txSigners
       txResult = show result 
-      txOutputs = showTypes outputs
+      txOutputs = makeOut <$> outputs
       txInputSummaries = getInputSummary txID inputResults
   return $ TXSummary{..}
 
@@ -115,24 +106,18 @@ collectTransaction txID = do
 getInputSummary :: 
   TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
 getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} -> 
-  let txInputVersions = 
-        over (traverse . _2) (show . bearerType) $ 
-          Map.toList $ getVersionMap $ makeInputVersions iR
+  let txInputVersion = iVersionID
       txInputOutputs = 
         maybe 
           (throw $ ContractOmitted txID ix) 
-          showTypes 
+          (fmap $ makeOut) 
           iOutputsM
   in (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
 
--- | Fetches the 'outputType' from each output as an 'UnquotedString'.
-showTypes :: Outputs -> Vector UnquotedString
-showTypes = fmap $ UnquotedString . show . outputType
-
--- | Probably not necessary, as this kind of thing can always be replaced
--- by 'Vector.imap'.
-toIxList :: Vector a -> [(Int, a)]
-toIxList = zip [0 ..] . toList
+makeOut :: Output -> VersionID
+-- We assume (justifiably!) that a new output does, in fact, store a live
+-- contract.
+makeOut Output{storedContract=Just StoredContract{..},..} = storedVersion
 
 -- | Constructs a header with a name and some other data.
 labelHeader :: (Show a) => String -> a -> Doc
@@ -141,6 +126,11 @@ labelHeader h l = text h <+> text (show l)
 -- | Formats a nice header with indented body.
 prettyHeader :: Doc -> Doc -> Doc
 prettyHeader header body = header $+$ nest 2 body 
+
+prettyVector :: (Show v) => String -> Vector v -> Doc
+prettyVector headString v 
+  | Vector.null v = empty
+  | otherwise = prettyList headString $ Vector.toList $ Vector.imap ((,) . show) v
 
 -- | Converts a string and list of "lines" into a body with header.
 prettyList :: (Show v) => String -> [(String, v)] -> Doc

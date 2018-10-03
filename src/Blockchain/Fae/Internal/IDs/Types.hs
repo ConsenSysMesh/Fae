@@ -39,7 +39,7 @@ data ContractID =
     parentTransaction :: TransactionID,
     transactionPart :: TransactionPart,
     creationIndex :: Int,
-    contractNonce :: Nonce
+    contractVersion :: Version
   }
   deriving (Read, Show, Eq, Ord, Generic)
 
@@ -48,9 +48,9 @@ data ContractID =
 data TransactionPart = Body | InputCall Int
   deriving (Read, Show, Eq, Ord, Generic)
 
--- | A contract ID can be specified without a nonce, meaning that whatever
+-- | A contract ID can be specified without a version, meaning that whatever
 -- the current version of the contract is should be used.
-data Nonce = Current | Nonce Int
+data Version = Current | Version VersionID
   deriving (Read, Show, Eq, Ord, Generic)
                          --
 -- | Transactions can have many named signatories, which are available in
@@ -68,7 +68,7 @@ newtype Renames = Renames { getRenames :: Map String String }
 type TransactionID = Digest
 -- | For simplicity
 type EntryID = Digest
--- | For convenience
+-- | Previously a newtype, no longer necessary.
 type VersionID = Digest
 
 -- | This identifier locates an escrow.  Escrow IDs are assigned when the
@@ -86,22 +86,15 @@ newtype EscrowID name = EscrowID { entID :: EntryID }
 
 -- Instances
 
--- | There are various times a contract ID needs to be serialized: as part
--- of a transaction, or as part of an exported return value.
 instance Serialize ContractID
--- | -
 instance Digestible ContractID
--- | -
 instance NFData ContractID
--- | -
+
 instance Serialize TransactionPart
--- | -
 instance NFData TransactionPart
 
--- | -
-instance Serialize Nonce
--- | -
-instance NFData Nonce
+instance Serialize Version
+instance NFData Version
 
 -- | Useful for debugging
 instance Show (EscrowID name) where
@@ -113,7 +106,7 @@ makeLenses ''Signers
 makeLenses ''Renames
 makeLenses ''ContractID
 makeLenses ''TransactionPart
-makePrisms ''Nonce
+makePrisms ''Version
 
 -- * Functions
 
@@ -121,22 +114,20 @@ makePrisms ''Nonce
 nullID :: TransactionID
 nullID = nullDigest
 
--- | Avoids a boring pattern match to find the value of the nonce field.
--- Necessary for creating versions in an input call result, and for
--- securing imports.
-hasNonce :: ContractID -> Bool
-hasNonce ContractID{..} =
-  case contractNonce of
-    Current -> False
-    _ -> True
-
--- | Prints a contract ID as a "path" @txID/txPart/index/nonce@.
+-- | Prints a contract ID as a "path" `txID/txPart/index/version`, with the
+-- two hex strings abbreviated.
 prettyContractID :: ContractID -> String
 prettyContractID ContractID{..} = intercalate "/" $ 
   [
-    show parentTransaction, 
+    printShortHex parentTransaction, 
     show transactionPart, 
     show creationIndex, 
-    show contractNonce
+    case contractVersion of
+      Current -> "Current"
+      Version vID -> "Version " ++ printShortHex vID
   ]
+
+matchesVersion :: Version -> Version -> Bool
+matchesVersion (Version vID1) (Version vID2) = vID1 == vID2
+matchesVersion _ _ = True
 

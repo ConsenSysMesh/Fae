@@ -334,6 +334,9 @@ public (PrivateKey pubKey@(PublicKey edPublicKey) (EdSecretKey secKey))
 printHex :: (Serialize a) => a -> String
 printHex = C8.unpack . B16.encode . Ser.encode
 
+printShortHex :: (Serialize a) => a -> String
+printShortHex = (++ "...") . C8.unpack . C8.take 4 . B16.encode . Ser.encode
+
 -- | The default for various things
 nullDigest :: Digest
 nullDigest = digest ()
