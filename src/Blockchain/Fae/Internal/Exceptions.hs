@@ -59,7 +59,7 @@ data StorageException =
 
 -- | Exceptions for contract-related errors.
 data ContractException =
-  BadContractVersion ContractID VersionID |
+  BadContractVersion VersionID ContractID |
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
@@ -122,7 +122,7 @@ instance Show StorageException where
 
 -- | -
 instance Show ContractException where
-  show (BadContractVersion cID ver) =
+  show (BadContractVersion ver cID) =
     "Incorrect version in contract ID: " ++ prettyContractID cID ++
     "; correct version is: " ++ show ver
   show (BadInputParse input inputType) = 

@@ -21,7 +21,7 @@ module Blockchain.Fae.Contracts
     Sell(..), --Redeem(..),
     -- * Possession
     -- $possession
-    signOver, deposit,
+    signOver, deposit, assign, keyTo,
     SignOver(..)
   )
   where

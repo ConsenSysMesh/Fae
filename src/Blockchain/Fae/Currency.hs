@@ -52,7 +52,14 @@ class
   -- | Close the given accounts and make a new one with their sum.
   add :: (MonadTX m) => coin -> coin -> m coin
   -- | Take off the given amount and return it and the change if both are
-  -- nonnegative, otherwise @empty@.
+  -- nonnegative, otherwise @empty@.  For understanding, the signature is
+  -- better understood as
+  --
+  -- @ change :: coin -> Valuation coin -> m (Maybe (coin, Maybe coin)) @
+  --
+  -- Despite appearances, the double-'Maybe', as opposed to just returning
+  -- various 'zero's, is preferable because it is more Haskellish: a sum
+  -- type rather than a nullable type.
   change :: 
     (Alternative f, Alternative f', MonadTX m) =>
     coin -> Valuation coin -> m (f (coin, f' coin))
@@ -95,11 +102,10 @@ class
 
   -- | Rounds a coin down to the nearest multiple of some number, returning
   -- this rounded coin and the remainder.
-  round :: (MonadTX m) => 
-    coin -> Natural -> m (Maybe coin, coin)
+  round :: (MonadTX m) => coin -> Natural -> m (coin, Maybe coin)
   round c n = do
-    (l, rM) <- split c [n]
-    return (listToMaybe l, fromMaybe c rM)
+    ([c'], rM) <- split c [n] -- Can't fail, the lists are the same length
+    return (c', rM)
 
   -- | A mixed 'Ord'-style comparison
   valCompare :: (MonadTX m) => coin -> Valuation coin -> m Ordering

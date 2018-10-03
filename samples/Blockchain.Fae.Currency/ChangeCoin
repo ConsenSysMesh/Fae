@@ -1,0 +1,5 @@
+body = ChangeCoin
+inputs
+  $coinTX/Body/0/$ver = ()
+keys
+  self = $self

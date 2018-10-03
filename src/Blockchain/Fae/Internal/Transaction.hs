@@ -157,24 +157,28 @@ runInputContracts = fmap Vector.fromList . mapM nextInput
 -- actions (call, import, error) depending on what's found.
 nextInput ::
   (ContractID, String, Renames) -> TXStorageM InputResults
+-- None of the alternatives here should throw an exception.  If an
+-- exception is to be returned, it needs to be via `errInputResult`, so
+-- that at least the input /has/ a result.
 nextInput (cID, arg, renames) = do
   valEM <- use $ at cID
-  maybe errInputResult (either importedCallResult cCall) valEM cID
+  maybe (errInputResult BadContractID) (either importedCallResult cCall) valEM cID
   where cCall = contractCallResult arg renames
 
 -- | If the contract function is available, use it, update if it suceeds,
 -- and produce the results regardless.
 contractCallResult :: 
   String -> Renames -> StoredContract -> ContractID -> TXStorageM InputResults
-contractCallResult arg (Renames rMap) StoredContract{..} cID = do
-  unless (contractVersion cID `matchesVersion` Version storedVersion) $ 
-    throw $ BadContractVersion cID storedVersion
-  ~(iR, gAbsM) <- lift $ 
-    pushArg arg . remapSigners rMap $ 
-      runContract cID storedVersion storedFunction arg
-  let newStoredContractM = flip StoredContract nextVersion <$> gAbsM
-  when (successful iR) $ at cID .= (Right <$> newStoredContractM)
-  return iR
+contractCallResult arg (Renames rMap) StoredContract{..} cID 
+  | contractVersion cID `matchesVersion` Version storedVersion = 
+    do
+      ~(iR, gAbsM) <- lift $ 
+        pushArg arg . remapSigners rMap $ 
+          runContract cID storedVersion storedFunction arg
+      let newStoredContractM = flip StoredContract nextVersion <$> gAbsM
+      when (successful iR) $ at cID .= (Right <$> newStoredContractM)
+      return iR
+  | otherwise = errInputResult (BadContractVersion storedVersion) cID
   -- Previously also updated the contract version in 'iRealID', but that
   -- muddles the summary output and also allows exporting things that were
   -- not called by version, which is actually not a good idea since the
@@ -191,11 +195,12 @@ importedCallResult iR@InputResults{..} cID = do
 
 -- | Otherwise, this input is exceptional (and so, probably, is the
 -- transaction result).
-errInputResult :: ContractID -> TXStorageM InputResults
+errInputResult ::
+  (Exception e) => (ContractID -> e) -> ContractID -> TXStorageM InputResults
 -- A quick way of assigning the same exception to all the fields of the
 -- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
 -- values, which are useful even if the contract itself is missing.
-errInputResult cID = return $ (throw $ BadContractID cID) & 
+errInputResult ef cID = return $ (throw $ ef cID) & 
   \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
 
 -- | Executes the contract function, returning the result, the structured
