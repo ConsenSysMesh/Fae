@@ -32,6 +32,7 @@ import Data.Map (Map)
 import qualified Data.Serialize as S
 
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Typeable
 
 import Network.HTTP.Client hiding (Proxy)
@@ -69,7 +70,7 @@ sendReceiveSerialize =
 -- the response bytestring.
 sendReceiveJSON :: (Typeable a, FromJSON a) => Request -> IO (Either String a)
 sendReceiveJSON = sendReceive $ \bs ->
-  bimap (\_ -> LC8.unpack bs) id $ A.eitherDecode bs
+  bimap (\_ -> T.unpack $ T.decodeUtf8 $ LC8.toStrict bs) id $ A.eitherDecode bs
 
 -- | Combines the 'String' and 'JSON' variants, pretty-printing the latter
 -- if it is requested.
