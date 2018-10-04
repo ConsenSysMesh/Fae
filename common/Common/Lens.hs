@@ -6,7 +6,9 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module just re-exports "Control.Lens", replacing 'makeLenses' with one that works exactly oppositely to the default one regarding underscored names, and including a utility function.
+This module just re-exports "Control.Lens", replacing 'makeLenses' with one
+that works exactly oppositely to the default one regarding underscored
+names, and including a utility function.
 -}
 module Common.Lens
   (

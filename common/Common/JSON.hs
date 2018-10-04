@@ -1,14 +1,13 @@
 {- |
 Module: Common.JSON
-Description: JSON instances and Utils
+Description: JSON instances for encoding transaction summaries
 Copyright: (c) Ryan Reich, 2017-2018
 License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module exports JSON Orphan instances and utilities for types that 
+This module exports (orphan) JSON instances and utilities for types that 
 are generally useful both to the server (@faeServer@) and the client (@postTX@).
-
 -}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -26,15 +25,16 @@ import Data.Aeson (FromJSON, ToJSON, Object, toJSON,
    withObject, (.=), (.:))
 import qualified Data.Aeson as A
 import Data.Aeson.Types
+import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as X
-import qualified Data.Text.Lazy.Encoding as D
+import qualified Data.Text.Encoding as T
 import Data.Text (Text)
 
 import System.IO.Unsafe
 
 import Text.Read
 
+-- | -
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = 
     object [
@@ -42,6 +42,7 @@ instance ToJSON TXInputSummary where
       "txInputOutputs" .= wrapExceptions txInputOutputs,
       "txInputVersion" .= wrapExceptions txInputVersion ]
 
+-- | -
 instance ToJSON TXSummary where
   toJSON TXSummary{..} = object [
     "transactionID" .= transactionID,
@@ -50,6 +51,7 @@ instance ToJSON TXSummary where
     "txInputSummaries" .= txInputSummaries,
     "txSSigners" .= txSSigners ]
 
+-- | -
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
     exceptionValue o <|>
@@ -58,6 +60,7 @@ instance FromJSON TXInputSummary where
         <*> readJSONField "txInputOutputs" o
         <*> readJSONField "txInputVersion" o
       
+-- | -
 instance FromJSON TXSummary where
   parseJSON = withObject "TXSummary" $ \o ->
     TXSummary
@@ -67,38 +70,49 @@ instance FromJSON TXSummary where
       <*> o .: "txInputSummaries"
       <*> o .: "txSSigners"
 
+-- | -
 instance FromJSON PublicKey where
   parseJSON = withText "PublicKey" $ \pKey ->
     either fail return $ readEither (T.unpack pKey)
 
+-- | -
 instance ToJSON PublicKey where
   toJSON = toJSON . T.pack . show
 
+-- | -
 instance ToJSON ContractID where
   toJSON = toJSON . show
 
+-- | -
 instance FromJSON ContractID where
   parseJSON = withText "ContractID" $ \cID -> do
     either fail return $ readEither (T.unpack cID)
 
+-- | -
 instance ToJSON Digest where
   toJSON = toJSON . show
 
+-- | -
 instance FromJSON Digest where
   parseJSON = withText "Digest" $ \dig -> do
     either fail return $ readEither (T.unpack dig)
 
+-- | -
 instance ToJSON UnquotedString where
   toJSON = toJSON . show
 
+-- | -
 instance FromJSON UnquotedString where
   parseJSON = fmap UnquotedString . parseJSON
 
+-- | -
 instance ToJSON Status
+-- | -
 instance FromJSON Status
     
+-- | Chains a couple conversions to get a readable json string.
 encodeJSON :: (ToJSON a) => a -> String
-encodeJSON a = T.unpack $ X.toStrict $ D.decodeUtf8 $ A.encode a
+encodeJSON = T.unpack . T.decodeUtf8 . BS.toStrict . A.encode
 
 -- | If an exception is found then we tag the value as an exception.
 -- By forcing evaluation of exceptions we prevent uncaught exceptions being thrown
@@ -113,6 +127,7 @@ readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
 readJSONField fieldName obj = 
   obj .: fieldName <|> (obj .: fieldName >>= exceptionValue) 
 
+-- | Parses a tagged exception.
 exceptionValue :: Object -> Parser a
 exceptionValue x = throw . TXFieldException <$> x .: "exception"
 
