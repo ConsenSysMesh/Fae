@@ -1,9 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module PostTX.Args where
-  
-import Blockchain.Fae.FrontEnd
-import Common.Lens hiding (view)
+
 import Control.Exception (throw)
 import Control.Monad (replicateM)
 import Control.Monad.Reader

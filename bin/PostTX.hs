@@ -72,7 +72,8 @@ main = do
       putStrLn ("PostTX.hs... finished")
     OngoingFaethArgs{..} -> resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
-    ImportExportArgs{..} -> importExport exportTXID exportSCID exportHost importHost
+    ImportExportArgs{..} -> 
+      importExport exportTXID exportIx exportHost importHost
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess
