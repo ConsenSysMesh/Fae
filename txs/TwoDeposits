@@ -1,0 +1,4 @@
+body = TwoDeposits
+keys
+  me = $me
+  you = $you

@@ -1,0 +1,5 @@
+body = SplitCoin
+inputs
+  $coinTX/Body/0/$ver = ()
+keys
+  self = $self

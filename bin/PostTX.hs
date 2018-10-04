@@ -1,7 +1,12 @@
 import Common.ProtocolT (Salt)
 
 import Control.Monad.Reader
+import Control.Monad.Trans
+import Control.Lens hiding (view)
 
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.Serialize as S
 import Data.Maybe
 import Data.Serialize (Serialize)
 
@@ -10,8 +15,9 @@ import qualified Data.Serialize as S
 
 import PostTX.Args
 import PostTX.Faeth
+import PostTX.Keys
 import PostTX.ImportExport
-import PostTX.SpecParser
+import PostTX.Parser
 import PostTX.Submit
 import PostTX.TXSpec
 import PostTX.View
@@ -66,7 +72,8 @@ main = do
       putStrLn ("PostTX.hs... finished")
     OngoingFaethArgs{..} -> resubmitFaeth ongoingFaethHost ongoingEthTXID ongoingFaethArgs
     ViewArgs{..} -> view viewArgTXID viewArgHost viewArgJSON
-    ImportExportArgs{..} -> importExport exportTXID exportSCID exportHost importHost
+    ImportExportArgs{..} -> 
+      importExport exportTXID exportIx exportHost importHost
     UsageArgs UsageSuccess -> do
       usage
       exitSuccess
@@ -74,6 +81,9 @@ main = do
       putStrLn err
       usage
       exitFailure
+    ShowKeysArgs keysList -> do
+      showKeys faeHome keysList
+      exitSuccess
 
 usage :: IO ()
 usage = do
@@ -86,7 +96,11 @@ usage = do
       "where args = data [host[:port]] [options]",
       "where the available options are:",
       "  Help",
-      "  --help        Print this usage",
+      "    --help           Print this usage",
+      "",
+      "  Viewing Stored Public Keys:",
+      "    --show-keys              Show all keys.",
+      "    --show-keys=key1,key2,.. Show one or more keys",
       "",
       "  Regular Fae operation:",
       "    with data = (tx name)",

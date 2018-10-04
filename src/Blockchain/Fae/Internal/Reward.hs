@@ -21,28 +21,42 @@ import GHC.Generics
 -- * Types
 
 -- | The system-managed reward value.  Not constructible directly.
-data RewardValue = Reward deriving (Generic)
+data RewardValue = Value deriving (Generic)
 -- | Private token controlling a 'RewardEscrowID'.
 data RewardToken = Token deriving (Generic)
 -- | The identifier for reward escrows
-data Reward = RewardName deriving (Generic)
--- | The escrow ID of a reward token provided by the system.
-type RewardEscrowID = EscrowID Reward
+data RewardName = RewardName deriving (Generic)
+-- | An opaque type containing the escrow ID of a reward token provided by
+-- the system.
+newtype Reward = Reward (EscrowID RewardName) deriving (Generic)
 
-instance ContractName Reward where
-  type ArgType Reward = RewardToken
-  type ValType Reward = RewardValue
+-- | The argument and value types are both private types (not exported by
+-- "Blockchain.Fae"), so that a reward contract cannot be called directly
+-- by users; instead, they must use the interface, which consists only of
+-- 'claimReward', which only destroys a reward and does not create them.
+-- So the supply of 'Reward's is limited to those transactions that are
+-- marked to receive them as special input values.
+instance ContractName RewardName where
+  type ArgType RewardName = RewardToken
+  type ValType RewardName = RewardValue
   theContract RewardName = rewardContract
 
 -- | This is global to support the 'ContractName' instance
 rewardContract :: Contract RewardToken RewardValue
-rewardContract Token = spend Reward
+rewardContract Token = spend Value
 
 -- | This function destroys a reward token, validating it in the process.
 -- As the only interface to the `Reward` type, this /must/ be used by any
 -- contract that intends to accept rewards as payment.
-claimReward :: (MonadTX m) => RewardEscrowID -> m ()
-claimReward eID = do
-  Reward <- useEscrow eID Token
+claimReward :: (MonadTX m) => Reward -> m ()
+claimReward (Reward eID) = do
+  Value <- useEscrow [] eID Token
   return ()
+
+withReward :: (MonadTX m) => Bool -> [ReturnValue] -> m [ReturnValue]
+withReward isReward inputsL
+  | isReward = do
+      eID <- newEscrow RewardName
+      return $ ReturnValue (Reward eID) : inputsL
+  | otherwise = return inputsL
 
