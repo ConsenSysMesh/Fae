@@ -84,7 +84,6 @@ import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
 import Blockchain.Fae.Internal.Serialization
 import Blockchain.Fae.Internal.Transaction
---import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
