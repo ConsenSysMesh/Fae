@@ -35,6 +35,7 @@ import Data.ByteString
 import Data.Maybe
 import Data.Proxy
 import Data.Typeable
+import Data.Void
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -88,6 +89,7 @@ type family ERep c :: * where
   ERep Natural = Natural
   ERep PublicKey = PublicKey
   ERep Digest = Digest
+  ERep (a -> b) = ()
   ERep c = SERep1 (Rep c)
 
 -- | This is mostly boilerplate recursion, except for the 'K1' instance,
@@ -183,6 +185,11 @@ instance EGeneric Natural
 instance EGeneric PublicKey
 -- | - 
 instance EGeneric Digest
+
+-- | - 
+instance (Typeable a, Typeable b) => EGeneric (a -> b) where
+  eFrom f = return $ throw $ NotExportable $ typeOf f
+  eTo _ = return $ throw $ NotExportable $ typeRep $ Proxy @(a -> b)
 
 -- | - 
 instance (EGeneric1 f, EGeneric1 g) => EGeneric1 (f :+: g) where
