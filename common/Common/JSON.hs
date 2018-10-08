@@ -26,6 +26,7 @@ import Data.Aeson (FromJSON, ToJSON, Object, toJSON,
 import qualified Data.Aeson as A
 import Data.Aeson.Types
 import qualified Data.ByteString.Lazy as BS
+import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Text (Text)
@@ -72,8 +73,7 @@ instance FromJSON TXSummary where
 
 -- | -
 instance FromJSON PublicKey where
-  parseJSON = withText "PublicKey" $ \pKey ->
-    either fail return $ readEither (T.unpack pKey)
+  parseJSON = readJSONText "PublicKey" 
 
 -- | -
 instance ToJSON PublicKey where
@@ -85,8 +85,7 @@ instance ToJSON ContractID where
 
 -- | -
 instance FromJSON ContractID where
-  parseJSON = withText "ContractID" $ \cID -> do
-    either fail return $ readEither (T.unpack cID)
+  parseJSON = readJSONText "ContractID" 
 
 -- | -
 instance ToJSON Digest where
@@ -94,8 +93,7 @@ instance ToJSON Digest where
 
 -- | -
 instance FromJSON Digest where
-  parseJSON = withText "Digest" $ \dig -> do
-    either fail return $ readEither (T.unpack dig)
+  parseJSON = readJSONText "Digest" 
 
 -- | -
 instance ToJSON UnquotedString where
@@ -126,6 +124,11 @@ wrapExceptions val =
 readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
 readJSONField fieldName obj = 
   obj .: fieldName <|> (obj .: fieldName >>= exceptionValue) 
+
+readJSONText :: (Read a) => String -> Value -> Parser a
+readJSONText l = withText l $ \t -> return $
+  let s = T.unpack t in
+  fromMaybe (throw $ JSONTextError s) $ readMaybe s 
 
 -- | Parses a tagged exception.
 exceptionValue :: Object -> Parser a

@@ -1,0 +1,969 @@
+%&program=xelatex
+%&encoding=UTF-8 Unicode
+
+\documentclass[11pt]{article}
+
+\usepackage{array}
+\usepackage{fontspec}
+\usepackage{fullpage}
+\usepackage[margin=.9in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{linegoal}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{mdframed}
+\usepackage{parskip}
+\usepackage{ragged2e}
+\usepackage{sectsty}
+\usepackage[compact]{titlesec}
+\usepackage[normalem]{ulem}
+\usepackage[table]{xcolor}
+\usepackage[normalem]{ulem}
+\usepackage{wasysym}
+\usepackage{wrapfig}
+
+\pagestyle{empty}
+\RaggedRight
+\setcounter{secnumdepth}{0}
+\sloppy
+
+\definecolor{header-color}{gray}{0.94}
+\newcolumntype{L}[1]{>{
+  \raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{
+  \centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+\newcommand{\codeblock}[1]{\begin{mdframed}[
+    backgroundcolor=header-color,
+    linecolor=header-color,
+    innertopmargin=10pt,
+    ]{\texttt{#1}}\end{mdframed}}
+
+\definecolor{blockquote-border-color}{gray}{0.5}
+\newcommand{\blockquote}[1]{\begin{mdframed}[
+    linecolor=blockquote-border-color,
+    linewidth=3pt,
+    topline=false,
+    bottomline=false,
+    rightline=false,
+    innerrightmargin=0,
+    innertopmargin=0,
+    innerbottommargin=0
+    ]{\textit{#1}}\end{mdframed}}
+
+\newcommand{\pullquote}[1]{\begin{mdframed}[
+    fontcolor=gray,
+    hidealllines=true
+    ]{\begin{center}\LARGE{\textit{#1}}\end{center}}\end{mdframed}}
+
+
+\usepackage{enumitem}
+\newlist{longitem}{itemize}{9}
+\newlist{longenum}{enumerate}{9}
+
+
+\renewcommand{\labelenumi}{\arabic* }
+
+\renewcommand{\labelenumii}{\alph* }
+
+\renewcommand{\labelenumiii}{\roman* }
+
+\renewcommand{\labelenumiv}{\arabic* }
+
+\renewcommand{\labelenumv}{\alph* }
+
+\renewcommand{\labelenumvi}{\roman* }
+
+\renewcommand{\labelenumvii}{\arabic* }
+
+\renewcommand{\labelenumviii}{\alph* }
+
+\renewcommand{\labelenumix}{\roman* }
+
+\hypersetup{%
+    colorlinks=true,%
+    urlcolor=blue,%
+}
+\DeclareRobustCommand{\fuline}[1]{\texorpdfstring{\uline{#1}}{#1}}
+\renewcommand{\bottomtitlespace}{0pt}
+
+\renewcommand{\labelitemi}{\raisebox{2pt}{\tiny \CIRCLE}
+
+\renewcommand{\labelitemii}{\raisebox{2pt}{\tiny \Circle}
+
+\renewcommand{\labelitemiii}{\raisebox{2pt}{\tiny \Square}
+
+\renewcommand{\labelitemiv}{\raisebox{2pt}{\tiny \CIRCLE}
+
+\renewcommand{\labelitemv}{\raisebox{2pt}{\tiny \Circle}
+
+\renewcommand{\labelitemvi}{\raisebox{2pt}{\tiny \Square}
+
+\renewcommand{\labelitemvii}{\raisebox{2pt}{\tiny \CIRCLE}
+
+\renewcommand{\labelitemviii}{\raisebox{2pt}{\tiny \Circle}
+
+\renewcommand{\labelitemix}{\raisebox{2pt}{\tiny \Square}
+
+\newcommand*\checkitem{\item[\raisebox{2pt}{\Square}]}
+\newcommand*\checkeditem[1]{\item[\raisebox{2pt}{\CheckedBox}] \sout{#1}}
+\newcommand*\parentcheckitem[1]{\item[\raisebox{2pt}{\Square}] \textbf{#1}}
+\newcommand*\parentcheckeditem[1]{\item[\raisebox{2pt}{
+        \CheckedBox}] \sout{\textbf{#1}}}
+\newcommand*\checkbox{\raisebox{2pt}{\Square}}
+\newcommand*\checkedbox{\raisebox{2pt}{\CheckedBox}}
+
+\newfontfamily\cjk{SimSun}
+\newfontfamily\hgl{Batang}
+\newfontfamily\fbf{Helvetica}
+
+\setmainfont{Palatino}
+\setsansfont{Helvetica}
+
+\sectionfont{\sffamily\Huge}
+\subsectionfont{\sffamily\Large}
+\subsubsectionfont{\sffamily\uppercase}
+
+\setlist[longitem,1]{label=\labelitemi}
+\setlist[longenum,1]{label=\labelenumi}
+
+\setlist[longitem,2]{label=\labelitemii}
+\setlist[longenum,2]{label=\labelenumii}
+
+\setlist[longitem,3]{label=\labelitemiii}
+\setlist[longenum,3]{label=\labelenumiii}
+
+\setlist[longitem,4]{label=\labelitemiv}
+\setlist[longenum,4]{label=\labelenumiv}
+
+\setlist[longitem,5]{label=\labelitemv}
+\setlist[longenum,5]{label=\labelenumv}
+
+\setlist[longitem,6]{label=\labelitemvi}
+\setlist[longenum,6]{label=\labelenumvi}
+
+\setlist[longitem,7]{label=\labelitemvii}
+\setlist[longenum,7]{label=\labelenumvii}
+
+\setlist[longitem,8]{label=\labelitemviii}
+\setlist[longenum,8]{label=\labelenumviii}
+
+\setlist[longitem,9]{label=\labelitemix}
+\setlist[longenum,9]{label=\labelenumix}
+
+
+\begin{document}
+%ZRIACAbGAS5
+\section{Tutorial 2: Escrows}
+\vspace{5.5pt}
+
+%ZRIACAVCvqD
+In this second tutorial, we will introduce the remaining feature of Fae: \textit{escrows}, which are the means by which you may create value and perform complex transactions.  As in the first tutorial, the sample code will use the conventions of \href{https://consensys.quip.com/kN9MAhiNm8dz/Project-information\%23GTTACAArd2o}{\fuline{the postTX utility}} and the sample command lines use \href{https://consensys.quip.com/kN9MAhiNm8dz/Project-information\%23GTTACAfd57C}{\fuline{the docker images}}.  After following the instructions there, you should execute this first to have a local server running:
+
+%ZRIACAWE20H
+\codeblock{.\slash{}faeServer.sh}
+
+%ZRIACARBFpI
+\subsection{Creating escrows}
+\vspace{5.5pt}
+
+%ZRIACA73wjm
+To present the concepts surrounding escrows accessibly, we will start with not a full transaction, but simply a contract that uses them.  To begin, we will revert to the ad-hoc style of defining a contract, and return to contract names when they are seen to be absolutely necessary.
+
+%ZRIACABrgQl
+\subsubsection{Contract source code}
+\vspace{5.5pt}
+
+%ZRIACATJefq
+\codeblock{c :: Contract String (EscrowID (Contract () String))\newline
+c name = newEscrow e where\newline
+  e :: Contract () String\newline
+  e \_ = spend ("Property of: " ++ name)}
+
+%ZRIACAHpKY2
+This is a contract that creates an escrow personalized according to the caller's request.
+
+%ZRIACAyohxp
+\subsubsection{Escrow creation}
+\vspace{5.5pt}
+
+%ZRIACAEnbT6
+The escrow creation function, \texttt{newEscrow}, has exactly the same argument as \texttt{newContract}, including the type \texttt{Contract argType valType}: escrows are the same as contracts but have a different role.  As we will see later, they can be called as well, with different restrictions; this involves the \textit{escrow ID}, which is returned by \texttt{newEscrow}.  This particular escrow can be used once, returning a declaration of who created it, and is then deleted, just like contracts that end with \texttt{spend} are deleted when that line is executed.
+
+%ZRIACA8vbVs
+\subsubsection{Escrow ID}
+\vspace{5.5pt}
+
+%ZRIACAVaZ3m
+An escrow is created with a unique identifier; if the escrow's name has type \texttt{name}, then the escrow ID has type \texttt{EscrowID name}; \texttt{EscrowID} is, like \texttt{ArgType} and \texttt{ValType}, a family of types.  The reason the name is specified is so that contracts that accept escrow IDs can guarantee that they get the right kind of escrow, and users of contracts that return escrow IDs can guarantee that \textit{they} got the right kind of escrow.  As we will see, escrows can represent valuable quantities in Fae, so these guarantees amount to an assurance that the contracts deal in a particular kind of valuable (say, a specific currency).
+
+%ZRIACAN8wVR
+\subsection{Using escrows}
+\vspace{5.5pt}
+
+%ZRIACAk8znL
+An escrow is of no use in isolation: it must be used, if only to verify it.  The transaction below will demonstrate calling it.  First, we should commit the contract above to Fae via a transaction. 
+
+%ZRIACAGcViA
+
+\vspace{11pt}
+
+%ZRIACAFCy89
+\textbf{Transaction source file: Escrow1.hs}
+
+%ZRIACArGABv
+\codeblock{type EType = Contract () String\newline
+\newline
+body :: FaeTX ()\newline
+body = newContract c where\newline
+  c :: Contract String (EscrowID EType)\newline
+  c name = do\newline
+    eID \textless{}- newEscrow e\newline
+    spend eID\newline
+    \newline
+    where\newline
+      e :: EType\newline
+      e \_ = spend ("Property of: " ++ name)}
+
+%ZRIACApVlx2
+\textbf{Transaction message: Escrow1}
+
+%ZRIACAKf90F
+\codeblock{body = Escrow1}
+
+%ZRIACAiw32B
+\textbf{Command line:}
+
+%ZRIACAvtLB0
+\codeblock{.\slash{}postTX.sh Escrow1}
+
+%ZRIACAm7T8i
+\textbf{Transaction results}
+
+%ZRIACAl9bCN
+\codeblock{Transaction 49c34b94bc40bf1012ec989bebecea10719c577c3f1c3f8d01ffd4457feba73c\newline
+  result: ()\newline
+  outputs:\newline
+    0: 49c34b94bc40bf1012ec989bebecea10719c577c3f1c3f8d01ffd4457feba73c\newline
+  signers:\newline
+    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420}
+
+%ZRIACAbi5o0
+Like most of the examples in \href{https://consensys.quip.com/IHP2AzL922EJ/Tutorial-1-Transactions-and-contracts}{\fuline{Tutorial 1}}, this transaction just creates a single new contract.  This example also demonstrates how additional code beyond the transaction executable can be included in a transaction source file.
+
+%ZRIACAM8yen
+\subsubsection{Type Synonyms}
+\vspace{5.5pt}
+
+%ZRIACAbHb4u
+The first line of the transaction above is a \textit{type synonym definition}, much like the instantiations of \texttt{ArgType} and \texttt{ValType} we saw in Tutorial 1.  It declares an alias (in this case, a shorter one for convenience) for another type.  Not only would the long expression \texttt{Contract () String} otherwise occur twice in this transaction, but it would also appear in every other transaction, and we will see that we can reuse the same synonym in all of them.
+
+%ZRIACAiuZNm
+\subsubsection{Binding the Fae API}
+\vspace{5.5pt}
+
+%ZRIACARqYyd
+This example has another of the \textit{do block }for creating contract bodies longer than a single line.  This block allows more than simple imperative expressions like \texttt{newContract contractName}; it also allows \textit{bindings} of values obtained from the Fae API.  Bindings in a \texttt{do}-block can assign any name (like \texttt{eID}) to any value that would otherwise appear on a line (like \texttt{newEscrow e}), “extracting” the content of the value from the monad at the present time and making it available for use on subsequent lines.
+
+%ZRIACASXFFz
+
+\vspace{11pt}
+
+%ZRIACAx63i5
+\textbf{Transaction source file: CallEscrow1.hs}
+
+%ZRIACARbI6J
+\codeblock{import Blockchain.Fae.Transactions.TX\$txID\newline
+\newline
+body :: EscrowID EType -\textgreater{} FaeTX String\newline
+body eID = useEscrow {[}{]} eID ()}
+
+%ZRIACAOXmlB
+\textbf{Transaction message: CallEscrow1}
+
+%ZRIACA3HhDV
+\codeblock{body = CallEscrow1\newline
+inputs\newline
+  \$txID\slash{}Body\slash{}0\slash{}Current = "Ryan Reich"}
+
+%ZRIACAekOVA
+\textbf{Command line:}
+
+%ZRIACA77PgQ
+\codeblock{.\slash{}postTX.sh -e txID=\textless{}transaction ID from Escrow1\textgreater{} CallEscrow1}
+
+%ZRIACAVePi5
+\textbf{Transaction results}
+
+%ZRIACA7HVRU
+\codeblock{Transaction 304142b3b74befb0eef7fa3204ede5be2dc4714ada6f66855251d7814eb91d1f\newline
+  result: "Property of: Ryan Reich"\newline
+  signers:\newline
+    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420\newline
+  input \#0: 49c3...\slash{}Body\slash{}0\slash{}Current (Deleted)}
+
+%ZRIACArJJW8
+The contract ID format \texttt{\$txID\slash{}Body\slash{}0\slash{}Current} should be familiar from the first tutorial, signifying that the contract to be called was the first one created by transaction \texttt{\$txID}.  This transaction calls the contract above, passing it my name as an argument, and then uses it with the ID for that new transaction.
+
+%ZRIACAkHHsZ
+\subsubsection{Import Statement}
+\vspace{5.5pt}
+
+%ZRIACA0lP87
+The first line of \textit{this} transaction is the \textit{import statement}, which recalls the source-code module defined in the transaction \texttt{\$txID}.  This environment variable is actually allowed to appear in the code, although it is invalid syntax, because \texttt{postTX} scans the import statements for exactly this and substitutes them before sending the transaction.  All transaction modules are placed under the hierarchical location \texttt{Blockchain.Fae.Transactions} with the specific name \texttt{TX}\texttt{\textless{}}\texttt{the transaction ID}\texttt{\textgreater{}}.  Other core Fae modules are placed under \texttt{Blockchain.Fae} as well.
+
+%ZRIACArXANL
+
+\vspace{11pt}
+
+%ZRIACAQZVIp
+The effect of the import statement is that all of the definitions in \texttt{Escrow1.hs} become available by name to \texttt{CallEscrow1.hs}.  Thus, the name \texttt{EType} is available, and means the same thing.  This is important when using user-defined types, because simply repeating the definition in the second transaction will not create a type that the interpreter understands to be the same as the original, but rather, another type with the same name and (coincidentally) the same definition.
+
+%ZRIACAxT4ZC
+
+\vspace{11pt}
+
+%ZRIACAibU07
+Speaking of definitions with the same name, this import \textit{also} exposes the \texttt{body} function of \texttt{Escrow1.hs}; however, since we explicitly define a function of this name in \texttt{Escrow2.hs}, the latter “shadows” the former, and is the one that the interpreter sees when running the transaction.
+
+%ZRIACAlu1Y7
+\subsubsection{Calling an escrow}
+\vspace{5.5pt}
+
+%ZRIACAO4ebW
+Escrows can be called like functions with \texttt{useEscrow}, which takes three arguments: an unexplained list, here the empty list \texttt{{[}{]}}; the escrow ID; and the argument to the escrow itself, here the empty argument \texttt{()}.  This returns a string, as indicated by the second type argument to \texttt{EscrowID () String}, which is returned from the transaction.  The transaction result is therefore \texttt{Property of: Ryan Reich}, as shown.
+
+%ZRIACAUtia9
+\subsubsection{Escrow ownership}
+\vspace{5.5pt}
+
+%ZRIACAJEHfL
+One subtle but extremely important point that comes out in this example is the \textit{ownership} of this escrow.  Originally, it was owned by its creator, the contract created in \texttt{Escrow1}.  However, by returning the escrow ID from its call, that contract \textit{transfers} ownership to the transaction that called it, which is \texttt{CallEscrow1}.  It is only because of this transfer that the \texttt{useEscrow} call is valid; if an escrow is called by a contract or transaction that does not own it, the call will fail with an error indicating that the escrow does not exist.  Escrows only exist for their owners.
+
+%ZRIACALosNO
+\subsection{Saving escrows}
+\vspace{5.5pt}
+
+%ZRIACAMMRVB
+The transaction above does not use escrows to their full potential, but merely as glorified functions.  In Fae, escrows are the only means of creating persistent value, and in order to persist, they must be held by a contract rather than expended by a transaction.  Before running this transaction, you need to re-execute \texttt{Escrow1}, because the contract it created was deleted in \texttt{CallEscrow1}.
+
+%ZRIACAE659D
+
+\vspace{11pt}
+
+%ZRIACAYn2so
+\textbf{Transaction source file: Escrow2.hs}
+
+%ZRIACAehRhZ
+\codeblock{import Blockchain.Fae.Transactions.TX\$txID\newline
+\newline
+body :: EscrowID EType -\textgreater{} FaeTX ()\newline
+body eID = newContract (Spend eID)\newline
+\newline
+data Spend a = Spend a deriving (Generic)\newline
+\newline
+instance (ContractVal a) =\textgreater{} ContractName (Spend a) where\newline
+  type ArgType (Spend a) = ()\newline
+  type ValType (Spend a) = a\newline
+  theContract (Spend x) = \textbackslash{}\_ -\textgreater{} spend x}
+
+%ZRIACAlZODo
+\textbf{Transaction message: Escrow2}
+
+%ZRIACAGDqM3
+\codeblock{body = Escrow2\newline
+inputs\newline
+  \$txID\slash{}Body\slash{}0\slash{}Current = "Ryan Reich"}
+
+%ZRIACAf628Z
+\textbf{Command line:}
+
+%ZRIACAXsuPm
+\codeblock{.\slash{}postTX.sh -e txID=\textless{}transaction ID from Escrow1\textgreater{} Escrow2}
+
+%ZRIACAKOcg1
+\textbf{Transaction results}
+
+%ZRIACAHyFSG
+\codeblock{Transaction f75495105860cf227c3eef53049519b08e9e0f7c801f8a144b07503e909b12ce\newline
+  result: ()\newline
+  outputs:\newline
+    0: f75495105860cf227c3eef53049519b08e9e0f7c801f8a144b07503e909b12ce\newline
+  signers:\newline
+    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420\newline
+  input \#0: af00...\slash{}Body\slash{}0\slash{}Current (Deleted)}
+
+%ZRIACAedtml
+This transaction calls the contract from \texttt{Escrow1} (for me, the re-execution of this transaction had ID \texttt{af00...}, which isn't shown here but does appear in the input contract ID), obtaining an escrow, then creates a contract to hold the escrow rather than calling it.  This contract, in turn, will pass the escrow back to its next caller, then be deleted (leaving that caller in possession of the escrow).  We'll leave it as an optional exercise to formulate the transaction that does so.
+
+%ZRIACAov8sU
+\subsubsection{Polymorphism and Constraints}
+\vspace{5.5pt}
+
+%ZRIACANOsd6
+In this transaction, we see for the first time a definition that applies to not one type but a family of types: a \textit{polymorphic} definition. It begins with the \texttt{data Spend a} statement, which defines a type that depends on a variable \texttt{a}, an unspecified other type.  So, \texttt{Spend (EscrowID EType)} is a specific example of this family of types; this works much the same way as \texttt{ArgType} and \texttt{ValType}.  This dependence on a free type variable is called \textit{polymorphism}.
+
+%ZRIACAgG7da
+
+\vspace{11pt}
+
+%ZRIACAX6Nqu
+Matching this is the \texttt{instance ContractName (Spend a)} statement, which declares a uniform instance of the \texttt{ContractName} typeclass for all of the specific \texttt{Spend a} types.  That is, almost all: the instance declaration is actually decorated with a new piece of notation: \texttt{(ContractVal a) =}\texttt{\textgreater{}}, which is a \textit{constraint} limiting the particular types \texttt{a} that this instance can actually apply to.  (You want to read this as the “if” side of an “if...then” statement, as in, “If \texttt{a} is a \texttt{ContractVal}, then \texttt{Sp}\texttt{end a} is a \texttt{ContractName}.")  The constraint contains one or possibly several properties that must hold of the free type variables mentioned elsewhere in the signature; here, a “property” is an interface (typeclass) that the type in the variable must have.
+
+%ZRIACAZoDA8
+
+\vspace{11pt}
+
+%ZRIACAIMMmr
+It is important to mention here that the \texttt{body} function is \textit{not} polymorphic, even though as mere code it could, apparently, have the signature \texttt{body :: (ContractVal a) =}\texttt{\textgreater{}}\texttt{ a -}\texttt{\textgreater{}}\texttt{ FaeTX ()}, because that is all we need to get the \texttt{ContractName} instance for the \texttt{Spend} value we use to create the new contract.  This will not fly with Fae, however, because \texttt{body} must be a \textit{monomorphic} type (as opposed to polymorphic; it should have no free type variables at all) in order for the interpreter to know how to call it on the return values of the input contracts, whose types are effectively dynamic in order to accommodate, in a single framework, all the possible types of contract return values.  It relies on the specificity of the definition of \texttt{body} to cast those dynamic types to the correct static ones.  (Optional exercise: change the type signature so that it actually has the wrong type for its input, and see how Fae handles this.)
+
+%ZRIACAJoD1j
+\subsubsection{Contract Values}
+\vspace{5.5pt}
+
+%ZRIACADowuI
+The specific interface mentioned in the constraint above is \texttt{ContractVal}, an internally defined collection of constraints that ensure that types that have it are suitable for returning from a Fae contract or escrow.  These all, in practice, tend to be implied by the \texttt{Generic} property that your data types will derive, but there are some, more primitive, types that have this interface but not because they are \texttt{Generic}, so it is good form, when writing a polymorphic definition that needs to return a value from a contract, to use the least restrictive and most descriptive property, which is \texttt{ContractVal}.
+
+%ZRIACA7f51E
+\subsubsection{Bearers of value}
+\vspace{5.5pt}
+
+%ZRIACA27oVc
+This transaction finally demonstrates the need to use data types, rather than inline functions, as contract names.  This need is simply that \textit{ownership of the escrow }\textit{\texttt{eID}}\textit{ needs to be transferred to the new contract.}  This transfer is performed automatically and invisibly simply by scanning the value provided as the contract name for escrow IDs, and in order to do this, Fae needs to be able to introspect into the type of that value.  This kind of introspection is provided for data types by the \texttt{Generic} property, and is impossible for function types.  The analogous contract definition to the above that uses an inline function would fail because the contract code would behave as the owner of an escrow that was never transferred to it.
+
+%ZRIACATDFvo
+
+\vspace{11pt}
+
+%ZRIACAwNW5E
+This general concept, of data values containing escrow IDs, is Fae's notion of a “valuable” \textit{backed by} escrows that, through their contractual behavior, give it value.  Such a data value can of course be passed into functions or used in definitions, but Fae ensures that the ownership of its backing escrows is correctly maintained.  In this case, the creation of a contract, that is accomplished by introspecting into the type of the contract name, extracting all escrow IDs, and moving them from the creating code's escrow storage into the created contract's escrow storage.  This unifies the concept of \textit{program value}, which is just data managed by the interpreter, with \textit{Fae value}, which is data managed by the Fae internals.  In other words, just like an escrow ID can't be called except by the owner of the escrow itself, a bearer of value is invalid if its backing escrows are not owned by the contract that makes use of it.
+
+%ZRIACA8JE9g
+
+\vspace{11pt}
+
+%ZRIACAJ55BA
+(As a slight aside, the \texttt{spend} and \texttt{release} functions are the other ways to transfer escrows, as indicated in the previous example; they both also introspect into their arguments.)
+
+%ZRIACAfLb2r
+
+\vspace{11pt}
+
+%ZRIACApKLYs
+The upshot is that the evaluation \texttt{theContract} function on a \texttt{Spend x} is definitively the owner of the value \texttt{x}, whatever it is (here, it's an \texttt{EscrowID name}) and can do what it wishes with it, including transferring it again via \texttt{spend}.
+
+%ZRIACAXVpyD
+\subsection{Restricted-access contracts}
+\vspace{5.5pt}
+
+%ZRIACAAWh0p
+The example above is highly flawed if the escrow is to be a bearer of value, since there are no access restrictions on the contract in which it is deposited.  Here we show how to rectify this (once again, you need to re-execute \texttt{Escrow1}).
+
+%ZRIACARZ8eo
+
+\vspace{11pt}
+
+%ZRIACALxPlb
+\textbf{Transaction source file: Escrow3.hs}
+
+%ZRIACAeAp1x
+\codeblock{import Blockchain.Fae.Transactions.TX\$txID\newline
+import Control.Monad (unless)\newline
+\newline
+body :: EscrowID EType -\textgreater{} FaeTX ()\newline
+body eID = do\newline
+ us \textless{}- signer "self"\newline
+ newContract (Restricted us eID)\newline
+\newline
+data Restricted a = Restricted PublicKey a deriving (Generic)\newline
+\newline
+instance (ContractVal a) =\textgreater{} ContractName (Restricted a) where\newline
+  type ArgType (Restricted a) = ()\newline
+  type ValType (Restricted a) = a\newline
+  theContract (Restricted us x) = \textbackslash{}\_ -\textgreater{} do\newline
+    them \textless{}- signer "self"\newline
+    unless (us == them) (error "Wrong sender")\newline
+    spend x}
+
+%ZRIACAISdqb
+\textbf{Transaction message: Escrow3}
+
+%ZRIACA3V9Cn
+\codeblock{body = Escrow3\newline
+inputs\newline
+  \$txID\slash{}Body\slash{}0\slash{}Current = "Ryan Reich"}
+
+%ZRIACAWIfwd
+\textbf{Command line:}
+
+%ZRIACAr5ZBr
+\codeblock{.\slash{}postTX.sh -e txID=cab24f... Escrow3}
+
+%ZRIACAm0Srg
+\textbf{Transaction results}
+
+%ZRIACAd7vqU
+\codeblock{Transaction e0543e9374b1cd1dab03402d3ec206b47734b6f91f1be95cf25b9a02fa1712a7\newline
+  result: ()\newline
+  outputs:\newline
+    0: b4f45d8bd1ba4571688ff0174395d380975f0306c12298d2ad64970a2d38d407\newline
+  signers:\newline
+    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420\newline
+  input \#0: 3747...\slash{}Body\slash{}0\slash{}Current (Deleted)}
+
+%ZRIACA0yKZC
+This transaction calls the contract of \texttt{Escrow1}, deleting it, and passes its return value, which is an escrow ID, to a newly created contract, as shown in the \texttt{outputs}.  The result is a contract that only returns the escrow ID to the same person (literally person, as in “someone who can send a transaction”) that first deposited it.  In order to see the restriction logic in action, we present a transaction to call this contract, similar to \texttt{CallEscrow1} except that it also sets the signers.
+
+%ZRIACAeE8BA
+
+\vspace{11pt}
+
+%ZRIACAL9MYr
+\textbf{Transaction source file: CallEscrow3.hs}
+
+%ZRIACAQOG8F
+\codeblock{import Blockchain.Fae.Transactions.TX\$tx1ID\newline
+\newline
+body :: EscrowID EType -\textgreater{} FaeTX String\newline
+body eID = useEscrow {[}{]} eID ()}
+
+%ZRIACABcuZH
+\textbf{Transaction message: CallEscrow3}
+
+%ZRIACAwSPhs
+\codeblock{body = CallEscrow3\newline
+inputs\newline
+  \$txID\slash{}Body\slash{}0\slash{}Current = "Ryan Reich"\newline
+keys\newline
+  self = \$self}
+
+%ZRIACAVECB0
+\textbf{Command line:}
+
+%ZRIACAM62wV
+\codeblock{.\slash{}postTX.sh \textbackslash{}\newline
+  -e tx1ID=\textless{}transaction ID from Escrow1\textgreater{} \textbackslash{}\newline
+  -e txID=\textless{}transaction ID from Escrow3\textgreater{} \textbackslash{}\newline
+  -e self=\textless{}your choice\textgreater{}}
+
+%ZRIACAx3vq3
+\textbf{Transaction results (}\textbf{\texttt{self = other}}\textbf{)}
+
+%ZRIACAgytNb
+\codeblock{Transaction 3cf8c74e88c29d00808c61595103f7f3019bdec3af791fc0d308ee5d3106e5a1\newline
+  result: \textless{}exception\textgreater{} Wrong sender\newline
+  signers:\newline
+    self: 412535810f40782eb779855a8cadbd5e0c5e7af1715d2f4d9c863c1fc8106987\newline
+  input \#0: e054...\slash{}Body\slash{}0\slash{}Current (Failed)\newline
+    \textless{}exception\textgreater{} Wrong sender}
+
+%ZRIACAYTLxC
+\textbf{Transaction results (}\textbf{\texttt{self = self}}\textbf{)}
+
+%ZRIACAsNhCy
+\codeblock{Transaction 1ba58cd97f17f52ba530b582b9883792ce8e7fa94d53c3bec8bde779240d737d\newline
+  result: "Property of: Ryan Reich"\newline
+  signers:\newline
+    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420\newline
+  input \#0: e054...\slash{}Body\slash{}0\slash{}Current (Deleted)}
+
+%ZRIACAfLePP
+Note how \texttt{CallEscrow3.hs} imports the transaction module from \texttt{\$tx1ID}, while the transaction message \texttt{CallEscrow3} uses \texttt{\$txID} in the input call's contract ID.  This reflects their different needs: the source file needs the definition of \texttt{EType}, which is provided by \texttt{Escrow1}; the message file needs the ID of the contract to be called, which is the one created by \texttt{Escrow3}.  So long as both variables are set it does not matter that they are not even both used in the same files.
+
+%ZRIACALeHA7
+
+\vspace{11pt}
+
+%ZRIACAthK5x
+The first transaction uses an identity for \texttt{self} that is different from the one used in \texttt{Escrow1} (which is the default key, also called \texttt{self}; see \href{https://consensys.quip.com/2wGTAw6Fgm87/Tutorial-2-Escrows\%23ZRIACAoIEoz}{\fuline{below}}), and receives an exception.  The second one uses the correct identity and receives the expected message as its \texttt{result}.
+
+%ZRIACA48oZw
+
+\vspace{11pt}
+
+%ZRIACA6icjZ
+This example is more complex than usual and introduces several new syntax features.
+
+%ZRIACAhzJpv
+\subsubsection{Public Keys}
+\vspace{5.5pt}
+
+%ZRIACAUcXol
+Fae uses the type \texttt{PublicKey} as a cryptographic proof of identity: when the transaction message is received, the required signers are listed in it and their signatures are attached, and checked.  If and when this check passes, the signers have been proven to have the necessary identities (and the message to be unmodified) and can be referred to within the transaction simply by their public key, which (as far as is computationally reasonable) uniquely specifies them.  The actual nature of the cryptography involved is irrelevant; Fae happens, for now at least, to use the Ed25519 elliptic curve schema, but that does not need to be known, and cannot be used, in the transaction body.
+
+%ZRIACAoIEoz
+\subsubsection{Signers}
+\vspace{5.5pt}
+
+%ZRIACAzn1PA
+The \texttt{signer} API function is the interface to an associative array containing the public keys of the various parties that signed the transaction currently being processed when it is bound.  Multiple signatures are possible and this enables some intricate ownership schemes, as well as defending against the misuse of one's contracts.  Therefore, in \texttt{Escrow3.hs}, the binding \texttt{us }\texttt{\textless{}}\texttt{- signer "self"} binds \texttt{us} to the public key of the signer named \texttt{self} of the transaction written in this code; however, the binding \texttt{them }\texttt{\textless{}}\texttt{- signer "self"} that appears in the contract it creates binds the \texttt{self} signer of the transaction that \textit{calls} the contract (which is \texttt{CallEscrow3}), since the line is not actually executed until that time.
+
+%ZRIACAMoPnP
+
+\vspace{11pt}
+
+%ZRIACAZF5Mx
+Fae often uses \texttt{self} as the default name for a transaction signer (\texttt{postTX} actually supplies it if it is not present in the message, with a private key also called \texttt{self}, but this is a demo behavior).  Signers can be declared in the transaction message similarly to inputs:
+
+%ZRIACA1i060
+\codeblock{keys\newline
+  self = ryan\newline
+  other = sarah}
+
+%ZRIACA1K3vb
+The names on the right indicate named public keys to be used to sign the transaction; the private keys are stored without any attempt at security by \texttt{postTX} (again, this is demo behavior; despite this, it is feasible to use \texttt{postTX} unmodified in a live system, so long as the machines that run it are secured; this kind of activity has absolutely nothing in particular to do with Fae, so is not attempted by its tools).
+
+%ZRIACATEQIH
+\subsubsection{Decisions and exceptions}
+\vspace{5.5pt}
+
+%ZRIACANsqY7
+The line \texttt{unless (us == them) (error "Wrong sender")} is quite novel for us, as it contains the first appearance of one of the staples of programming, the conditional.  The \texttt{unless} method (provided by \texttt{Control.Monad}) takes a boolean value and, if it is false, executes the second argument; if it is true, it does nothing.  Here, the boolean is \texttt{us == them}, which exploits the fact that \texttt{PublicKey} supports the \texttt{==} operator; in formal terms, it is an instance of the \texttt{Eq} interface (typeclass), like \texttt{Control.Monad} a part of the Haskell standard library package \texttt{base}.\texttt{ }
+
+%ZRIACAwKPS0
+
+\vspace{11pt}
+
+%ZRIACAWzxiX
+The action \texttt{error "Wrong sender"} raises an \textit{exception}, which causes the entire transaction to end and its return value to be replaced by this exception.  In addition, none of the transaction's actions are saved: new contracts are not created, though contract calls are still made normally.  An exception in a contract call will roll back just the one call, preventing its update or deletion.  Aside from the exceptional return value, it is as though the transaction (respectively, contract call) did not happen.  Exceptions may be thrown using \texttt{error} or \texttt{throw} (which takes a different kind of argument) but may not be caught, and so should not be used for control flow.  The appropriate time to throw an exception is when an error occurs that renders the contract meaningless.
+
+%ZRIACAtKnvm
+
+\vspace{11pt}
+
+%ZRIACABnKt9
+Exceptions are raised not only by explicit errors but also by errors of programming such as type mismatches, evaluating an undefined value (for example, \texttt{1\slash{}0}), calling a contract by an invalid contract ID or with a literal argument that doesn't parse correctly, or using an escrow that you do not own.
+
+%ZRIACAYOOrw
+
+\vspace{11pt}
+
+%ZRIACAXG4oL
+The inability to catch exceptions has one exception in that it is possible to attach recovery routines to a transaction in case it does exit prematurely.  This feature will be discussed elsewhere.
+
+%ZRIACA34c1p
+\subsubsection{Library alternative}
+\vspace{5.5pt}
+
+%ZRIACAjJGvn
+This example is instructive but unnecessary, since Fae provides a contract library that includes a method to save a value in a contract owned by a particular public key.  Here is a shorter way of writing \texttt{Escrow3.hs}:
+
+%ZRIACAZB7Bc
+\codeblock{import Blockchain.Fae.Transactions.TX\$txID\newline
+import Blockchain.Fae.Contracts\newline
+\newline
+body :: EscrowID EType -\textgreater{} FaeTX ()\newline
+body eID = deposit eID "self"}
+
+%ZRIACAMAuZz
+The module \texttt{Blockchain.Fae.Contracts} contains a method \texttt{deposit} accepting a value-bearing argument and a name, and creates a contract that releases the value to the caller if that caller is the same as the one referred to by the name \textit{in the original transasction}.  Its implementation is as shown above.
+
+%ZRIACACDysu
+\subsection{Restricted-access escrows}
+\vspace{5.5pt}
+
+%ZRIACA0NI3j
+This ongoing example still contains a serious issue: the escrow can easily be obtained without calling contract \texttt{\textless{}}\texttt{Escrow1 transaction ID}\texttt{\textgreater{}}\texttt{\slash{}Body\slash{}0\slash{}Current}.  Indeed, \textit{anyone} is free to write the code in \href{https://consensys.quip.com/2wGTAw6Fgm87/Tutorial-2-Escrows\%23ZRIACABrgQl}{\fuline{the contract definition}} to create their own escrow that works the same way.  This means that the escrows issued by that contract have no value: the access control placed on the contract that saves them does not actually keep the escrow private.  Here, we at last present the method that makes escrows actually valuable.
+
+%ZRIACAcNynv
+\subsubsection{Module source code}
+\vspace{5.5pt}
+
+%ZRIACAaBq15
+\codeblock{module Nametag (Nametag, getNametag, checkNametag) where\newline
+\newline
+import Blockchain.Fae\newline
+import Control.Monad (forever)\newline
+\newline
+data NametagName = NametagName String deriving (Generic)\newline
+newtype Nametag = Nametag (EscrowID NametagName) deriving (Generic)\newline
+\newline
+instance ContractName NametagName where\newline
+  type ArgType NametagName = ()\newline
+  type ValType NametagName = String\newline
+  theContract (NametagName name) = \textbackslash{}\_ -\textgreater{} forever \$ release \$ "Property of: " ++ name\newline
+  \newline
+getNametag :: (MonadTX m) =\textgreater{} String -\textgreater{} m Nametag\newline
+getNametag name = Nametag \textless{}\$\textgreater{} newEscrow (NametagName name)\newline
+\newline
+checkNametag :: (MonadTX m) =\textgreater{} Nametag -\textgreater{} m String\newline
+checkNametag (Nametag eID) = useEscrow {[}{]} eID ()}
+
+%ZRIACAMdVR2
+This code defines not a transaction or contract, but a new module like \texttt{Blockchain.Fae.Contracts}.  This module provides the interface to escrows like the ones previously created by contract \texttt{\textless{}}\texttt{Escrow1 transaction ID}\texttt{\textgreater{}}\texttt{\slash{}Body\slash{}0\slash{}Current}.
+
+%ZRIACAPM9F6
+\subsubsection{Module definitions}
+\vspace{5.5pt}
+
+%ZRIACAlmRv0
+A module is just a source file that can be imported by others, including transactions.  It \textit{exports} some or all of the names defined in it, which are available to any other source file that imports it, whereas the ones that are not exported, are not available outside the module.  Modules occupy a place very similar to that of classes in languages like \texttt{C++}: indeed, you can make an easy analogy between the above module and the definition of a class called \texttt{Nametag} having a private type \texttt{NametagName} with a constructor of that same name, a public type \texttt{Nametag}, and two public functions \texttt{getNametag} and \texttt{checkNametag} defining its interface.  The analogy ends there, though, since one does not instantiate the \texttt{Nametag} type as a programmatic value \texttt{x} that has members such as \texttt{x.checkNametag}.
+
+%ZRIACAlo5zs
+
+\vspace{11pt}
+
+%ZRIACAQqPJg
+The export list has a subtlety that we exploit: when exporting a type like \texttt{Nametag}, just placing that type name in the list only exports the type name itself, and \textit{not} any of its constructors.  If you want the constructors you have to write \texttt{Nametag(the constructor name)}, or just \texttt{Nametag(..)} to get all of them (if there were more than one).
+
+%ZRIACANOUri
+\subsubsection{Module imports}
+\vspace{5.5pt}
+
+%ZRIACACQtdr
+This module imports \texttt{Blockchain.Fae}, the main Fae module that contains the Fae API.  This module is provided implicitly to all transactions, but must be imported explicitly by modules (because, conceivably, a module could provide just a general source code library intended to be used in contracts but not actually using them itself).
+
+%ZRIACA27fwR
+\subsubsection{Newtypes}
+\vspace{5.5pt}
+
+%ZRIACAxERyK
+In addition to the familiar \texttt{data NametagName = NametagName String} that defines a data-bearing type with a constructor having a single \texttt{String} field, we also see the similar but new \texttt{newtype Nametag = Nametag (EscrowID NametagName)}.  This defines a data type that only \textit{looks} different from its single field; internally, it has exactly the same values.  This construct is typically used to build an abstraction over a more general type and enforcing the use of that abstraction rather than taking a shortcut through the original type.  We use it here in just this way, so as to hide the escrow ID from consumers of \texttt{Nametag}s.
+
+%ZRIACAim6qF
+
+\vspace{11pt}
+
+%ZRIACAyerLd
+Although there are some efficiencies both in coding and also execution in using newtypes, for the most part you could replace \texttt{newtype} with \texttt{data} and nothing would change.  I chose to use it here because it signifies my intent to abstract away the fact that a nametag is just an escrow.
+
+%ZRIACAz8Ymk
+\subsubsection{The dollar sign operator}
+\vspace{5.5pt}
+
+%ZRIACAQaWFw
+The code for \texttt{getNametag} has an odd syntax, separating functions from their arguments with a dollar sign \texttt{\$}.  This useful operator allows us to avoid writing parentheses: it collects its entire right-hand side and provides it as a single value to its left-hand side.  So if \texttt{f} is a function, \texttt{f \$ x = f (x)} for any expression \texttt{x}, which is visually cleaner particularly when there are nested parentheses.
+
+%ZRIACAzdCH6
+
+\vspace{11pt}
+
+%ZRIACAoYHSz
+The similar operator \texttt{\textless{}}\texttt{\$}\texttt{\textgreater{}} in \texttt{checkNametag} is actually used for something different.  It allows us to apply the \texttt{Nametag} constructor to the Fae value of type \texttt{EscrowID NametagName}, which latter type is the one that \texttt{Nametag} actually takes, rather than what we have as the result of \texttt{useEscrow}, which is a \texttt{FaeTX (EscrowID NametagName)}.  By using \texttt{\textless{}}\texttt{\$}\texttt{\textgreater{}} we enter the monad and apply the constructor there.  It is exactly the same as writing
+
+%ZRIACAD8pyN
+\codeblock{f \textless{}\$\textgreater{} xMonadic = do\newline
+  x \textless{}- xMonadic\newline
+  return \$ f x}
+
+%ZRIACAwUawH
+but, of course, much shorter and more to the point.
+
+%ZRIACAxQJO2
+\subsubsection{How it works}
+\vspace{5.5pt}
+
+%ZRIACADLoae
+There are no other new syntactical elements in this file, but its construction exploits the semantics of module exports and patterns in a new way.  Quite simply, it protects the escrow by making its contract name and its escrow ID private types, usable only within the \texttt{Nametag} module.  Since consumers of this module are unable to create their own \texttt{NametagName} values, they are also unable to create a valid escrow with that contract name type, and so cannot forge a \texttt{Nametag}.  In addition, if they are given a \texttt{Nametag}, they cannot use it to call the backing escrow directly, because only the \textit{type} name \texttt{Nametag} was exported; its constructor called \texttt{Nametag} was not, and so the pattern match used by \texttt{checkNametag} cannot be written in any other code.  This means that a nametag is used \textit{exactly} as specified by its interface, or else not used at all: it is a high-level abstraction that prevents the use of the lower-level primitives on which it is built.
+
+%ZRIACAjW1g9
+
+\vspace{11pt}
+
+%ZRIACAv4NZU
+The \texttt{checkNametag} function has another purpose besides getting the name: validation.  Although no one can use the same function definition to create a nametag, it is still possible to write contract code like
+
+%ZRIACAr13Dp
+\codeblock{newNametag :: String -\textgreater{} FaeTX Nametag\newline
+newNametag name = Nametag \textless{}\$\textgreater{} newEscrow undefined}
+
+%ZRIACA8d9Qb
+where \texttt{undefined} is a value that throws an exception when evaluated, as it would be if for instance the escrow were actually called.  It can be of any type, so this definition is type-correct, but it can never be used.  But \texttt{checkNametag} \textit{does} use it, so if one attempts to evaluate it on an attempted forgery as above, the undefined contract name has to be evaluated and this throws an exception.  Thus, the \textit{success} of a \texttt{checkNametag} call indicates that the nametag is truly valid.  This is also why the nametag escrows have been redefined to \texttt{release} rather than \texttt{spend} their contents, so that they can be checked repeatedly without being deleted.
+
+%ZRIACA7Bqbt
+
+\vspace{11pt}
+
+%ZRIACA3U1q5
+(Lest you think that I am setting up \texttt{undefined} as a strawman, rest assured that the only kind of value that can masquerade as a private type is an erroneous value: one that, when evaluated, either throws an exception or fails to produce a result at all.)
+
+%ZRIACAFErgw
+\subsection{Rewards and payment}
+\vspace{5.5pt}
+
+%ZRIACA6uVk5
+Using the module concept, we can lock down access to a particular type of escrow to its public interface.  As written, the \texttt{Nametag} interface does not restrict the use of \texttt{getNametag}, so that although the value of nametags is protected by the module, it does not really exist at all because nametags are free.  The solution to this is, of course, to charge for them.  The only form of value built in to Fae is the reward, which may be awarded as a participation incentive.  To use it, we just alter \texttt{getNametag} slightly.
+
+%ZRIACAzYZsC
+\codeblock{getNametag :: Reward -\textgreater{} String -\textgreater{} FaeTX Nametag\newline
+getNametag rwd name = do\newline
+  claimReward rwd\newline
+  newEscrow \$ NametagName name}
+
+%ZRIACA5fRAG
+Then, a special \textit{reward transaction} can call this function, but no other kind of transaction.
+
+%ZRIACAjSzWL
+
+\vspace{11pt}
+
+%ZRIACAwuilm
+\textbf{Transaction source file: RewardNametag.hs}
+
+%ZRIACAya8Ud
+\codeblock{import Blockchain.Fae.Contracts\newline
+import Nametag\newline
+\newline
+body :: Reward -\textgreater{} FaeTX ()\newline
+body rwd = do\newline
+  nt \textless{}- getNametag rwd "Ryan Reich"\newline
+  deposit nt "self"}
+
+%ZRIACApVW1S
+\textbf{Transaction message: RewardNametag}
+
+%ZRIACAJQBg9
+\codeblock{body = RewardNametag\newline
+others\newline
+  - Nametag\newline
+reward = True\newline
+keys\newline
+  self = ryan}
+
+%ZRIACAwUILJ
+\textbf{Command line:}
+
+%ZRIACANFcW0
+\codeblock{.\slash{}postTX.sh RewardNametag}
+
+%ZRIACADclBd
+\textbf{Transaction results:}
+
+%ZRIACAU51Vl
+\codeblock{Transaction 0e49d0a3b1ede73524354c3f7b343524ef6a284a67f5e55120bb1a427992ff24\newline
+  result: ()\newline
+  outputs:\newline
+    0: bd11897e5a2950f0311b932395834c29b00a1ed7ed5fd95a789927cc3faedee1\newline
+  signers:\newline
+    self: 738a79bc3b11c200ceb5190a14382cb5aa6514640d0f05adfc93d2bb23139091}
+
+%ZRIACA1A9vc
+This cashes in the reward to get a nametag, then saves that nametag in a signature-protected contract.  We can see that it works as expected using the following transaction:
+
+%ZRIACAD3AeV
+
+\vspace{11pt}
+
+%ZRIACAXHO8n
+\textbf{Transaction source file: CallRewardNametag.hs}
+
+%ZRIACA4v8TF
+\codeblock{import Blockchain.Fae.Transactions.TX\$txID.Nametag\newline
+\newline
+body :: Nametag -\textgreater{} FaeTX String\newline
+body = checkNametag}
+
+%ZRIACA8iK4e
+\textbf{Transaction message: CallRewardNametag}
+
+%ZRIACADwFZ9
+\codeblock{body = CallRewardNametag\newline
+inputs\newline
+  \$txID\slash{}Body\slash{}0\slash{}Current = ()\newline
+keys\newline
+  self = \$self}
+
+%ZRIACA3ezhc
+\textbf{Command line:}
+
+%ZRIACA9EkhW
+\codeblock{.\slash{}postTX.sh \textbackslash{}\newline
+  -e txID=\textless{}transaction ID from RewardNametag\textgreater{} \textbackslash{}\newline
+  -e self=\textless{}your choice\textgreater{}\newline
+  CallRewardNametag}
+
+%ZRIACA3n8NM
+We call this first with \texttt{self = sarah} and then \texttt{self = ryan} to see the access restriction working:
+
+%ZRIACAlVg6E
+
+\vspace{11pt}
+
+%ZRIACARUJCM
+\textbf{Transaction “sarah” results:}
+
+%ZRIACAvzXT8
+\codeblock{Transaction 83b487a511b20f9011abcf118beff8cbc81ffe2e7d75aca4ff519a702fc62c44\newline
+  result: \textless{}exception\textgreater{} Signer with public key 260cc5cf5cc36548b1ae701db9d3f3ff478fbd2e2bbeddb4bd5c96a4e477077a is not the owner of the requested value\newline
+  signers:\newline
+    self: 260cc5cf5cc36548b1ae701db9d3f3ff478fbd2e2bbeddb4bd5c96a4e477077a\newline
+  input \#0: 0e49...\slash{}Body\slash{}0\slash{}Current (Failed)\newline
+    \textless{}exception\textgreater{} Signer with public key 260cc5cf5cc36548b1ae701db9d3f3ff478fbd2e2bbeddb4bd5c96a4e477077a is not the owner of the requested value}
+
+%ZRIACA7Djz3
+\textbf{Transaction “ryan” results}
+
+%ZRIACAaaUm8
+\codeblock{Transaction 7b784d4dbe4e783d9cfdf029cd711e20d74d16898357a00914b9cce8e5c8dbcb\newline
+  result: "Property of: Ryan Reich"\newline
+  signers:\newline
+    self: 738a79bc3b11c200ceb5190a14382cb5aa6514640d0f05adfc93d2bb23139091\newline
+  input \#0: 0e49...\slash{}Body\slash{}0\slash{}Current (Deleted)}
+
+%ZRIACAV73U4
+\subsubsection{Submodule imports}
+\vspace{5.5pt}
+
+%ZRIACAOZ4ja
+The \texttt{import} line in \texttt{CallRewardNametag} specifies \texttt{Nametag} \textit{beneath} the transaction module for \texttt{RewardNametag}; this is because the latter uploaded this module \textit{as} \texttt{Nametag}, and so it is placed hierarchically inside its module namespace.   Though \texttt{RewardNametag} can use the module just as \texttt{Nametag}, any other transaction has to give the full path.
+
+%ZRIACAah8hl
+\subsubsection{Rewards and reward transactions}
+\vspace{5.5pt}
+
+%ZRIACA5v4jD
+Rewards in Fae have the type \texttt{Reward}, which is provided by the module \texttt{Blockchain.Fae} (and therefore available implicitly to any transaction).  This is a semi-private type like \texttt{Nametag} for nametags, available for type signatures but not construction or deconstruction.  Values of this type are only created in reward transactions, which in a more realistic deployment might be designated as such in blocks and may be issued, for instance, to miners (the \texttt{reward} field in the message indicates to \texttt{faeServer} to simulate this designation; obviously, in reality a transaction should not be able to declare itself a reward recipient).  A reward transaction gets an extra input value, before the the list of explicit contract calls, of type \texttt{Reward}.
+
+%ZRIACAdLyRe
+\subsubsection{Claiming rewards}
+\vspace{5.5pt}
+
+%ZRIACA5NzU0
+As we saw for nametags, the private type must be accompanied by a public interface that can validate an escrow of that type.  For rewards, that interface has only one function, \texttt{claimReward}, which accepts a valid \texttt{Reward} and deletes its backing escrow (i.e. the escrow is defined to \texttt{spend} after one call).  Therefore, rewards cannot be reused or accumulated (though they can be saved), so are not really a currency; they are just an entrypoint to self-contained Fae value.
+
+%ZRIACAtG7CO
+
+\vspace{11pt}
+
+%ZRIACATnunx
+Because rewards are scarce and can be validated, they are one way to meaningfully limit access to the \texttt{Nametag} type.  Essentially, the \texttt{getNametag} function is a reward-to-nametag conversion engine, though this does not make nametags the same as rewards, because (for example) they cannot be used to pay \texttt{getNametag}.
+
+%ZRIACAo1Cw0
+\subsubsection{Falling off the end}
+\vspace{5.5pt}
+
+%ZRIACA0JYob
+You'll notice that \texttt{callRewardNametag} terminated while still holding the \texttt{Nametag}, as it did not \texttt{deposit} it again.  This valuable is actually \textit{destroyed} when the transaction terminates; Fae makes no attempt to preserve dangling escrows.
+
+%ZRIACA8nnmL
+\subsection{Summary}
+\vspace{5.5pt}
+
+%ZRIACAXNZSG
+This lengthy tutorial gradually developed the machinery of escrows, which are contracts-within-contracts that can be used to represent value in Fae.  We saw:
+
+%ZRIACAl2jBg
+
+\vspace{5.5pt}\begin{longitem}
+\item{Escrows can be created like contracts and called like functions using their escrow ID, but only by their owner.}
+\item{Escrows can be transferred to new contracts or escrows, or returned by ID from contract or escrow calls.}
+\item{To make an escrow type valuable, it should be encapsulated in a module defining a public interface to a private type.}
+\end{longitem}
+
+\vspace{11pt}
+
+%ZRIACAr4nUx
+We also learned about some more programming features:
+
+%ZRIACAGML29
+
+\vspace{5.5pt}\begin{longitem}
+\item{Many, many new syntactic constructs (linked in the table of contents).}
+\item{The \texttt{signer} API method.}
+\item{The \texttt{Blockchain.Fae.Contracts} module and, in particular, \texttt{deposit} for saving things in a new contract.  }
+\end{longitem}
+
+\vspace{11pt}
+
+\end{document}

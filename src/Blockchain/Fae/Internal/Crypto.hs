@@ -16,6 +16,7 @@ module Blockchain.Fae.Internal.Crypto
   ) where
 
 import Control.DeepSeq
+import Control.Exception
 import Control.Monad
 
 import Crypto.Error
@@ -30,6 +31,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Char
 import Data.Dynamic
 import Data.List
+import Data.Maybe
 import Data.Ord
 import Data.Proxy
 import Data.Serialize (Serialize)
@@ -44,6 +46,8 @@ import GHC.Generics
 import Numeric.Natural
 
 import System.IO.Unsafe
+
+import Text.Read
 
 -- * Types
 -- We don't implement our own crypto because we aren't crazy; these are
@@ -67,6 +71,9 @@ newtype Digest = HashDigest (Hash.Digest Hash.SHA3_256) deriving (Eq, Ord, NFDat
 
 -- | A useful abstraction, again allowing semantic improvements in 'sign'.
 data Signed a = Signed {unSigned :: a, sig :: Signature} deriving (Generic)
+
+data CryptoException =
+  CryptoParseException String String
 
 -- * Type classes
 -- | This is probably a duplicate of some @Hashable@ class, but I want
@@ -105,6 +112,11 @@ class (PassFail (PassFailM a)) => PartialSerialize a where
   partialDecode :: BS.ByteString -> PassFailM a a
 
 {- Instances -}
+
+instance Show CryptoException where
+  show (CryptoParseException label text) = label ++ " read failed for: " ++ text
+
+instance Exception CryptoException 
 
 -- | Decoding a hash returns a 'Maybe' value.  This is of course the
 -- motivating type for the 'PassFail' class.
@@ -241,12 +253,12 @@ instance Ord Signature where
 -- authors, who have to provide a contract ID that is, ultimately,
 -- a 'Digest'.
 instance IsString Digest where
-  fromString = read
+  fromString = readCrypto "Digest"
 
 -- | Contracts may need to contain public keys that come from outside Fae,
 -- and it should be easy to enter them.
 instance IsString PublicKey where
-  fromString = read
+  fromString = readCrypto "PublicKey"
 
 -- | Public keys 'show' as hex strings.
 instance Show PublicKey where
@@ -284,6 +296,9 @@ readsPrecSer _ s =
     Left _ -> []
     Right x -> [(x, C8.unpack rest)]
   where (bs, rest) = B16.decode $ C8.pack $ dropWhile isSpace s
+
+readCrypto :: (Read a) => String -> String -> a
+readCrypto l s = fromMaybe (throw $ CryptoParseException l s) $ readMaybe s
 
 -- | This function replaces 'Ed.sign' to use our semantically-nice types.
 --

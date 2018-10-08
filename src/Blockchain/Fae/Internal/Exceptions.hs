@@ -76,7 +76,8 @@ data TransactionException =
 
 -- | Exceptions for formatting transaction summaries
 data DisplayException = 
-  TXFieldException String
+  TXFieldException String |
+  JSONTextError String
 
 -- * Instances
 
@@ -148,6 +149,7 @@ instance Show TransactionException where
 -- | - 
 instance Show DisplayException where
   show (TXFieldException e) = e
+  show (JSONTextError s) = "Couldn't read JSON text value: " ++ s
 
 -- | -
 instance Exception VersionException

@@ -166,7 +166,9 @@ getParameters params paramName =
 -- | A multipurpose tool for getting and using the last, and therefore
 -- effective, value of a query parameter.
 getLast :: (Read b) => a -> (b -> a) -> [String] -> a
-getLast x0 f l = last $ x0 : map (f . read) l
+getLast x0 f l = last $ x0 : map (f . readMay) l where
+  readMay s = fromMaybe (error $ "Couldn't read query parameter value: " ++ s) $
+    readMaybe s
 
 -- | When the app throws an exception that it doesn't catch, Warp catches
 -- it, and this function builds a simple response with what I think are
