@@ -55,6 +55,7 @@ data StorageException =
   ContractOmitted TransactionID Int |
   CantImport ByteString TypeRep |
   ImportWithoutVersion ContractID |
+  NotExportable TypeRep |
   DeletedEntry 
 
 -- | Exceptions for contract-related errors.
@@ -117,6 +118,8 @@ instance Show StorageException where
   show (ImportWithoutVersion cID) =
     "Rejecting imported value for " ++ prettyContractID cID ++ 
     " that lacks a nonce value."
+  show (NotExportable ty) = 
+    "Type " ++ show ty ++ " cannot be imported or exported."
   show (DeletedEntry) =
     "(internal error) Tried to delete an entry of the transaction results!"
 
