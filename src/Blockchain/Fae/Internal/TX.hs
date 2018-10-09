@@ -118,13 +118,11 @@ interpretTX ::
   (Typeable m, MonadMask m, MonadIO m) => 
   TX -> FaeInterpretT m ()
 interpretTX TX{..} = do
-  Int.set [searchPath := privateSearchPath]
   faeInterpret [txModule] runString $ \f -> f inputs txID pubKeys isReward
   where
     txModule = mkTXModuleName txID
     -- Contrary to comments in the @hint@ documentation, the directory
     -- @"."@ is /not/ always included in the search path.
-    privateSearchPath = [".", mkTXPrivatePath txID]
     runString = unwords
       [
         "runTransaction",
@@ -263,12 +261,4 @@ mkTXPathParts txID = ["Blockchain", "Fae", "Transactions", mkTXIDName txID]
 -- module name.
 mkTXModuleName :: TransactionID -> String
 mkTXModuleName = intercalate "." . mkTXPathParts
-
--- | The location of transaction-specific modules.
--- FIXME: this whole scheme is flawed because if module A imports module
--- B which itself imports module C from its transaction's private
--- directory, then that directory will not be "in scope" in module A in
--- a different transaction and module C will not be found.
-mkTXPrivatePath :: TransactionID -> String
-mkTXPrivatePath = foldr (</>) "private" . mkTXPathParts
 

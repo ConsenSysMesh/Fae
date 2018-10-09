@@ -145,6 +145,7 @@ executable faeServer
     RankNTypes
     RecordWildCards
     ScopedTypeVariables
+    TupleSections
     TypeApplications
 
 executable postTX
