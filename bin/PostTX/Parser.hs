@@ -226,7 +226,7 @@ readEnd end = (\s -> either (err s) return $ readEither s) =<< literalEnd end
 -- | A lookahead newline, important since list items need to continue until
 -- a newline but not absorb it.
 endl :: SpecParser Char
-endl = lookAhead eol *> return '\n'
+endl = (lookAhead eol *> return '\n') <|> (eof *> return '\0')
 
 -- | Parses the given string on a single line, not absorbing the newline.
 symbol :: String -> SpecParser String
