@@ -126,7 +126,7 @@ instance Show ContractException where
     "Incorrect version in contract ID: " ++ prettyContractID cID ++
     "; correct version is: " ++ show ver
   show (BadInputParse input inputType) = 
-    "Unable to parse '" ++ show input ++ "' as type: " ++ show inputType
+    "Unable to parse '" ++ input ++ "' as type: " ++ show inputType
   show (BadArgType bad good) = 
     "Expected argument type: " ++ show good ++ "; got: " ++ show bad
   show (BadValType bad good) =
