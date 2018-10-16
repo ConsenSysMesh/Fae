@@ -2,6 +2,8 @@
 
 module PostTX.Args where
 
+import Blockchain.Fae.FrontEnd (TransactionID)
+
 import Control.Exception (throw)
 import Control.Monad (replicateM)
 import Control.Monad.Reader
