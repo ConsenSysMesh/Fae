@@ -81,9 +81,9 @@ main = do
       putStrLn err
       usage
       exitFailure
-    ShowKeysArgs keysList -> do
-      showKeys faeHome keysList
-      exitSuccess
+    -- ShowKeysArgs keysList -> do
+    --   showKeys faeHome keysList
+    --   exitSuccess
 
 usage :: IO ()
 usage = do
