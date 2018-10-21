@@ -59,7 +59,7 @@ main = do
   args <- parseArgs <$> getArgs
   
   -- TODO: determine if runTransferServer can be right here
-  --void $ fork $ run 27184 runTransferServer
+  void $ fork $ run 27184 runTransferServer
   
   flip runReaderT txQueue $ case args of
     ArgsServer args@ServerArgs{..} -> do

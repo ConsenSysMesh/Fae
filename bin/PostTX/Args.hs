@@ -253,7 +253,8 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     justHost :: Maybe String -> String
     justHost
       | useFaeth && not argFake = fromMaybe "localhost:8546" 
-      | otherwise = fromMaybe "localhost:5555" -- TODO: change after testing
+      | otherwise = fromMaybe "0.0.0.0:27182"
+      -- | otherwise = fromMaybe "localhost:5555" -- TODO: change after testing
 
     justTX :: Maybe String -> String
     justTX 
