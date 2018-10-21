@@ -62,6 +62,7 @@ runServer port makeApp sendTXExecData = do
 
 -- TODO: finish function
 runTransferServer _ respond = respond $
+--  liftIO $ putStrLn ("runTransferServer ")
   responseLBS status200 [("Content-Type", "text/plain")] "runTransferServer response. finish adding query"
 
 -- TODO: write end to end and unit tests. try to break it. see quick check package for unit tests
