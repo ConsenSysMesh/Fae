@@ -46,6 +46,7 @@ import System.FilePath
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
 
+
 main :: IO ()
 main = do
   userHome <- getHomeDirectory
@@ -59,7 +60,7 @@ main = do
   args <- parseArgs <$> getArgs
   
   -- TODO: determine if runTransferServer can be right here
-  void $ fork $ run 27184 runTransferServer
+  --void $ fork $ run 27184 runTransferServer
   
   flip runReaderT txQueue $ case args of
     ArgsServer args@ServerArgs{..} -> do
@@ -70,7 +71,7 @@ main = do
       void $ fork $ runFae tID args
       void $ fork $ runServer importExportPort importExportApp queueTXExecData
       -- TODO: determine if runTransferServer has to be right here or if above is fine
-      liftIO $ void $ fork $ run 27184 runTransferServer
+      --liftIO $ void $ fork $ run 27184 runTransferServer
       case serverMode of
         FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData
         FaethMode -> runFaeth args tID

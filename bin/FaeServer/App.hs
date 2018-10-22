@@ -54,16 +54,16 @@ runServer port makeApp sendTXExecData = do
   app <- bringOut $ makeApp sendTXExecData
   liftIO $ runSettings (faeSettings port) app
 
--- runTransferServer :: Int -> TransferQueryApplication
--- runTransferServer port = do
---   liftIO $ run port runSimpleServer
---   -- app <- bringOut $ makeApp
---   -- liftIO $ runSettings (faeSettings port) app
+--runTransferServer :: Int -> TransferQueryApplication
+--runTransferServer port = do
+--  liftIO $ run port runSimpleServer
+--  app <- bringOut $ makeApp
+--  liftIO $ runSettings (faeSettings port) app
 
--- TODO: finish function
-runTransferServer _ respond = respond $
---  liftIO $ putStrLn ("runTransferServer ")
-  responseLBS status200 [("Content-Type", "text/plain")] "runTransferServer response. finish adding query"
+---- TODO: finish function
+--runTransferServer :: Int -> TransferQueryApplication
+--runTransferServer _ respond = respond $
+--  responseLBS status200 [("Content-Type", "text/plain")] "runTransferServer response. finish adding query"
 
 -- TODO: write end to end and unit tests. try to break it. see quick check package for unit tests
 --      debugging internal processes, see "inversion of control"
