@@ -455,8 +455,10 @@ returnGlobal ::
   WithEscrows valType -> FaeTXM (WithEscrows ReturnValue)
 returnGlobal yE = do
   y <- putEscrows yE
-  escrowMap <- use _escrowMap
-  return $ yE & _getWithEscrows %~ ReturnValue
+  -- This apparently redundant construction ensures that the expression is
+  -- not undefined, so that the return value type can be obtained without
+  -- running anything that leads to the return value itself.
+  return $ WithEscrows (withEscrows yE) (ReturnValue y)
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
