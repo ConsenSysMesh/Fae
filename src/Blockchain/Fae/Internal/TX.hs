@@ -71,7 +71,7 @@ data TX =
   {
     isReward :: Bool,
     txID :: TransactionID,
-    inputs :: Inputs,
+    inputs :: [Input],
     pubKeys :: Signers,
     fallback :: [String]
   }

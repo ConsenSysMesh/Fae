@@ -39,11 +39,21 @@ import qualified Data.Vector as Vector
 import qualified Data.Map as Map
 import Data.Map (Map)
 
+import GHC.Generics
+
 -- * Types
 
 -- | How inputs are provided to transactions.  The contract with a given ID
 -- gets an argument and a (possibly empty) remapping of signer names.
-type Inputs = [(ContractID, String, Renames)]
+data Input =
+  InputArgs
+  {
+    inputCID :: ContractID,
+    inputArg :: String,
+    inputRenames :: Renames
+  } |
+  InputReward
+  deriving (Generic)
 
 -- | Transaction monad with storage access, for executing contracts and
 -- saving the results.
@@ -75,18 +85,21 @@ class TransactionBody f where
   -- guaranteed to be defined even if the return value is exceptional,
   -- unless the transaction itself is exceptional, when it throws that
   -- exception.
-  callTransactionBody :: f -> Inputs -> TXStorageM ([InputResults], Result)
+  callTransactionBody :: f -> [Input] -> TXStorageM ([InputResults], Result)
 
   -- | "Installs a handler" on the given transaction body.
   applyFallback :: FallbackType f -> f -> f
 
 {- Instances -}
 
+instance Serialize Input
+instance NFData Input
+
 -- | The base-case instance: a transaction with no arguments.
 instance (Show a) => TransactionBody (FaeTX a) where
   callTransactionBody doBody [] = lift $ ([],) . Result <$> getFaeTX doBody
   callTransactionBody _ inputs = return (errIRs, throw BadSignature) where 
-    errIRs = view _1 . errInputResult (const UnexpectedInput) . view _1 <$> inputs
+    errIRs = fst . errInputResult (const UnexpectedInput) . inputCID <$> inputs
 
   applyFallback doFallback doBody = FaeTX $ do
     escrows <- get
@@ -98,9 +111,14 @@ instance (Show a) => TransactionBody (FaeTX a) where
 -- | The inductive-case instance: a transaction with one more argument.
 instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
   callTransactionBody g [] = return ([], throw NotEnoughInputs)
-  callTransactionBody g (input : rest) = do
-    valEM <- use $ at cID 
-    (iR, newStoredContractM) <- lift $ doInput input valEM
+  callTransactionBody g (InputReward : rest) = do
+    let err = throw UnexpectedReward
+    (restResults, txResult) <- callTransactionBody (g err) rest
+    return (restResults, err `seq` txResult)
+  callTransactionBody g (InputArgs{..} : rest) = do
+    valEM <- use $ at inputCID 
+    (iR, newStoredContractM) <- lift $ 
+      doInput (inputCID, inputArg, inputRenames) valEM
     let rv = getWithEscrows $ iResult iR
         e = BadArgType (returnValueType rv) (typeRep $ Proxy @a)
         errIR = errInputResult (const e) (iRealID iR) ^. _1
@@ -112,7 +130,7 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
     -- not called by version, which is actually not a good idea since the
     -- version should be explicit in the transaction message for
     -- verification.
-    when (successful inputResults) $ at cID .= fmap Right newStoredContractM
+    when (successful inputResults) $ at inputCID .= fmap Right newStoredContractM
 
     -- This /should/ undefine @txResult@ only if the contract call has the
     -- wrong type, if the contract ID was bad, or if the contract version
@@ -120,7 +138,18 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
     -- 'ReturnValue' of 'iResult'.
     return (inputResults : restResults, iResult inputResults `seq` txResult)
 
-    where cID = input ^. _1
+  applyFallback doFallback doBody x = applyFallback (doFallback x) (doBody x)
+
+instance {-# OVERLAPPING #-} 
+  (TransactionBody f) => TransactionBody (Reward -> f) where
+
+  callTransactionBody g (InputReward : rest) = do
+    eID <- newEscrow RewardName
+    callTransactionBody (g $ Reward eID) rest
+  callTransactionBody g inputs = do
+    let err = throw ExpectedReward
+    (inputResults, txResult) <- callTransactionBody (g err) inputs
+    return (inputResults, err `seq` txResult)
 
   applyFallback doFallback doBody x = applyFallback (doFallback x) (doBody x)
 
@@ -132,11 +161,14 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
 -- the context.
 runTransaction :: 
   (TransactionBody f) =>
-  f -> [FallbackType f] -> Inputs -> TransactionID -> Signers -> Bool -> 
+  f -> [FallbackType f] -> [Input] -> TransactionID -> Signers -> Bool -> 
   FaeStorage ()
-runTransaction f0 fallbacks inputArgs txID txSigners isReward = runTX $ do
+runTransaction f0 fallbacks inputs0 txID txSigners isReward = runTX $ do
   let f = foldr applyFallback f0 fallbacks
-  ~(~(iRs, result), os) <- listen $ callTransactionBody f inputArgs
+      inputs
+        | isReward = InputReward : inputs0
+        | otherwise = inputs0
+  ~(~(iRs, result), os) <- listen $ callTransactionBody f inputs
   let inputResults = Vector.fromList iRs
       outputs = Vector.fromList os
   _getStorage . at txID ?= TransactionEntry{..}
