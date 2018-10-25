@@ -543,8 +543,8 @@ lookupWithEscrows escrowMap entID =
 -- ** 'ReturnValue' manipulation
 
 -- | Like 'unBear'.
-getReturnValue :: (Typeable a) => ReturnValue -> a -> a
-getReturnValue (ReturnValue x) x0 = fromMaybe x0 $ cast x
+getReturnValue :: (Typeable a) => ReturnValue -> Maybe a
+getReturnValue (ReturnValue x) = cast x
 
 -- | Like 'bearerType'.
 returnValueType :: ReturnValue -> TypeRep

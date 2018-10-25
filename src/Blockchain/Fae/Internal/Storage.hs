@@ -201,9 +201,6 @@ onlyJust err = lens getter setter where
   getter = Just
   setter _ = fromMaybe $ throw err
 
-listToOutputs :: [Output] -> Outputs
-listToOutputs = Vector.fromList
-
 successful :: InputResults -> Bool
 successful InputResults{..}
   | Failed <- iStatus = False
