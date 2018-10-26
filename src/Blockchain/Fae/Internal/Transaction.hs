@@ -85,7 +85,8 @@ class TransactionBody f where
   -- guaranteed to be defined even if the return value is exceptional,
   -- unless the transaction itself is exceptional, when it throws that
   -- exception.
-  callTransactionBody :: f -> [Input] -> TXStorageM ([InputResults], Result)
+  callTransactionBody :: 
+    f -> [Input] -> TXStorageM ([InputResults], Result, [Output])
 
   -- | "Installs a handler" on the given transaction body.
   applyFallback :: FallbackType f -> f -> f
@@ -97,8 +98,11 @@ instance NFData Input
 
 -- | The base-case instance: a transaction with no arguments.
 instance (Show a) => TransactionBody (FaeTX a) where
-  callTransactionBody doBody [] = lift $ ([],) . Result <$> getFaeTX doBody
-  callTransactionBody _ inputs = return (errIRs, throw BadSignature) where 
+  callTransactionBody doBody [] = do
+    (result, outputs) <- lift $ listen $ Result <$> getFaeTX doBody
+    return ([], result, outputs)
+  callTransactionBody _ inputs = return (errIRs, err, err) where 
+    err = throw BadSignature
     errIRs = fst . errInputResult (const UnexpectedInput) . inputCID <$> inputs
 
   applyFallback doFallback doBody = FaeTX $ do
@@ -110,11 +114,11 @@ instance (Show a) => TransactionBody (FaeTX a) where
 
 -- | The inductive-case instance: a transaction with one more argument.
 instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
-  callTransactionBody g [] = return ([], throw NotEnoughInputs)
-  callTransactionBody g (InputReward : rest) = do
-    let err = throw UnexpectedReward
-    (restResults, txResult) <- callTransactionBody (g err) rest
-    return (restResults, err `seq` txResult)
+  callTransactionBody g [] = return ([], err, err) where 
+    err = throw NotEnoughInputs
+  callTransactionBody g (InputReward : rest) = 
+    (_1 .~ err) . (_2 .~ err) <$> callTransactionBody (g err) rest 
+    where err = throw UnexpectedReward
   callTransactionBody g (InputArgs{..} : rest) = do
     valEM <- use $ at inputCID 
     (iR, newStoredContractM) <- lift $ 
@@ -123,7 +127,7 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
         e = BadArgType (returnValueType rv) (typeRep $ Proxy @a)
         errIR = errInputResult (const e) (iRealID iR) ^. _1
         (x, inputResults) = maybe (throw e, errIR) (,iR) $ getReturnValue rv
-    (restResults, txResult) <- callTransactionBody (g x) rest
+    (restResults, txResult, outputs) <- callTransactionBody (g x) rest
 
     -- Previously also updated the contract version in 'iRealID', but that
     -- muddles the summary output and also allows exporting things that were
@@ -136,7 +140,9 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
     -- wrong type, if the contract ID was bad, or if the contract version
     -- was bad.  Any other kind of error should be contained inside the
     -- 'ReturnValue' of 'iResult'.
-    return (inputResults : restResults, iResult inputResults `seq` txResult)
+    let checkRV :: b -> b
+        checkRV = seq (iResult inputResults)
+    return (inputResults : restResults, checkRV txResult, checkRV outputs)
 
   applyFallback doFallback doBody x = applyFallback (doFallback x) (doBody x)
 
@@ -146,10 +152,9 @@ instance {-# OVERLAPPING #-}
   callTransactionBody g (InputReward : rest) = do
     eID <- newEscrow RewardName
     callTransactionBody (g $ Reward eID) rest
-  callTransactionBody g inputs = do
-    let err = throw ExpectedReward
-    (inputResults, txResult) <- callTransactionBody (g err) inputs
-    return (inputResults, err `seq` txResult)
+  callTransactionBody g inputs = 
+    (_1 .~ err) . (_2 .~ err) <$> callTransactionBody (g err) inputs
+    where err = throw ExpectedReward
 
   applyFallback doFallback doBody x = applyFallback (doFallback x) (doBody x)
 
@@ -168,7 +173,7 @@ runTransaction f0 fallbacks inputs0 txID txSigners isReward = runTX $ do
       inputs
         | isReward = InputReward : inputs0
         | otherwise = inputs0
-  ~(~(iRs, result), os) <- listen $ callTransactionBody f inputs
+  ~(iRs, result, os) <- callTransactionBody f inputs
   let inputResults = Vector.fromList iRs
       outputs = Vector.fromList os
   _getStorage . at txID ?= TransactionEntry{..}
