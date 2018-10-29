@@ -146,8 +146,10 @@ data StoredContract =
 
 -- | Monad modifier; several of ours use escrows.
 type EscrowsT = StateT Escrows
+-- | Also used in "Transaction", so needs a name
+type TXDataM = Reader TXData
 -- | The internal operational monad for Fae contracts.
-type FaeExternalM = ReaderT TXData (Writer [Output])
+type FaeExternalM = WriterT [Output] TXDataM
 -- | The authoring monad for Fae contracts (when wrapped in 'Fae')
 type FaeContractM argType valType = 
   EscrowsT (SuspendT (WithEscrows argType) (WithEscrows valType) FaeExternalM)
@@ -557,6 +559,6 @@ exportReturnValue (ReturnValue x) = exportValue x
 -- ** Running
 
 runFaeTXM :: TXData -> FaeTXM a -> (a, [Output])
-runFaeTXM txData = runWriter . flip runReaderT txData . flip evalStateT escrows
+runFaeTXM txData = flip runReader txData . runWriterT . flip evalStateT escrows
   where escrows = Escrows Map.empty (thisTXID txData)
 
