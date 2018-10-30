@@ -43,9 +43,136 @@ import System.Exit
 import System.FilePath
 
 {-# LANGUAGE OverloadedStrings #-}
+
 import Network.Wai
 import Network.Wai.Handler.Warp (run)
 
+--------------------------------------------------------------------------------
+
+import Control.Concurrent ( forkIO )
+import           Control.Exception
+  ( IOException
+  , try
+  )
+import           Data.Default.Class
+  ( def
+  )
+import           Network.Socket             hiding (recv, send)
+import qualified Network.TLS                as T
+import qualified Network.TLS.Extra          as TE
+import           System.Environment
+  ( getArgs
+  )
+import qualified Data.ByteString            as BS
+import qualified Data.ByteString.Lazy.Char8 as L8
+import           Data.Maybe
+  ( fromMaybe
+  , listToMaybe
+  )  
+--------------------------------------------------------------------------------
+
+tlsPort
+  :: IO PortNumber
+
+recv
+  :: T.Context
+  -> IO (Either IOException BS.ByteString)
+  
+send
+  :: T.Context
+  -> [ BS.ByteString ]
+  -> IO (Either IOException ())
+
+pong
+  :: T.Context
+  -> IO ()
+
+spawn
+  :: (Socket, SockAddr)
+  -> T.Credentials
+  -> IO ()
+
+loop
+  :: Socket
+  -> Either String T.Credential
+  -> IO ()
+
+runPostTXServer
+  :: IO ()
+
+--------------------------------------------------------------------------------
+
+tlsPort =
+  getArgs >>= pure . fromMaybe 8443 . listToMaybe . (map read) 
+
+recv ctx =
+  try $ T.recvData ctx
+
+send ctx bs =
+  try $ T.sendData ctx $ L8.fromChunks $ bs
+
+pong ctx =
+  do
+    res <- recv ctx
+    case Right "ping" == res of
+      False -> T.contextClose ctx
+      True  ->
+        do
+          req <- send ctx $ [ "pong" ]
+          case Right () == req of
+            False -> T.contextClose ctx
+            True  -> pong ctx
+
+spawn (sock, _) creds =
+  do
+    ctx <- T.contextNew sock $ para creds
+    ___ <- T.handshake  ctx
+    pong ctx
+  where
+    para x509 =
+      def
+      { T.serverWantClientCert = False
+      , T.serverShared         = shared
+      , T.serverSupported      = supported
+      }
+      where
+        shared =
+          def
+          { T.sharedCredentials = x509
+          }
+        supported =
+          def
+          { T.supportedVersions = [ T.TLS12 ]
+          , T.supportedCiphers  = ciphers
+          }
+        ciphers =
+          [ TE.cipher_AES128_SHA1
+          , TE.cipher_AES256_SHA1
+          , TE.cipher_RC4_128_MD5
+          , TE.cipher_RC4_128_SHA1
+          ]
+
+loop sock (Right creds) =
+  do
+    conn <- accept $ sock
+    putStrLn $ ("Connected to: " ++) $ show $ snd $ conn
+    ____ <- forkIO $ spawn conn $ T.Credentials [creds]
+    loop sock $ Right creds
+loop ____ (Left msg) =
+  putStrLn $ msg 
+
+runPostTXServer =
+  do
+    port <- tlsPort
+    x509 <- T.credentialLoadX509 "/Users/tim.siwula/Documents/Projects/haskell-p2p/tls/localhost.crt" "/Users/tim.siwula/Documents/Projects/haskell-p2p/tls/localhost.key"
+    sock <- socket AF_INET Stream 0
+    putStrLn $ "Listening on port " ++ show port
+    ____ <- setSocketOption sock ReuseAddr 1
+    ____ <- bind sock $ SockAddrInet port iNADDR_ANY
+    ____ <- listen sock 256
+    loop sock x509
+
+--------------------------------------------------------------------------------
 
 main :: IO ()
 main = do
@@ -59,9 +186,6 @@ main = do
   txQueue <- atomically newTQueue
   args <- parseArgs <$> getArgs
   
-  -- TODO: determine if runTransferServer can be right here
-  --void $ fork $ run 27184 runTransferServer
-  
   flip runReaderT txQueue $ case args of
     ArgsServer args@ServerArgs{..} -> do
       let portDir = "port-" ++ show faePort
@@ -70,8 +194,8 @@ main = do
         setCurrentDirectory portDir
       void $ fork $ runFae tID args
       void $ fork $ runServer importExportPort importExportApp queueTXExecData
-      -- TODO: determine if runTransferServer has to be right here or if above is fine
-      --liftIO $ void $ fork $ run 27184 runTransferServer
+      --void $ fork $ runPostTXServer $ 27184
+            
       case serverMode of
         FaeMode -> runServer faePort (serverApp $ Proxy @String) queueTXExecData
         FaethMode -> runFaeth args tID
@@ -83,6 +207,9 @@ main = do
         putStrLn $ "Unrecognized option(s): " ++ intercalate ", " xs
         usage
         exitFailure
+  
+  -- loop tls server on port 8843
+  runPostTXServer
 
 usage :: IO ()
 usage = do
