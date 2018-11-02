@@ -49,9 +49,11 @@ type a <-| b = (a, b)
 (<-|) :: a -> b -> a <-| b
 (<-|) = (,)
 
--- | Another dynamic type, this time including 'Exportable'.
+-- | Another dynamic type, this time including 'Exportable'.  Its
+-- constructor is strict, so as not to distinguish between an error in the
+-- outer value and an error in the inner value.
 data ReturnValue =
-  forall a. (HasEscrowIDs a, Exportable a) => ReturnValue a
+  forall a. (HasEscrowIDs a, Exportable a) => ReturnValue !a
 
 -- | Something like a closure for the initial state of a new contract
 -- (currently only escrows).  The actual contract function can be
@@ -164,18 +166,21 @@ type PreContractF argType valType =
 -- | A type-correct contract function; 'WithEscrows' is omitted here
 -- because neither of the abstract contracts takes it (though they do use
 -- it internally).
-newtype ContractF argType valType = 
-  ContractF { getContractF :: SuspendStepF argType valType FaeTXM }
+newtype ContractF m argType valType = 
+  ContractF { getContractF :: SuspendStepF argType valType m }
   deriving (Generic, NFData)
 
 -- ** External contract functions
 
 -- | The form of a contract function intended to be called from within
 -- a contract, as well as a precursor to an 'AbstractGlobalContract'.
-type AbstractLocalContract = ContractF BearsValue BearsValue
+type AbstractLocalContract = ContractF FaeTXM BearsValue BearsValue
 -- | The form of a contract function intended to be called from
--- a transaction.
-type AbstractGlobalContract = ContractF String (WithEscrows ReturnValue)
+-- a transaction.  Note that it returns into a 'TXDataM', i.e. does not
+-- expose the mutable inner state of the contract, which is revealed
+-- read-only in the return value.
+type AbstractGlobalContract = 
+  ContractF TXDataM String (ReturnValue, EscrowMap, [Output])
 
 -- ** User-visible
 
@@ -312,6 +317,7 @@ signers = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners
 -- | Terminates the contract entirely, transferring escrows backing the
 -- return value.
 spend :: 
+  forall m argType valType.
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m (WithEscrows valType)
 spend = liftContract . Fae . (takeEscrows >=> lift . terminate)
@@ -320,16 +326,17 @@ spend = liftContract . Fae . (takeEscrows >=> lift . terminate)
 -- return value to the caller and awaiting an argument, depositing its
 -- escrows.
 release :: 
+  forall m argType valType.
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m argType
 release = liftContract . Fae . (takeEscrows >=> lift . suspend >=> putEscrows)
 
 -- | Emits a new output contract endowed with a given list of valuables.
 newContract :: 
-  forall name m.
+  forall m name.
   (
-    ContractName name, Read (ArgType name), Exportable (ValType name), 
-    MonadTX m
+    MonadTX m,
+    ContractName name, Read (ArgType name), Exportable (ValType name)
   ) => 
   name -> m ()
 newContract x = liftTX $ FaeTX $ do
@@ -343,7 +350,7 @@ newContract x = liftTX $ FaeTX $ do
 
 -- | Creates a new escrow endowed with a given list of valuables.
 newEscrow :: 
-  (ContractName name, MonadTX m) =>
+  (MonadTX m, ContractName name) =>
   name -> m (EscrowID name)
 newEscrow contractName = liftTX $ FaeTX $ do
   (entID, contractNextID) <- forkNextID
@@ -355,7 +362,7 @@ newEscrow contractName = liftTX $ FaeTX $ do
 
 -- | Calls an escrow by ID, which must exist in the present context.
 useEscrow :: 
-  (ContractName name, MonadTX m) =>
+  (MonadTX m, ContractName name) =>
   [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)
 useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
   \entID escrowVersion nameOrFunction -> return $ do
@@ -378,7 +385,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 -- ** Calling
 
 -- | Temporarily changes the map of signers according to its first argument.
-remapSigners :: Map String String -> FaeTXM a -> FaeTXM a
+remapSigners :: (MonadReader TXData m) => Map String String -> m a -> m a
 remapSigners renames = local (_thisTXSigners . _getSigners %~ applyRenames) where
   applyRenames keyMap = fmap (flip renameKey keyMap) renames `Map.union` keyMap
   renameKey oldName = Map.findWithDefault (throw $ MissingSigner oldName) oldName
@@ -398,8 +405,9 @@ txData txID txSigners =
 -- | Converts a deeply wrapped function returning an awkward type into
 -- a natural stepwise function call.
 callContract :: 
-  ContractF argType valType -> 
-  argType -> FaeTXM (valType, Maybe (ContractF argType valType))
+  (Monad m) =>
+  ContractF m argType valType -> 
+  argType -> m (valType, Maybe (ContractF m argType valType))
 callContract (ContractF (SuspendStepF f)) = fmap (fmap (fmap ContractF)) . f
 
 -- ** Contract function converters
@@ -420,8 +428,16 @@ globalContract ::
     HasEscrowIDs argType, HasEscrowIDs valType
   ) =>
   PreContractF argType valType -> AbstractGlobalContract
-globalContract = ContractF . 
+globalContract = ContractF . mapSuspendStepF extractState .
   alterSuspendStepF acceptGlobal returnGlobal lift . startSuspendF
+  where
+    extractState xm = do
+      ((y, sfM), s, w) <- unFaeTXM xm
+      return ((y, escrowMap s, w), sfM)
+    unFaeTXM xm = do
+      txID <- view _thisTXID
+      ~(~(x, s), w) <- runWriterT $ runStateT xm (Escrows Map.empty txID)
+      return (x, s, w)
 
 -- | Prepares a value-bearing argument.
 acceptLocal :: 
@@ -451,16 +467,12 @@ acceptGlobal argS = takeEscrows $ fromMaybe err $ readMaybe argS where
   err = throw $ BadInputParse argS $ typeRep $ Proxy @argType
 
 -- | Prepares a value-bearing result together with its table of versioned
--- values.
+-- values.  N.B. The 'ReturnValue' component is _always_ defined, though
+-- its inner value may not be.
 returnGlobal :: 
   (HasEscrowIDs valType, Exportable valType) =>
-  WithEscrows valType -> FaeTXM (WithEscrows ReturnValue)
-returnGlobal yE = do
-  y <- putEscrows yE
-  -- This apparently redundant construction ensures that the expression is
-  -- not undefined, so that the return value type can be obtained without
-  -- running anything that leads to the return value itself.
-  return $ WithEscrows (withEscrows yE) (ReturnValue y)
+  WithEscrows valType -> FaeTXM ReturnValue
+returnGlobal = fmap ReturnValue . putEscrows
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
@@ -555,10 +567,4 @@ returnValueType (ReturnValue x) = typeRep (Just x)
 -- | Taking advantage of the existential type
 exportReturnValue :: (MonadState EscrowMap m) => ReturnValue -> m ByteString
 exportReturnValue (ReturnValue x) = exportValue x
-
--- ** Running
-
-runFaeTXM :: TXData -> FaeTXM a -> (a, [Output])
-runFaeTXM txData = flip runReader txData . runWriterT . flip evalStateT escrows
-  where escrows = Escrows Map.empty (thisTXID txData)
 

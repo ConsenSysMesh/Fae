@@ -82,3 +82,10 @@ alterSuspendStepF fArg fVal fMon g =
   SuspendStepF $ fArg >=> fMon . getSuspendStepF g >=> fVal' 
   where fVal' (y, sfM) = (, alterSuspendStepF fArg fVal fMon <$> sfM) <$> fVal y
 
+-- | Changes the return value of the suspended function.
+mapSuspendStepF :: 
+  (Monad m, Monad m') =>
+  (forall c. m (b, c) -> m' (b', c)) -> SuspendStepF a b m -> SuspendStepF a b' m'
+mapSuspendStepF f (SuspendStepF g) = SuspendStepF $ 
+  fmap (fmap $ fmap $ mapSuspendStepF f) . f . g
+

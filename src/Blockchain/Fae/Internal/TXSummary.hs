@@ -62,7 +62,7 @@ instance Pretty ContractID where
   pPrint = text . prettyContractID
 
 instance Pretty TXSummary where
-  pPrint TXSummary{..} = prettyHeader header (displayException entry) where 
+  pPrint TXSummary{..} = prettyHeader header entry where 
     header = labelHeader "Transaction" transactionID
     result = prettyPair ("result", displayException $ text txResult)
     outputs = prettyVector "outputs" txOutputs
@@ -74,7 +74,9 @@ instance Pretty TXSummary where
         in prettyHeader 
              (prettyPair ("input #" ++ show ix, printCID))
              (displayException prettyInput))
-    entry = vcat [ result, outputs, txSSigners', inputs ]
+    entry = vcat [outcome, rest]
+    outcome = displayException $ vcat [result, outputs] 
+    rest = vcat [txSSigners', inputs]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat $ pVersion [outputs] where 

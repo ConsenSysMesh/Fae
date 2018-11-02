@@ -86,6 +86,7 @@ library
     TupleSections
     TypeApplications
     TypeFamilies
+    TypeFamilyDependencies
     TypeOperators
 
 executable faeServer

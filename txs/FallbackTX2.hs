@@ -1,2 +1,2 @@
-body :: Transaction String String
+body :: String -> FaeTX String
 body = return

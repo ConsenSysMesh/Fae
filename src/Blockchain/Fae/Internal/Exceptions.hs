@@ -77,7 +77,8 @@ data TransactionException =
   UnexpectedInput |
   ExpectedReward |
   UnexpectedReward |
-  BadSignature
+  BadSignature |
+  InputFailed ContractID
 
 newtype TXFieldException = TXFieldException String
 
@@ -158,6 +159,8 @@ instance Show TransactionException where
   show ExpectedReward = "Transaction expected a reward as its first argument"
   show UnexpectedReward = "Transaction passed an unexpected reward"
   show BadSignature = "Transaction signature does not match contract return types"
+  show (InputFailed cID) = 
+    "Used the result of failed input contract " ++ prettyContractID cID 
 
 -- | -
 instance Exception VersionException
