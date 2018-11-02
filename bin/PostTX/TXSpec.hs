@@ -2,7 +2,7 @@
 module PostTX.TXSpec 
   (
     module PostTX.TXSpec, 
-    Inputs, Module, ModuleMap, Renames(..), TransactionID, getTXID
+    Input(..), Module, ModuleMap, Renames(..), TransactionID, getTXID
   ) where
 
 import Blockchain.Fae.FrontEnd
@@ -38,7 +38,7 @@ data TXData =
   {
     dataModules :: LoadedModules,
     fallback :: [String],
-    inputs :: Inputs,
+    inputs :: [Input],
     keys :: [(String, String)],
     reward :: Bool,
     parent :: Maybe TransactionID
@@ -112,7 +112,7 @@ getMakeTXSpec TXData{..} = do
 
 makeTXSpec ::
   (Serialize a) => 
-  LoadedModules -> Inputs -> Keys -> [Identifier] -> 
+  LoadedModules -> [Input] -> Keys -> [Identifier] -> 
   Maybe TransactionID -> Bool -> a ->
   TXSpec a
 makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt = 

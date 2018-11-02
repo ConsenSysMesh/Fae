@@ -74,7 +74,11 @@ data TransactionException =
   IncompleteContract ContractID |
   IncompleteTransaction TransactionID |
   NotEnoughInputs |
-  TooManyInputs
+  UnexpectedInput |
+  ExpectedReward |
+  UnexpectedReward |
+  BadSignature |
+  InputFailed ContractID
 
 newtype TXFieldException = TXFieldException String
 
@@ -151,7 +155,12 @@ instance Show TransactionException where
   show (IncompleteTransaction txID) =
     "Transaction " ++ show txID ++ " has missing result"
   show NotEnoughInputs = "Transaction expected more inputs"
-  show TooManyInputs = "Transaction expected fewer inputs"
+  show UnexpectedInput = "Excess input given transaction body's signature"
+  show ExpectedReward = "Transaction expected a reward as its first argument"
+  show UnexpectedReward = "Transaction passed an unexpected reward"
+  show BadSignature = "Transaction signature does not match contract return types"
+  show (InputFailed cID) = 
+    "Used the result of failed input contract " ++ prettyContractID cID 
 
 -- | -
 instance Exception VersionException

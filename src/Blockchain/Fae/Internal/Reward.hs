@@ -53,10 +53,3 @@ claimReward (Reward eID) = do
   Value <- useEscrow [] eID Token
   return ()
 
-withReward :: (MonadTX m) => Bool -> [ReturnValue] -> m [ReturnValue]
-withReward isReward inputsL
-  | isReward = do
-      eID <- newEscrow RewardName
-      return $ ReturnValue (Reward eID) : inputsL
-  | otherwise = return inputsL
-

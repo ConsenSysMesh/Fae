@@ -74,7 +74,10 @@ data TransactionEntry =
 -- outside meaning.  This is an existential type, so the record names are
 -- just there for documentation; values have to be extracted by
 -- pattern-matching.
-data Result = forall a. (Show a) => Result a
+--
+-- The constructor is strict so that there is no possibility of a hidden
+-- exception in the value.
+data Result = forall a. (Show a) => Result !a
 
 -- | We save the versions map, with the actual values scrubbed, so that it
 -- can be displayed to learn the actual version IDs.
@@ -200,9 +203,6 @@ onlyJust :: (Exception e) => e -> Lens' a (Maybe a)
 onlyJust err = lens getter setter where
   getter = Just
   setter _ = fromMaybe $ throw err
-
-listToOutputs :: [Output] -> Outputs
-listToOutputs = Vector.fromList
 
 successful :: InputResults -> Bool
 successful InputResults{..}

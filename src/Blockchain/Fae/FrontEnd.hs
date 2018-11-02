@@ -53,13 +53,11 @@ import Blockchain.Fae.Internal.Messages hiding
 import Blockchain.Fae.Internal.TXSummary
 import Blockchain.Fae.Internal.Storage hiding 
   (
-    hoistFaeStorage, nonceAt, checkNonce, nonceSetter,
-    listToOutputs, emptyOutputs, combineIOV, combineO
+    txPartLens, txInputLens, vectorAt, joinUncertainty, uncertain, onlyJust
   )
-import Blockchain.Fae.Internal.Transaction hiding
+import Blockchain.Fae.Internal.Transaction
   (
-    TXStorageM, doTX, doFallback, runInputContracts, 
-    runInputContract, runContract, hoistFaeContractNaught
+    Input(..), TXStorageM, TransactionBody(..), runTransaction
   )
 import Blockchain.Fae.Internal.TX
 

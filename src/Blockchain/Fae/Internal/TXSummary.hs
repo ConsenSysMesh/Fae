@@ -65,7 +65,7 @@ instance Pretty TXSummary where
   pPrint TXSummary{..} = prettyHeader header entry where 
     header = labelHeader "Transaction" transactionID
     result = prettyPair ("result", displayException $ text txResult)
-    outputs = displayException $ prettyVector "outputs" txOutputs
+    outputs = prettyVector "outputs" txOutputs
     txSSigners' = prettyList "signers" txSSigners
     inputs = txInputSummaries & vcat . toList . Vector.imap
       (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
@@ -74,14 +74,16 @@ instance Pretty TXSummary where
         in prettyHeader 
              (prettyPair ("input #" ++ show ix, printCID))
              (displayException prettyInput))
-    entry = vcat [ result, outputs, txSSigners', inputs ]
+    entry = vcat [outcome, rest]
+    outcome = displayException $ vcat [result, outputs] 
+    rest = vcat [txSSigners', inputs]
 
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat $ pVersion [outputs] where 
     pVersion
       | Updated <- txInputStatus = (prettyPair ("version", txInputVersion) :)
       | otherwise = id
-    outputs = prettyVector  "outputs" txInputOutputs
+    outputs = prettyVector "outputs" txInputOutputs
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
