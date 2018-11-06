@@ -38,13 +38,6 @@ unsafeIsDefined act = unsafePerformIO $ catchAll
 
 -- * Types
 
--- | Exceptions for version-related errors.
-data VersionException =
-  BadVersionID Int VersionID TypeRep |
-  BadVersionedType VersionID TypeRep TypeRep |
-  UnresolvedVersionID VersionID |
-  UnexpectedResolvedVersion
-
 -- | Exceptions for storage-related errors.
 data StorageException =
   BadTransactionID TransactionID |
@@ -52,7 +45,7 @@ data StorageException =
   BadInputID TransactionID Int |
   BadVersion ContractID Int Int |
   InvalidVersionAt ContractID |
-  ContractOmitted TransactionID Int |
+  ContractOmitted TransactionID String |
   CantImport ByteString TypeRep |
   ImportWithoutVersion ContractID |
   NotExportable TypeRep |
@@ -91,20 +84,6 @@ instance Show TXFieldException where
   show (TXFieldException e) = e
 
 -- | -
-instance Show VersionException where
-  show (BadVersionID ix vID rep) = 
-    "No version found in input contract #" ++ show ix ++ 
-    " with ID: " ++ show vID ++
-    " (expected type: " ++ show rep ++ ")"
-  show (BadVersionedType vID bad good) = 
-    "For value with version ID: " ++ show vID ++ 
-    "; expected type: " ++ show good ++ 
-    "; got: " ++ show bad
-  show (UnresolvedVersionID vID) = "Unresolved version ID: " ++ show vID
-  show UnexpectedResolvedVersion = 
-    "Found a resolved version where version ID was expected."
-
--- | -
 instance Show StorageException where
   show (BadTransactionID tID) = "Not a transaction ID: " ++ show tID
   show (BadContractID cID) = "Not a contract ID: " ++ prettyContractID cID
@@ -115,9 +94,8 @@ instance Show StorageException where
     "Contract " ++ prettyContractID cID ++ 
     " has nonce " ++ show good ++ "; got: " ++ show bad
   show (InvalidVersionAt cID) = "Can't look up contract ID: " ++ prettyContractID cID
-  show (ContractOmitted txID ix) =
-    "Contract call #" ++ show ix ++ 
-    " in transaction " ++ show txID ++ 
+  show (ContractOmitted txID descr) =
+    descr ++ " in transaction " ++ show txID ++ 
     " was replaced with an imported return value."
   show (CantImport bs ty) =
     "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
@@ -168,8 +146,6 @@ instance Show TransactionException where
   show (InputFailed cID) = 
     "Used the result of failed input contract " ++ prettyContractID cID 
 
--- | -
-instance Exception VersionException
 -- | -
 instance Exception StorageException
 -- | -

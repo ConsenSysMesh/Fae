@@ -69,7 +69,9 @@ module Blockchain.Fae
     -- ** Contract API
     spend, release, useEscrow, newEscrow, 
     newContract, usingState, usingReader,
-    lookupSigner, signer, signers, (<-|), claimReward, 
+    lookupSigner, signer, signers, 
+    lookupMaterial, material, materials,
+    (<-|), claimReward, 
     -- * Opaque classes
     HasEscrowIDs, {- Versionable,-} ContractArg, ContractVal, 
     -- * Re-exports

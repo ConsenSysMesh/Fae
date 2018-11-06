@@ -351,17 +351,17 @@ spend = liftContract . Fae . (takeEscrows >=> lift . terminate)
 -- return value to the caller and awaiting an argument, depositing its
 -- escrows.
 release :: 
-  forall m argType valType.
+  forall argType valType m.
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m argType
 release = liftContract . Fae . (takeEscrows >=> lift . suspend >=> putEscrows)
 
 -- | Emits a new output contract endowed with a given list of valuables.
 newContract :: 
-  forall m name.
+  forall name m.
   (
-    MonadTX m,
-    ContractName name, Read (ArgType name), Exportable (ValType name)
+    ContractName name, Read (ArgType name), Exportable (ValType name),
+    MonadTX m
   ) => 
   name -> m ()
 newContract x = liftTX $ FaeTX $ do
@@ -375,7 +375,7 @@ newContract x = liftTX $ FaeTX $ do
 
 -- | Creates a new escrow endowed with a given list of valuables.
 newEscrow :: 
-  (MonadTX m, ContractName name) =>
+  (ContractName name, MonadTX m) =>
   name -> m (EscrowID name)
 newEscrow contractName = liftTX $ FaeTX $ do
   (entID, contractNextID) <- forkNextID
@@ -387,7 +387,7 @@ newEscrow contractName = liftTX $ FaeTX $ do
 
 -- | Calls an escrow by ID, which must exist in the present context.
 useEscrow :: 
-  (MonadTX m, ContractName name) =>
+  (ContractName name, MonadTX m) =>
   [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)
 useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
   \entID escrowVersion nameOrFunction -> return $ do

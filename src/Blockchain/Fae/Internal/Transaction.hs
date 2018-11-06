@@ -171,7 +171,7 @@ instance {-# OVERLAPPING #-}
   (TransactionBody f) => TransactionBody (Reward -> f) where
 
   callTransactionBody g (InputReward : rest) = do
-    x <- lift $ Reward . fst <$> globalize (newEscrow @FaeTX RewardName)
+    x <- lift $ Reward . fst <$> globalize (newEscrow @_ @FaeTX RewardName)
     callTransactionBody (g x) rest
   callTransactionBody g inputs = 
     (_2 .~ err) . (_3 .~ []) <$> callTransactionBody (g err) inputs
