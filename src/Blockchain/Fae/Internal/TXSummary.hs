@@ -82,12 +82,17 @@ instance Pretty TXSummary where
     rest = vcat [txSSigners', inputs, materials]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat $ pVersion [outputs, materials] where 
-    pVersion
-      | Updated <- txInputStatus = (prettyPair ("version", txInputVersion) :)
-      | otherwise = id
-    outputs = prettyVector "outputs" txInputOutputs
-    materials = printMaterialsSummaries txInputMaterialsSummaries
+  pPrint TXInputSummary{..} = vcat $ 
+    [
+      displayException (vcat $ pVersion [outputs]), 
+      materials
+    ]
+    where
+      pVersion
+        | Updated <- txInputStatus = (prettyPair ("version", txInputVersion) :)
+        | otherwise = id
+      outputs = prettyVector "outputs" txInputOutputs
+      materials = printMaterialsSummaries txInputMaterialsSummaries
 
 -- | This occurs twice, so it's worth having its own function.
 printMaterialsSummaries :: MaterialsSummaries -> Doc
@@ -98,7 +103,7 @@ printMaterialsSummaries =
 -- | This occurs twice, so it's worth having its own function.
 printInputSummary :: String -> InputSummary -> Doc
 printInputSummary tag (cID, txInputSummary@TXInputSummary{..}) = 
-  prettyHeader (prettyPair (tag, printCID)) (displayException prettyInput)
+  prettyHeader (prettyPair (tag, printCID)) prettyInput
   where
     printCID = pPrint cID <+> parens (text $ show txInputStatus) 
     prettyInput = pPrint txInputSummary

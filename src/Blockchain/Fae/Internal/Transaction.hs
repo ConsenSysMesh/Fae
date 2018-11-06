@@ -69,13 +69,6 @@ type InputMaterials = [(String, Input)]
 -- completely independent output lists.
 type TXStorageM = FaeStorageT TXBodyM
 
--- | The monad in which the transaction body is executed.  Escrows are
--- accumulated from the various contract calls, but no outputs are
--- accumulated, because those are collected individually from each call and
--- from the body itself.  This elision makes it impossible to express
--- various subtle error states involving undefined outputs.
-type TXBodyM = EscrowsT TXDataM
-
 -- * Typeclasses
 
 -- | Replaces the ultimate return type with a partially-run monad, so as to
@@ -235,7 +228,7 @@ runInputArgs ::
 runInputArgs f InputArgs{inputRenames = Renames rMap, ..} = remapSigners rMap $ do
   (localMaterials, iMaterialsM) <- (_2 %~ Just) <$> runMaterials inputInputs
   valEM <- use $ at inputCID 
-  (iR, newStoredContractM) <- lift . lift $ 
+  (iR, newStoredContractM) <- lift $ 
     -- The transaction's local materials do not propagate to its regular
     -- inputs.  Note that none of this contract's local materials
     -- propagate to their own materials calls either; each contract gets
@@ -267,7 +260,7 @@ runInputArgs f InputArgs{inputRenames = Renames rMap, ..} = remapSigners rMap $ 
 -- occurred during execution of the input call.
 doInput :: 
   ContractID -> String -> Maybe (IxValue Storage) ->
-  TXDataM (InputResults, Maybe StoredContract)
+  TXBodyM (InputResults, Maybe StoredContract)
 -- None of the alternatives here should throw an exception.  If an
 -- exception is to be returned, it needs to be via `errInputResult`, so
 -- that at least the input /has/ a result.
@@ -285,7 +278,7 @@ doInput cID arg valEM = cID &
 -- local hash from its own argument.
 contractCallResult :: 
   String -> StoredContract -> ContractID -> 
-  TXDataM (InputResults, Maybe StoredContract)
+  TXBodyM (InputResults, Maybe StoredContract)
 contractCallResult arg StoredContract{..} cID 
   | contractVersion cID `matchesVersion` Version storedVersion = do
       runResult <- pushArg arg $ 
@@ -299,7 +292,7 @@ contractCallResult arg StoredContract{..} cID
 -- into context.  This will never fail, and will also never update the
 -- contract (which is not present).
 importedCallResult :: 
-  InputResults -> ContractID -> TXDataM (InputResults, Maybe StoredContract)
+  InputResults -> ContractID -> TXBodyM (InputResults, Maybe StoredContract)
 importedCallResult = const . return . (,Nothing)
 
 -- | Constructs a conforming exceptional input result, containing all the
@@ -323,15 +316,16 @@ runContract ::
   VersionID ->
   AbstractGlobalContract -> 
   String ->
-  TXDataM (InputResults, Maybe AbstractGlobalContract)
+  TXBodyM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID iVersionID fAbs arg = do
   ~(~(returnValue, escrowMap, outputsL), gAbsM) <- callContract fAbs arg
   let enforce :: a -> a
       enforce = seq outputsL . seq escrowMap . seq returnValue
+      enforcedRV = enforce returnValue
       iOutputsM = Just $ Vector.fromList outputsL
-      iResult = WithEscrows (enforce escrowMap) (enforce returnValue)
+      iResult = WithEscrows (enforce escrowMap) enforcedRV
       iStatus
-        | not (unsafeIsDefined returnValue) = Failed
+        | not (unsafeIsDefined enforcedRV) = Failed
         | Nothing <- gAbsM = Deleted
         | otherwise = Updated
       iMaterialsM = Nothing -- Changed in 'runInputArgs'
