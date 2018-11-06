@@ -40,6 +40,7 @@ data TXMessage a =
     salt :: a, -- ^ Needs to be the first field
     mainModulePreview :: ModulePreview,
     otherModulePreviews :: Map String ModulePreview,
+    materialsCalls :: InputMaterials,
     inputCalls :: [Input],
     fallbackFunctions :: [String],
     signatures :: Map String (PublicKey, Maybe Signature)
@@ -119,12 +120,13 @@ getTXID = digest . unsignedTXMessage
 -- constructing the transaction call.  Modules must be placed in the
 -- appropriate directory structure by the client.
 txMessageToTX :: (Serialize a) => Bool -> TXMessage a -> Bool -> Maybe TX
-txMessageToTX isReward txm@TXMessage{..} unchecked = do
+txMessageToTX isReward txm unchecked = do
   TXMessage{..} <- unsign txm
   let 
     txID = getTXID txm
     pubKeys = Signers $ fst <$> signatures
     fallback = fallbackFunctions
+    txMaterials = materialsCalls
     inputs = inputCalls
   return TX{..}
   where unsign | unchecked = Just . unsignedTXMessage

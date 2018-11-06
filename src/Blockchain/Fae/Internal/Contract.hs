@@ -118,8 +118,12 @@ data TXData =
   {
     thisTXSigners :: Signers,
     localHash :: Digest,
-    thisTXID :: TransactionID
+    thisTXID :: TransactionID,
+    localMaterials :: MaterialsMap
   }
+
+-- | Useful shorthand.
+type MaterialsMap = Map String ReturnValue
 
 -- ** Contract outputs
 
@@ -259,7 +263,6 @@ makeLenses ''StoredContract
 {- Instances -}
 
 instance NFData Output
-
 instance NFData StoredContract
 
 instance HasEscrowIDs ReturnValue where
@@ -301,6 +304,28 @@ instance {-# OVERLAPPABLE #-}
   liftTX = lift . liftTX
 
 -- * API Functions
+
+-- | Looks up a material by name, maybe.  A 'Nothing' can mean that the
+-- name was not found /or/ that the named value had the wrong type.
+lookupMaterial :: forall a m. (MonadTX m, Typeable a) => String -> m (Maybe a)
+lookupMaterial name = liftTX . FaeTX $
+  view _localMaterials <&> (Map.lookup name >=> getReturnValue) 
+
+-- | Looks up a material by name, throwing individual errors in case of
+-- missing name or incorrect material type under an existing name.
+material :: forall a m. (MonadTX m, Typeable a) => String -> m a
+material name = liftTX . FaeTX $
+  getRV . Map.findWithDefault missingErr name <$> view _localMaterials 
+  where
+    getRV xRV = fromMaybe (badTypeErr xRV) $ getReturnValue xRV
+    missingErr = throw $ MissingMaterial name
+    badTypeErr xRV = 
+      throw $ BadMaterialType name (typeRep $ Proxy @a) (returnValueType xRV)
+
+-- | Uses all the materials in the map with a given type, ignoring the ones
+-- with other types.
+materials :: forall a m. (MonadTX m, Typeable a) => m (Map String a)
+materials = liftTX . FaeTX $ Map.mapMaybe getReturnValue <$> view _localMaterials
 
 -- | Looks up a named signatory, maybe. 
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
@@ -399,7 +424,8 @@ txData txID txSigners =
   {
     thisTXSigners = txSigners,
     localHash = txID,
-    thisTXID = txID
+    thisTXID = txID,
+    localMaterials = Map.empty
   }
 
 -- | Converts a deeply wrapped function returning an awkward type into

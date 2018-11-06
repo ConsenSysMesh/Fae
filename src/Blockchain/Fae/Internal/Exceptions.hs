@@ -64,6 +64,8 @@ data ContractException =
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
+  BadMaterialType String TypeRep TypeRep |
+  MissingMaterial String |
   BadEscrowID EntryID |
   BadEscrowName EntryID TypeRep TypeRep |
   MissingSigner String |
@@ -138,6 +140,10 @@ instance Show ContractException where
     "Expected argument type: " ++ show good ++ "; got: " ++ show bad
   show (BadValType bad good) =
     "Expected value type: " ++ show good ++ "; got: " ++ show bad
+  show (BadMaterialType name bad good) = 
+    "Expected material '" ++ name ++ "' of type: " ++ show good ++ 
+    "; got: " ++ show bad
+  show (MissingMaterial name) = "No material named " ++ show name
   show (BadEscrowID eID) = "No escrow found in this contract with ID: " ++ show eID
   show (BadEscrowName entID bad good) =
     "Wrong contract name for escrow " ++ show entID ++ 

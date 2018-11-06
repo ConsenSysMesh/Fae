@@ -10,13 +10,16 @@ PostTX accepts transactions written in a yaml-like format, which is parsed by th
 -}
 module PostTX.Parser where
 
-import Blockchain.Fae.FrontEnd (ContractID(..))
+import Blockchain.Fae.FrontEnd (ContractID(..), InputMaterials)
+
+import Common.Lens
 
 import Control.Applicative hiding (some)
 import Control.Monad
 import Control.Monad.Trans
 
 import Data.Char
+import Data.Either
 import Data.Maybe
 import Data.Void
 
@@ -67,6 +70,7 @@ specFile = makePermParser $
   <$$> noIndent body
   <|?> (Map.empty, noIndent others)
   <|?> ([], noIndent fallback)
+  <|?> ([], noIndent materials)
   <|?> ([], noIndent inputs)
   <|?> ([], noIndent keys)
   <|?> (False, noIndent reward)
@@ -100,27 +104,45 @@ others = fmap Map.fromList $ titledList "others" $ listItem readModule
 fallback :: SpecParser [String]
 fallback = titledList "fallback" $ listItem literal
 
+-- | >>> materials
+--   >>>   name = 
+materials :: SpecParser InputMaterials
+materials = titledList "materials" $ input (equalsItem literalEnd)
+
 -- | >>> inputs
---   >>>   <contract ID> = <'Read'able argument>
---   >>>     <local role> = <global role>
---   >>>     ...
+--   >>>   input
 --   >>>   ...
--- Specifies, optionally, a list of contract calls by ID and argument.
--- Each one may, itself, optionally have a list of "renamings" of roles
--- (signer names, as in the @keys@ section) that hold during that call.
--- This renaming facility is essential to using stock contracts such as
--- @deposit@ that expect to authenticate the signers in specifically named
--- roles, which may not be the names used in the transaction that calls
--- it.
+-- Specifies the contract calls to be passed as arguments to the
+-- transaction function.
 inputs :: SpecParser [Input]
-inputs = titledList "inputs" $ do
-  ((cID, arg), renamesL) <- 
-    headedList (equalsItem contractID literal) (equalsItem literalEnd literal)
-  return $ InputArgs cID arg $ Renames $ Map.fromList renamesL
+inputs = titledList "inputs" $ snd <$> input (fmap ("",))
+
+-- | >>> prefix <contract ID> : <'Read'able argument>
+--   >>>   <local role> = <global role>
+--   >>>   ...
+--   >>> ...
+-- Specifies contract call by ID and argument, with optional prefacing
+-- material (e.g. a label).  Each one may, optionally have a list of
+-- "renamings" of roles (signer names, as in the @keys@ section) that hold
+-- during that call.  This renaming facility is essential to using stock
+-- contracts such as @deposit@ that expect to authenticate the signers in
+-- specifically named roles, which may not be the names used in the
+-- transaction that calls it.
+input :: 
+  (forall a. SpecParser a -> SpecParser (String, a)) -> SpecParser (String, Input)
+input pre = do
+  ((prefix, (inputCID, inputArg)), itemEs) <- 
+    headedList (pre $ colonItem contractID literal) itemE
+  let (inputInputs, inputRenames) = 
+        (_2 %~ Renames . Map.fromList) $ partitionEithers itemEs
+  return (prefix, InputArgs{..})
   where 
     -- Matches the 'Show' instance in "Blockchain.Fae.Internal.IDs.Types"
     contractID end = 
       ContractID <$> readPath <*> readPath <*> readPath <*> readEnd end
+    itemE = 
+      (Left <$> input (equalsItem literalEnd)) <|> 
+      (Right <$> equalsItem literalEnd literal)
 
 -- | >>> keys
 --   >>>   <global role name> = <private key name> | <public key hex string>
@@ -159,15 +181,25 @@ parent = equalsName "parent" readWord
 equalsName :: String -> SpecParser a -> SpecParser a
 equalsName name p = fmap snd $ equalsItem (symbol name <*) p <* multilineBlank
 
--- | Parses an expression like @a = b@, where at least the @a =@ part is on
--- one line.  Its behavior with respect to following whitespace depends on
--- the second parameter; if it doesn't absorb newlines, an 'equalsItem' may
--- be part of a list.  This reads right up to the equals, so if you want to
--- absorb preceding spaces, the @lhsEnd@ must be like @literalEnd@, which
--- does so.
+-- | Equals-separated pair.
 equalsItem :: 
   (SpecParser String -> SpecParser a) -> SpecParser b -> SpecParser (a,b)
-equalsItem lhsEnd = liftA2 (,) $ lhsEnd $ symbol "="
+equalsItem = sepPair "="
+
+-- | Colon-separated pair.
+colonItem :: 
+  (SpecParser String -> SpecParser a) -> SpecParser b -> SpecParser (a,b)
+colonItem = sepPair ":"
+
+-- | Parses an expression like @a sep b@, where at least the @a is on
+-- one line, as is @sep@ if it does not contain a newline.  Its behavior
+-- with respect to following whitespace depends on the third parameter; if
+-- it doesn't absorb newlines, an 'equalsItem' may be part of a list.  This
+-- reads right up to the separator, so if you want to absorb preceding spaces,
+-- the @lhsEnd@ must be like @literalEnd@, which does so.
+sepPair :: 
+  String -> (SpecParser String -> SpecParser a) -> SpecParser b -> SpecParser (a,b)
+sepPair sep lhsEnd = liftA2 (,) $ lhsEnd $ symbol sep
 
 -- | Parses an expression like @- a@, where the behavior with respect to
 -- following whitespace depends on the argument; if it doesn't absorb

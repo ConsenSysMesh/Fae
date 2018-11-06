@@ -71,6 +71,7 @@ data TX =
   {
     isReward :: Bool,
     txID :: TransactionID,
+    txMaterials :: InputMaterials,
     inputs :: [Input],
     pubKeys :: Signers,
     fallback :: [String]
@@ -119,12 +120,12 @@ interpretTX ::
   (Typeable m, MonadMask m, MonadIO m) => 
   TX -> FaeInterpretT m ()
 interpretTX TX{..} = do
-  faeInterpret [txModule] runString $ \f -> f inputs txID pubKeys isReward
+  faeInterpret [txModule] expr $ \f -> f txMaterials inputs txID pubKeys isReward
   where
     txModule = mkTXModuleName txID
     -- Contrary to comments in the @hint@ documentation, the directory
     -- @"."@ is /not/ always included in the search path.
-    runString = unwords
+    expr = unwords
       [
         "runTransaction",
         "body", 
