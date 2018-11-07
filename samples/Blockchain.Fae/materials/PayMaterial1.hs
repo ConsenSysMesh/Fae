@@ -1,7 +1,7 @@
 body :: FaeTX ()
 body = do
   newContract @(Contract () (EscrowID (Contract () Int))) $
-    \_ -> newEscrow (\_ -> traverse release [1 ..] >> spend 0) >>= spend
+    feedback $ \_ -> newEscrow (\_ -> traverse release [1 ..] >> spend 0) >>= release
   newContract @(Contract () (EscrowID (Contract () Int))) $
     let f _ = do
           eID <- material "eID"

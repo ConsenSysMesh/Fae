@@ -75,7 +75,7 @@ type TXStorageM = FaeStorageT TXBodyM
 -- stabilize the outputs.
 type family GlobalType a = t | t -> a where
   GlobalType (a -> f) = a -> GlobalType f
-  GlobalType (FaeTX a) = TXBodyM (a, [Output])
+  GlobalType (FaeTX a) = EscrowsT TXDataM (a, [Output])
 
 class Globalizable f where
   globalize :: f -> GlobalType f
@@ -120,7 +120,9 @@ instance NFData Input
 -- | The base-case instance: a transaction with no arguments.
 instance (Show a) => TransactionBody (FaeTX a) where
   callTransactionBody doBody [] = lift $ do
-    ~(result, os) <- doBody
+    txID <- view _thisTXID
+    escrows <- pop
+    ~(result, os) <- lift $ evalStateT doBody $ Escrows escrows txID
     let outputs = if unsafeIsDefined os then os else []
     return ([], Result result, outputs)
   callTransactionBody doBody (InputReward : rest) =
@@ -164,8 +166,17 @@ instance {-# OVERLAPPING #-}
   (TransactionBody f) => TransactionBody (Reward -> f) where
 
   callTransactionBody g (InputReward : rest) = do
-    x <- lift $ Reward . fst <$> globalize (newEscrow @_ @FaeTX RewardName)
+    x <- lift . keepEscrows $ 
+      Reward . fst <$> globalize (newEscrow @_ @FaeTX RewardName)
     callTransactionBody (g x) rest
+    where
+      keepEscrows :: EscrowsT TXDataM a -> TXBodyM a
+      keepEscrows xm = do
+        txID <- view _thisTXID
+        (x, Escrows{..}) <- lift $ runStateT xm $ Escrows Map.empty txID
+        keep escrowMap
+        return x
+
   callTransactionBody g inputs = 
     (_2 .~ err) . (_3 .~ []) <$> callTransactionBody (g err) inputs
     where err = throw ExpectedReward
@@ -200,16 +211,16 @@ runTransaction f fbs materialArgs inputs0 txID txSigners isReward = runTX $ do
   let inputResults = Vector.fromList iRs
       outputs = Vector.fromList os
   _getStorage . at txID ?= TransactionEntry{..}
-  where runTX = FaeStorage . mapStateT (flip runReaderT r0 . flip evalStateT s0)
+  where runTX = FaeStorage . mapStateT (flip runReaderT r0 . flip evalStateT [])
         r0 = txData txID txSigners
-        s0 = Escrows Map.empty txID
 
 -- | Runs the materials as inputs, providing both kinds of result and /not/
 -- type-checking the return values (that is done at the point of use).
 runMaterials :: InputMaterials -> TXStorageM (MaterialsMap, Materials)
-runMaterials = 
-  fmap ((_1 %~ Map.fromList) . (_2 %~ Vector.fromList) . unzip . map split) .
-  traverse (traverse $ runInputArgs Just) 
+runMaterials ims = do
+  lift $ push Map.empty
+  fmap ((_1 %~ Map.fromList) . (_2 %~ Vector.fromList) . unzip . map split) $
+    traverse (traverse $ runInputArgs Just) ims
   where split (name, (x, inputResults)) = ((name, x), (name, inputResults))
 
 -- | This is apparently polymorphic, but in fact will fail if the return
@@ -235,14 +246,15 @@ runInputArgs f InputArgs{inputRenames = Renames rMap, ..} = remapSigners rMap $ 
     -- just the materials that are declared exactly for it.
     local (_localMaterials .~ localMaterials) $
     doInput inputCID inputArg valEM
-  rv <- lift $ putEscrows $ iResult iR
-  let cID = iRealID iR
+  let WithEscrows escrows rv = iResult iR
+      cID = iRealID iR
       e = BadArgType (returnValueType rv) (typeRep $ Proxy @a)
       errIR = errInputResult (const e) cID ^. _1
       (x, inputResults)
         | unsafeIsDefined rv =
             maybe (throw BadSignature, errIR) (,iR) $ f rv
         | otherwise = (throw $ InputFailed cID, iR)
+  lift $ keep escrows
   -- Previously also updated the contract version in 'iRealID', but that
   -- muddles the summary output and also allows exporting things that were
   -- not called by version, which is actually not a good idea since the
@@ -318,16 +330,12 @@ runContract ::
   String ->
   TXBodyM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID iVersionID fAbs arg = do
-  ~(~(returnValue, escrowMap, outputsL), gAbsM) <- callContract fAbs arg
-  let enforce :: a -> a
-      enforce = seq outputsL . seq escrowMap . seq returnValue
-      enforcedRV = enforce returnValue
-      iOutputsM = Just $ Vector.fromList outputsL
-      iResult = WithEscrows (enforce escrowMap) enforcedRV
+  ~(~(iResult, outputsL), gAbsM) <- callContract fAbs arg
+  let iOutputsM = Just $ Vector.fromList outputsL
+      iMaterialsM = Nothing -- Changed in 'runInputArgs'
       iStatus
-        | not (unsafeIsDefined enforcedRV) = Failed
+        | not (unsafeIsDefined $ getWithEscrows iResult) = Failed
         | Nothing <- gAbsM = Deleted
         | otherwise = Updated
-      iMaterialsM = Nothing -- Changed in 'runInputArgs'
   return (InputResults{..}, gAbsM)
 

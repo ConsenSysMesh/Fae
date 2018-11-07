@@ -27,7 +27,7 @@ import Control.Monad.Writer
 
 import Control.DeepSeq
 
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Map (Map)
 import Data.Maybe
 import Data.Proxy
@@ -161,8 +161,10 @@ type FaeContractM argType valType =
   EscrowsT (SuspendT (WithEscrows argType) (WithEscrows valType) FaeExternalM)
 -- | The authoring monad for Fae transactions (when wrapped in 'FaeTX')
 type FaeTXM = EscrowsT FaeExternalM
--- | The monad in which the transaction body is run.
-type TXBodyM = EscrowsT TXDataM
+-- | The monad in which the transaction body is run.  Escrows are kept, but
+-- not for casual use; the list is a stack tracing the descent into
+-- sub-input calls.
+type TXBodyM = StateT [EscrowMap] TXDataM
 
 -- ** Internal contract functions
 
@@ -185,7 +187,7 @@ type AbstractLocalContract = ContractF FaeTXM BearsValue BearsValue
 -- a transaction.  Note that it returns into a 'TXBodyM', i.e. does not
 -- expose the outputs state, which is returned read-only in the return value.
 type AbstractGlobalContract = 
-  ContractF TXBodyM String (ReturnValue, EscrowMap, [Output])
+  ContractF TXBodyM String (WithEscrows ReturnValue, [Output])
 
 -- ** User-visible
 
@@ -265,6 +267,9 @@ makeLenses ''StoredContract
 
 instance NFData Output
 instance NFData StoredContract
+
+instance NFData EscrowEntry where
+  rnf = (`seq` ())
 
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
@@ -455,13 +460,13 @@ globalContract ::
     HasEscrowIDs argType, HasEscrowIDs valType
   ) =>
   PreContractF argType valType -> AbstractGlobalContract
-globalContract = ContractF . mapSuspendStepF extractState .
-  alterSuspendStepF acceptGlobal returnGlobal lift . startSuspendF
-  where
-    extractState xm = do
-      let sw ~(~(x,s),w) = ((x,w),s)
-      ~(~(~(WithEscrows s y), sfM), w) <- mapStateT (fmap sw . runWriterT) xm
-      return ((y, s, w), sfM)
+globalContract = ContractF . 
+  alterSuspendStepF acceptGlobal returnGlobal extractOutputs . startSuspendF
+  where 
+    extractOutputs mp = lift $ do
+      ~(~(y, sfM), w) <- runWriterT mp
+      let wForced = force w
+      return ((wForced `seq` sfM `deepseq` y, wForced), sfM)
 
 -- | Prepares a value-bearing argument.
 acceptLocal :: 
@@ -481,8 +486,8 @@ returnLocal = fmap bearer . putEscrows
 -- | Parses the literal argument into the argument type and collects all
 -- the ambient escrows, which are those from this contract's materials.
 acceptGlobal :: forall argType.
-  (Read argType, Typeable argType) => String -> FaeTXM (WithEscrows argType)
-acceptGlobal argS = flip WithEscrows arg <$> use _escrowMap where 
+  (Read argType, Typeable argType) => String -> TXBodyM (WithEscrows argType)
+acceptGlobal argS = flip WithEscrows arg <$> pop where 
   err = throw $ BadInputParse argS $ typeRep $ Proxy @argType
   -- Laziness assurance: the 'fromMaybe' function (which is not lazy) is
   -- nonetheless safe here because 'argS' is not provided by user code, and
@@ -495,8 +500,14 @@ acceptGlobal argS = flip WithEscrows arg <$> use _escrowMap where
 -- because they are returned by the 'AbstractGlobalContract'.
 returnGlobal :: 
   (HasEscrowIDs valType, Exportable valType) =>
-  WithEscrows valType -> FaeTXM (WithEscrows ReturnValue)
-returnGlobal = return . (_getWithEscrows %~ ReturnValue)
+  (WithEscrows valType, [Output]) -> TXBodyM (WithEscrows ReturnValue, [Output])
+returnGlobal (WithEscrows escrows y, outputs) = do
+  keep escrowsForced
+  return (WithEscrows escrowsForced rv, outputsForced)
+  where 
+    escrowsForced = force escrows
+    outputsForced = escrowsForced `seq` outputs
+    rv = escrowsForced `seq` ReturnValue y
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
@@ -591,4 +602,19 @@ returnValueType (ReturnValue x) = typeRep (Just x)
 -- | Taking advantage of the existential type
 exportReturnValue :: (MonadState EscrowMap m) => ReturnValue -> m ByteString
 exportReturnValue (ReturnValue x) = exportValue x
+
+-- * 'TXBodyM' stack manipulation
+
+push :: EscrowMap -> TXBodyM ()
+push = modify . cons 
+
+pop :: TXBodyM EscrowMap
+pop = gets uncons >>= maybe err act where
+  err = throw EmptyInputStack
+  act (em, rest) = put rest >> return em
+
+keep :: EscrowMap -> TXBodyM ()
+keep newEM = gets uncons >>= maybe err act where
+  err = throw EmptyInputStack
+  act (oldEM, rest) = put $ newEM `Map.union` oldEM : rest
 

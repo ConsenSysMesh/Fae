@@ -68,7 +68,7 @@ module Blockchain.Fae
     Fae, MonadContract, WithEscrows, EscrowID, Reward,
     -- ** Contract API
     spend, release, useEscrow, newEscrow, 
-    newContract, usingState, usingReader,
+    newContract, usingState, usingReader, feedback,
     lookupSigner, signer, signers, 
     lookupMaterial, material, materials,
     (<-|), claimReward, 
@@ -89,6 +89,7 @@ import Blockchain.Fae.Internal.Transaction
 
 import Common.Lens
 
+import Control.Monad.Fix
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -128,4 +129,18 @@ usingReader ::
   (a -> ReaderT r m b) ->
   (a -> m b)
 usingReader r f = flip runReaderT r . f
+
+-- | A shorthand for defining a contract that is, essentially, a state
+-- machine: the value of each 'release' is fed back into the same contract
+-- function, and no branch ends with 'spend'.  Used like this:
+--
+-- >>> c :: Contract Bool Int
+-- >>> c = feedback $ \case
+-- >>>   True -> release 42
+-- >>>   False -> release 57
+--
+-- it defines a contract that forever accepts a 'Bool' and returns one of
+-- the two numbers.
+feedback :: (Monad m) => (a -> m a) -> (a -> m b)
+feedback = fix . (>=>)
 

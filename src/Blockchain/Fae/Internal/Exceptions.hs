@@ -73,7 +73,8 @@ data TransactionException =
   ExpectedReward |
   UnexpectedReward |
   BadSignature |
-  InputFailed ContractID
+  InputFailed ContractID |
+  EmptyInputStack
 
 newtype TXFieldException = TXFieldException String
 
@@ -145,6 +146,7 @@ instance Show TransactionException where
   show BadSignature = "Transaction signature does not match contract return types"
   show (InputFailed cID) = 
     "Used the result of failed input contract " ++ prettyContractID cID 
+  show EmptyInputStack = "(internal error) Tried to use an empty stack!"
 
 -- | -
 instance Exception StorageException
