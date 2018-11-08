@@ -67,7 +67,8 @@ data TransactionEntry =
     inputResults :: Vector InputResults,
     outputs :: Outputs,
     txSigners :: Signers,
-    result :: Result
+    result :: Result,
+    inputMaterials :: Materials
   }
 
 -- | The result can be anything, but should be 'show'able so that it has
@@ -91,7 +92,8 @@ data InputResults =
     -- This value /must not/ be used inside Fae, but only exposed to
     -- external applications (such as import/export).
     iResult :: WithEscrows ReturnValue,
-    iOutputsM :: Maybe Outputs
+    iOutputsM :: Maybe Outputs,
+    iMaterialsM :: Maybe Materials
   } deriving (Generic)
 
 data Status = Updated | Deleted | Failed deriving (Show, Generic)
@@ -100,6 +102,11 @@ data Status = Updated | Deleted | Failed deriving (Show, Generic)
 -- but the indexing of the others should not change, so we have to keep the
 -- full array.
 type Outputs = Vector Output
+
+-- | Record of the "materials" (extra contract calls) given to
+-- a transaction or contract, in order of declaration but also tagged by
+-- name.
+type Materials = Vector (String, InputResults)
 
 -- | Not only convenient, but also important for ensuring that the three
 -- different source trees using this type all have the same version of it.
@@ -220,7 +227,8 @@ addImportedValue valueImporter iRealID iStatus = FaeStorage $
   case contractVersion iRealID of
     Current -> throw $ ImportWithoutVersion iRealID
     Version iVersionID -> 
-      _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
+      _importedValues . at iRealID ?= 
+        InputResults{iOutputsM = Nothing, iMaterialsM = Nothing, ..}
   where 
     iResult = WithEscrows escrowMap (ReturnValue importedValue)
     (importedValue, Escrows{..}) = 

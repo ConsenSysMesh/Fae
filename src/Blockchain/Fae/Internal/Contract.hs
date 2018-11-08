@@ -27,7 +27,7 @@ import Control.Monad.Writer
 
 import Control.DeepSeq
 
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Map (Map)
 import Data.Maybe
 import Data.Proxy
@@ -118,8 +118,12 @@ data TXData =
   {
     thisTXSigners :: Signers,
     localHash :: Digest,
-    thisTXID :: TransactionID
+    thisTXID :: TransactionID,
+    localMaterials :: MaterialsMap
   }
+
+-- | Useful shorthand.
+type MaterialsMap = Map String ReturnValue
 
 -- ** Contract outputs
 
@@ -157,6 +161,10 @@ type FaeContractM argType valType =
   EscrowsT (SuspendT (WithEscrows argType) (WithEscrows valType) FaeExternalM)
 -- | The authoring monad for Fae transactions (when wrapped in 'FaeTX')
 type FaeTXM = EscrowsT FaeExternalM
+-- | The monad in which the transaction body is run.  Escrows are kept, but
+-- not for casual use; the list is a stack tracing the descent into
+-- sub-input calls.
+type TXBodyM = StateT [EscrowMap] TXDataM
 
 -- ** Internal contract functions
 
@@ -176,11 +184,10 @@ newtype ContractF m argType valType =
 -- a contract, as well as a precursor to an 'AbstractGlobalContract'.
 type AbstractLocalContract = ContractF FaeTXM BearsValue BearsValue
 -- | The form of a contract function intended to be called from
--- a transaction.  Note that it returns into a 'TXDataM', i.e. does not
--- expose the mutable inner state of the contract, which is revealed
--- read-only in the return value.
+-- a transaction.  Note that it returns into a 'TXBodyM', i.e. does not
+-- expose the outputs state, which is returned read-only in the return value.
 type AbstractGlobalContract = 
-  ContractF TXDataM String (ReturnValue, EscrowMap, [Output])
+  ContractF TXBodyM String (WithEscrows ReturnValue, [Output])
 
 -- ** User-visible
 
@@ -259,8 +266,10 @@ makeLenses ''StoredContract
 {- Instances -}
 
 instance NFData Output
-
 instance NFData StoredContract
+
+instance NFData EscrowEntry where
+  rnf = (`seq` ())
 
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
@@ -302,6 +311,28 @@ instance {-# OVERLAPPABLE #-}
 
 -- * API Functions
 
+-- | Looks up a material by name, maybe.  A 'Nothing' can mean that the
+-- name was not found /or/ that the named value had the wrong type.
+lookupMaterial :: forall a m. (MonadTX m, Typeable a) => String -> m (Maybe a)
+lookupMaterial name = liftTX . FaeTX $
+  view _localMaterials <&> (Map.lookup name >=> getReturnValue) 
+
+-- | Looks up a material by name, throwing individual errors in case of
+-- missing name or incorrect material type under an existing name.
+material :: forall a m. (MonadTX m, Typeable a) => String -> m a
+material name = liftTX . FaeTX $
+  getRV . Map.findWithDefault missingErr name <$> view _localMaterials 
+  where
+    getRV xRV = fromMaybe (badTypeErr xRV) $ getReturnValue xRV
+    missingErr = throw $ MissingMaterial name
+    badTypeErr xRV = 
+      throw $ BadMaterialType name (typeRep $ Proxy @a) (returnValueType xRV)
+
+-- | Uses all the materials in the map with a given type, ignoring the ones
+-- with other types.
+materials :: forall a m. (MonadTX m, Typeable a) => m (Map String a)
+materials = liftTX . FaeTX $ Map.mapMaybe getReturnValue <$> view _localMaterials
+
 -- | Looks up a named signatory, maybe. 
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
 lookupSigner s = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners . at s
@@ -326,17 +357,17 @@ spend = liftContract . Fae . (takeEscrows >=> lift . terminate)
 -- return value to the caller and awaiting an argument, depositing its
 -- escrows.
 release :: 
-  forall m argType valType.
+  forall argType valType m.
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m argType
 release = liftContract . Fae . (takeEscrows >=> lift . suspend >=> putEscrows)
 
 -- | Emits a new output contract endowed with a given list of valuables.
 newContract :: 
-  forall m name.
+  forall name m.
   (
-    MonadTX m,
-    ContractName name, Read (ArgType name), Exportable (ValType name)
+    ContractName name, Read (ArgType name), Exportable (ValType name),
+    MonadTX m
   ) => 
   name -> m ()
 newContract x = liftTX $ FaeTX $ do
@@ -350,7 +381,7 @@ newContract x = liftTX $ FaeTX $ do
 
 -- | Creates a new escrow endowed with a given list of valuables.
 newEscrow :: 
-  (MonadTX m, ContractName name) =>
+  (ContractName name, MonadTX m) =>
   name -> m (EscrowID name)
 newEscrow contractName = liftTX $ FaeTX $ do
   (entID, contractNextID) <- forkNextID
@@ -362,7 +393,7 @@ newEscrow contractName = liftTX $ FaeTX $ do
 
 -- | Calls an escrow by ID, which must exist in the present context.
 useEscrow :: 
-  (MonadTX m, ContractName name) =>
+  (ContractName name, MonadTX m) =>
   [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)
 useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
   \entID escrowVersion nameOrFunction -> return $ do
@@ -399,7 +430,8 @@ txData txID txSigners =
   {
     thisTXSigners = txSigners,
     localHash = txID,
-    thisTXID = txID
+    thisTXID = txID,
+    localMaterials = Map.empty
   }
 
 -- | Converts a deeply wrapped function returning an awkward type into
@@ -428,16 +460,13 @@ globalContract ::
     HasEscrowIDs argType, HasEscrowIDs valType
   ) =>
   PreContractF argType valType -> AbstractGlobalContract
-globalContract = ContractF . mapSuspendStepF extractState .
-  alterSuspendStepF acceptGlobal returnGlobal lift . startSuspendF
-  where
-    extractState xm = do
-      ((y, sfM), s, w) <- unFaeTXM xm
-      return ((y, escrowMap s, w), sfM)
-    unFaeTXM xm = do
-      txID <- view _thisTXID
-      ~(~(x, s), w) <- runWriterT $ runStateT xm (Escrows Map.empty txID)
-      return (x, s, w)
+globalContract = ContractF . 
+  alterSuspendStepF acceptGlobal returnGlobal extractOutputs . startSuspendF
+  where 
+    extractOutputs mp = lift $ do
+      ~(~(y, sfM), w) <- runWriterT mp
+      let wForced = force w
+      return ((wForced `seq` sfM `deepseq` y, wForced), sfM)
 
 -- | Prepares a value-bearing argument.
 acceptLocal :: 
@@ -454,25 +483,31 @@ returnLocal ::
   WithEscrows valType -> FaeTXM BearsValue
 returnLocal = fmap bearer . putEscrows
 
--- | Prepares a literal argument together with a lookup table of versioned
--- values for its version references.
-acceptGlobal :: 
-  forall argType.
-  (Read argType, HasEscrowIDs argType) =>
-  String -> FaeTXM (WithEscrows argType)
--- Laziness assurance: the 'fromMaybe' function (which is not lazy) is
--- nonetheless safe here because 'argS' is not provided by user code, and
--- 'readMaybe' always returns a good value.
-acceptGlobal argS = takeEscrows $ fromMaybe err $ readMaybe argS where
+-- | Parses the literal argument into the argument type and collects all
+-- the ambient escrows, which are those from this contract's materials.
+acceptGlobal :: forall argType.
+  (Read argType, Typeable argType) => String -> TXBodyM (WithEscrows argType)
+acceptGlobal argS = flip WithEscrows arg <$> pop where 
   err = throw $ BadInputParse argS $ typeRep $ Proxy @argType
+  -- Laziness assurance: the 'fromMaybe' function (which is not lazy) is
+  -- nonetheless safe here because 'argS' is not provided by user code, and
+  -- 'readMaybe' always returns a good value.
+  arg = fromMaybe err $ readMaybe $! argS 
 
 -- | Prepares a value-bearing result together with its table of versioned
--- values.  N.B. The 'ReturnValue' component is _always_ defined, though
--- its inner value may not be.
+-- values.  N.B. The 'ReturnValue' component is /always/ defined, though
+-- its inner value may not be.  The escrows are /not/ emplaced in the state
+-- because they are returned by the 'AbstractGlobalContract'.
 returnGlobal :: 
   (HasEscrowIDs valType, Exportable valType) =>
-  WithEscrows valType -> FaeTXM ReturnValue
-returnGlobal = fmap ReturnValue . putEscrows
+  (WithEscrows valType, [Output]) -> TXBodyM (WithEscrows ReturnValue, [Output])
+returnGlobal (WithEscrows escrows y, outputs) = do
+  keep escrowsForced
+  return (WithEscrows escrowsForced rv, outputsForced)
+  where 
+    escrowsForced = force escrows
+    outputsForced = escrowsForced `seq` outputs
+    rv = escrowsForced `seq` ReturnValue y
 
 -- | Prepares a typed value to be passed to an abstract function.
 acceptTyped :: (HasEscrowIDs argType) => argType -> BearsValue
@@ -567,4 +602,19 @@ returnValueType (ReturnValue x) = typeRep (Just x)
 -- | Taking advantage of the existential type
 exportReturnValue :: (MonadState EscrowMap m) => ReturnValue -> m ByteString
 exportReturnValue (ReturnValue x) = exportValue x
+
+-- * 'TXBodyM' stack manipulation
+
+push :: EscrowMap -> TXBodyM ()
+push = modify . cons 
+
+pop :: TXBodyM EscrowMap
+pop = gets uncons >>= maybe err act where
+  err = throw EmptyInputStack
+  act (em, rest) = put rest >> return em
+
+keep :: EscrowMap -> TXBodyM ()
+keep newEM = gets uncons >>= maybe err act where
+  err = throw EmptyInputStack
+  act (oldEM, rest) = put $ newEM `Map.union` oldEM : rest
 

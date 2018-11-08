@@ -57,7 +57,7 @@ import Blockchain.Fae.Internal.Storage hiding
   )
 import Blockchain.Fae.Internal.Transaction
   (
-    Input(..), TXStorageM, TransactionBody(..), runTransaction
+    Input(..), InputMaterials, TXStorageM, TransactionBody(..), runTransaction
   )
 import Blockchain.Fae.Internal.TX
 

@@ -38,6 +38,7 @@ data TXData =
   {
     dataModules :: LoadedModules,
     fallback :: [String],
+    materials :: InputMaterials,
     inputs :: [Input],
     keys :: [(String, String)],
     reward :: Bool,
@@ -107,15 +108,16 @@ getMakeTXSpec TXData{..} = do
     keys' = if null keys then [("self", "self")] else keys
     (signerNames, keyNames) = unzip keys'
   privKeys <- mapM resolveKeyName keyNames
-  let privKeyMap = Map.fromList $ zip signerNames privKeys 
-  return $ makeTXSpec dataModules inputs privKeyMap fallback parent reward 
+  let keyMap = Map.fromList $ zip signerNames privKeys 
+  return $ makeTXSpec dataModules materials inputs keyMap fallback parent reward 
 
 makeTXSpec ::
   (Serialize a) => 
-  LoadedModules -> [Input] -> Keys -> [Identifier] -> 
+  LoadedModules -> InputMaterials -> [Input] -> Keys -> [Identifier] -> 
   Maybe TransactionID -> Bool -> a ->
   TXSpec a
-makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt = 
+makeTXSpec specModules materialsCalls inputCalls keys 
+           fallbackFunctions parentM isReward salt = 
   TXSpec
   {
     txMessage = addSignatures keys

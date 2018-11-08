@@ -76,16 +76,10 @@ stepSuspendF f = SuspendStepF $
 -- | Alters the parameters of the suspended function.
 alterSuspendStepF ::
   (Monad m, Monad m') => 
-  (a' -> m' a) -> (b -> m' b') -> (forall c. m c -> m' c) ->
-  SuspendStepF a b m -> SuspendStepF a' b' m'
+  (a' -> m' a) -> (b' -> m' b'') -> 
+  (m (b, Maybe (SuspendStepF a b m)) -> m' (b', Maybe (SuspendStepF a b m))) ->
+  SuspendStepF a b m -> SuspendStepF a' b'' m'
 alterSuspendStepF fArg fVal fMon g = 
   SuspendStepF $ fArg >=> fMon . getSuspendStepF g >=> fVal' 
   where fVal' (y, sfM) = (, alterSuspendStepF fArg fVal fMon <$> sfM) <$> fVal y
-
--- | Changes the return value of the suspended function.
-mapSuspendStepF :: 
-  (Monad m, Monad m') =>
-  (forall c. m (b, c) -> m' (b', c)) -> SuspendStepF a b m -> SuspendStepF a b' m'
-mapSuspendStepF f (SuspendStepF g) = SuspendStepF $ 
-  fmap (fmap $ fmap $ mapSuspendStepF f) . f . g
 

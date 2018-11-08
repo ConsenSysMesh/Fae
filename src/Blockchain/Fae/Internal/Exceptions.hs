@@ -38,13 +38,6 @@ unsafeIsDefined act = unsafePerformIO $ catchAll
 
 -- * Types
 
--- | Exceptions for version-related errors.
-data VersionException =
-  BadVersionID Int VersionID TypeRep |
-  BadVersionedType VersionID TypeRep TypeRep |
-  UnresolvedVersionID VersionID |
-  UnexpectedResolvedVersion
-
 -- | Exceptions for storage-related errors.
 data StorageException =
   BadTransactionID TransactionID |
@@ -52,7 +45,7 @@ data StorageException =
   BadInputID TransactionID Int |
   BadVersion ContractID Int Int |
   InvalidVersionAt ContractID |
-  ContractOmitted TransactionID Int |
+  ContractOmitted TransactionID String |
   CantImport ByteString TypeRep |
   ImportWithoutVersion ContractID |
   NotExportable TypeRep |
@@ -64,6 +57,8 @@ data ContractException =
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
   BadValType TypeRep TypeRep |
+  BadMaterialType String TypeRep TypeRep |
+  MissingMaterial String |
   BadEscrowID EntryID |
   BadEscrowName EntryID TypeRep TypeRep |
   MissingSigner String |
@@ -78,7 +73,9 @@ data TransactionException =
   ExpectedReward |
   UnexpectedReward |
   BadSignature |
-  InputFailed ContractID
+  InputFailed ContractID |
+  EmptyInputStack |
+  RepeatedMaterial String
 
 newtype TXFieldException = TXFieldException String
 
@@ -87,20 +84,6 @@ newtype TXFieldException = TXFieldException String
 -- | - 
 instance Show TXFieldException where
   show (TXFieldException e) = e
-
--- | -
-instance Show VersionException where
-  show (BadVersionID ix vID rep) = 
-    "No version found in input contract #" ++ show ix ++ 
-    " with ID: " ++ show vID ++
-    " (expected type: " ++ show rep ++ ")"
-  show (BadVersionedType vID bad good) = 
-    "For value with version ID: " ++ show vID ++ 
-    "; expected type: " ++ show good ++ 
-    "; got: " ++ show bad
-  show (UnresolvedVersionID vID) = "Unresolved version ID: " ++ show vID
-  show UnexpectedResolvedVersion = 
-    "Found a resolved version where version ID was expected."
 
 -- | -
 instance Show StorageException where
@@ -113,9 +96,8 @@ instance Show StorageException where
     "Contract " ++ prettyContractID cID ++ 
     " has nonce " ++ show good ++ "; got: " ++ show bad
   show (InvalidVersionAt cID) = "Can't look up contract ID: " ++ prettyContractID cID
-  show (ContractOmitted txID ix) =
-    "Contract call #" ++ show ix ++ 
-    " in transaction " ++ show txID ++ 
+  show (ContractOmitted txID descr) =
+    descr ++ " in transaction " ++ show txID ++ 
     " was replaced with an imported return value."
   show (CantImport bs ty) =
     "Can't decode value of type " ++ show ty ++ " from bytes: " ++ printHex bs
@@ -138,6 +120,10 @@ instance Show ContractException where
     "Expected argument type: " ++ show good ++ "; got: " ++ show bad
   show (BadValType bad good) =
     "Expected value type: " ++ show good ++ "; got: " ++ show bad
+  show (BadMaterialType name bad good) = 
+    "Expected material '" ++ name ++ "' of type: " ++ show good ++ 
+    "; got: " ++ show bad
+  show (MissingMaterial name) = "No material named " ++ show name
   show (BadEscrowID eID) = "No escrow found in this contract with ID: " ++ show eID
   show (BadEscrowName entID bad good) =
     "Wrong contract name for escrow " ++ show entID ++ 
@@ -161,9 +147,9 @@ instance Show TransactionException where
   show BadSignature = "Transaction signature does not match contract return types"
   show (InputFailed cID) = 
     "Used the result of failed input contract " ++ prettyContractID cID 
+  show EmptyInputStack = "(internal error) Tried to use an empty stack!"
+  show (RepeatedMaterial name) = "Repeated material name '" ++ name ++ "'"
 
--- | -
-instance Exception VersionException
 -- | -
 instance Exception StorageException
 -- | -

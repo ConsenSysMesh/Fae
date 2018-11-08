@@ -48,15 +48,21 @@ data TXSummary = TXSummary {
   transactionID :: TransactionID,
   txResult :: String,
   txOutputs:: Vector VersionID,
-  txInputSummaries :: Vector (ContractID, TXInputSummary),
+  txInputSummaries :: InputSummaries,
+  txMaterialsSummaries :: MaterialsSummaries,
   txSSigners :: [(String, PublicKey)]
 } deriving (Generic)
 
 data TXInputSummary = TXInputSummary {
   txInputStatus :: Status,
   txInputOutputs :: Vector VersionID,
+  txInputMaterialsSummaries :: MaterialsSummaries,
   txInputVersion :: VersionID
 } deriving (Generic)
+
+type InputSummary = (ContractID, TXInputSummary)
+type InputSummaries = Vector InputSummary
+type MaterialsSummaries = Vector (String, InputSummary)
 
 instance Pretty ContractID where 
   pPrint = text . prettyContractID
@@ -67,23 +73,40 @@ instance Pretty TXSummary where
     result = prettyPair ("result", displayException $ text txResult)
     outputs = prettyVector "outputs" txOutputs
     txSSigners' = prettyList "signers" txSSigners
-    inputs = txInputSummaries & vcat . toList . Vector.imap
-      (\ix (cID, txInputSummary@TXInputSummary{..}) -> 
-        let printCID = pPrint cID <+> parens (text $ show txInputStatus) 
-            prettyInput = pPrint txInputSummary
-        in prettyHeader 
-             (prettyPair ("input #" ++ show ix, printCID))
-             (displayException prettyInput))
+    inputs = 
+      vcat . toList . Vector.imap (printInputSummary . makeIx) $ txInputSummaries 
+      where makeIx = ("input #" ++) . show
+    materials = printMaterialsSummaries txMaterialsSummaries
     entry = vcat [outcome, rest]
     outcome = displayException $ vcat [result, outputs] 
-    rest = vcat [txSSigners', inputs]
+    rest = vcat [txSSigners', inputs, materials]
 
 instance Pretty TXInputSummary where
-  pPrint TXInputSummary{..} = vcat $ pVersion [outputs] where 
-    pVersion
-      | Updated <- txInputStatus = (prettyPair ("version", txInputVersion) :)
-      | otherwise = id
-    outputs = prettyVector "outputs" txInputOutputs
+  pPrint TXInputSummary{..} = vcat $ 
+    [
+      displayException (vcat $ pVersion [outputs]), 
+      materials
+    ]
+    where
+      pVersion
+        | Updated <- txInputStatus = (prettyPair ("version", txInputVersion) :)
+        | otherwise = id
+      outputs = prettyVector "outputs" txInputOutputs
+      materials = printMaterialsSummaries txInputMaterialsSummaries
+
+-- | This occurs twice, so it's worth having its own function.
+printMaterialsSummaries :: MaterialsSummaries -> Doc
+printMaterialsSummaries = 
+  vcat . toList . fmap (uncurry $ printInputSummary . makeIx) 
+  where makeIx name = "material '" ++ name ++ "'" 
+
+-- | This occurs twice, so it's worth having its own function.
+printInputSummary :: String -> InputSummary -> Doc
+printInputSummary tag (cID, txInputSummary@TXInputSummary{..}) = 
+  prettyHeader (prettyPair (tag, printCID)) prettyInput
+  where
+    printCID = pPrint cID <+> parens (text $ show txInputStatus) 
+    prettyInput = pPrint txInputSummary
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
@@ -96,20 +119,26 @@ collectTransaction txID = do
       txSSigners = Map.toList $ getSigners txSigners
       txResult = show result 
       txOutputs = makeOut <$> outputs
-      txInputSummaries = getInputSummary txID inputResults
+      txInputSummaries = Vector.imap (makeInputSummary txID . makeIx) inputResults
+        where makeIx = ("Input contract call #" ++) . show
+      txMaterialsSummaries = makeMaterialsSummaries txID inputMaterials
   return $ TXSummary{..}
 
 -- | Get the 'TXInputSummary' for a given 'TransactionID' 
-getInputSummary :: 
-  TransactionID -> Vector InputResults -> Vector (ContractID, TXInputSummary)
-getInputSummary txID = Vector.imap $ \ix ~iR@InputResults{..} -> 
-  let txInputVersion = iVersionID
-      txInputOutputs = 
-        maybe 
-          (throw $ ContractOmitted txID ix) 
-          (fmap $ makeOut) 
-          iOutputsM
-  in (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
+makeInputSummary :: TransactionID -> String -> InputResults -> InputSummary
+makeInputSummary txID descr ~iR@InputResults{..} =
+  (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
+  where 
+    txInputVersion = iVersionID
+    txInputOutputs = maybe err (fmap makeOut) iOutputsM
+    txInputMaterialsSummaries = maybe err (makeMaterialsSummaries txID) iMaterialsM
+    err :: a
+    err = throw $ ContractOmitted txID descr
+
+makeMaterialsSummaries :: TransactionID -> Materials -> MaterialsSummaries
+makeMaterialsSummaries txID = fmap $ 
+  \(name, iR) -> (name, makeInputSummary txID (makeIx name) iR)
+  where makeIx = ("Materials contract call " ++)
 
 makeOut :: Output -> VersionID
 -- We assume (justifiably!) that a new output does, in fact, store a live
