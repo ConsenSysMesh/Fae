@@ -492,7 +492,7 @@ acceptGlobal argS = flip WithEscrows arg <$> pop where
   -- Laziness assurance: the 'fromMaybe' function (which is not lazy) is
   -- nonetheless safe here because 'argS' is not provided by user code, and
   -- 'readMaybe' always returns a good value.
-  arg = fromMaybe err $ readMaybe argS 
+  arg = fromMaybe err $ readMaybe $! argS 
 
 -- | Prepares a value-bearing result together with its table of versioned
 -- values.  N.B. The 'ReturnValue' component is /always/ defined, though

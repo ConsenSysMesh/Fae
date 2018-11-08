@@ -74,7 +74,8 @@ data TransactionException =
   UnexpectedReward |
   BadSignature |
   InputFailed ContractID |
-  EmptyInputStack
+  EmptyInputStack |
+  RepeatedMaterial String
 
 newtype TXFieldException = TXFieldException String
 
@@ -147,6 +148,7 @@ instance Show TransactionException where
   show (InputFailed cID) = 
     "Used the result of failed input contract " ++ prettyContractID cID 
   show EmptyInputStack = "(internal error) Tried to use an empty stack!"
+  show (RepeatedMaterial name) = "Repeated material name '" ++ name ++ "'"
 
 -- | -
 instance Exception StorageException

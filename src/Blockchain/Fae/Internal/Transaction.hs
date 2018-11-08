@@ -220,8 +220,16 @@ runMaterials :: InputMaterials -> TXStorageM (MaterialsMap, Materials)
 runMaterials ims = do
   lift $ push Map.empty
   fmap ((_1 %~ Map.fromList) . (_2 %~ Vector.fromList) . unzip . map split) $
-    traverse (traverse $ runInputArgs Just) ims
-  where split (name, (x, inputResults)) = ((name, x), (name, inputResults))
+    traverse (traverse $ runInputArgs Just) uniqueIMs
+  where 
+    split (name, (x, inputResults)) = ((name, x), (name, inputResults))
+    uniqueIMs = adjust <$> ims
+    -- | A materials call _cannot_ be anything other than an 'InputArgs'.
+    adjust (name, input@InputArgs{..}) = (name,) $
+      if name `Map.member` repSet
+      then input{inputArg = throw $ RepeatedMaterial name}
+      else input
+    repSet = Map.filter (> 1) $ Map.fromListWith (+) $ (_2 .~ 1) <$> ims
 
 -- | This is apparently polymorphic, but in fact will fail if the return
 -- type does not agree with the (dynamic) input type.  It is also actually
@@ -252,7 +260,7 @@ runInputArgs f InputArgs{inputRenames = Renames rMap, ..} = remapSigners rMap $ 
       errIR = errInputResult (const e) cID ^. _1
       (x, inputResults)
         | unsafeIsDefined rv =
-            maybe (throw BadSignature, errIR) (,iR) $ f rv
+            maybe (throw BadSignature, errIR{iMaterialsM}) (,iR) $ f rv
         | otherwise = (throw $ InputFailed cID, iR)
   lift $ keep escrows
   -- Previously also updated the contract version in 'iRealID', but that
