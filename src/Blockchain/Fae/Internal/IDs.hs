@@ -117,6 +117,14 @@ instance HasEscrowIDs PublicKey where
 -- the generic instance here.
 instance (Typeable a, Typeable b) => HasEscrowIDs (a -> b) where
   traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | This covers a wide variety of types like 'Map' that are not 'Generic'
+-- but still function as containers that might have escrow IDs.
+instance 
+  (Typeable (t a), HasEscrowIDs a, Traversable t) => 
+  HasEscrowIDs (Container (t a)) where
+
+  traverseEscrowIDs f = 
+    fmap Container . traverse (traverseEscrowIDs f) . getContainer
 
 -- Boring Generic boilerplate
 

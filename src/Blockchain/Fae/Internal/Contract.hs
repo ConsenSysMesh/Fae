@@ -35,6 +35,9 @@ import Data.Typeable
 
 import qualified Data.Map as Map
 
+import Data.Serialize (Serialize)
+import qualified Data.Serialize as S
+
 import GHC.Generics
 
 import Text.Read (readMaybe)
@@ -227,7 +230,7 @@ class (Typeable a) => Exportable a where
 -- so this is effectively a contract that is portable between Fae
 -- instances.
 class 
-  (HasEscrowIDs a, HasEscrowIDs (ArgType a), HasEscrowIDs (ValType a)) =>
+  (HasEscrowIDs a, Typeable (ArgType a), HasEscrowIDs (ValType a)) => 
   ContractName a where
 
   type ArgType a
@@ -273,6 +276,22 @@ instance NFData EscrowEntry where
 
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
+
+instance 
+  (Typeable (t a), Exportable a, Traversable t, Serialize (t ByteString)) => 
+  Exportable (Container (t a)) where
+    
+  exportValue = fmap S.encode . traverse exportValue . getContainer
+  importValue = 
+    either (const $ return Nothing) 
+           (fmap (fmap Container . sequence) . traverse importValue) . 
+    S.decode
+
+instance {-# OVERLAPPABLE #-}
+  (Typeable a, Serialize a) => Exportable (Container a) where
+
+  exportValue = return . S.encode . getContainer
+  importValue = return . either (const Nothing) (Just . Container) . S.decode
 
 instance (HasEscrowIDs a, HasEscrowIDs b) => ContractName (Contract a b) where
   type ArgType (Contract a b) = a
@@ -393,7 +412,7 @@ newEscrow contractName = liftTX $ FaeTX $ do
 
 -- | Calls an escrow by ID, which must exist in the present context.
 useEscrow :: 
-  (ContractName name, MonadTX m) =>
+  (ContractName name, HasEscrowIDs (ArgType name), MonadTX m) =>
   [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)
 useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
   \entID escrowVersion nameOrFunction -> return $ do
@@ -456,8 +475,8 @@ localContract = ContractF .
 -- abstract one suitable for being called as a transaction input.
 globalContract :: 
   (
-    Read argType, Exportable valType,
-    HasEscrowIDs argType, HasEscrowIDs valType
+    Read argType, Typeable argType,
+    Exportable valType, HasEscrowIDs valType
   ) =>
   PreContractF argType valType -> AbstractGlobalContract
 globalContract = ContractF . 

@@ -62,6 +62,7 @@ type family ERep c :: * where
   ERep PublicKey = PublicKey
   ERep Digest = Digest
   ERep (a -> b) = ()
+  ERep (Container (t a)) = Container (t (ERep a))
   ERep c = SERep1 (Rep c)
 
 type family ERep1 a :: * -> * where
@@ -125,6 +126,10 @@ instance EGeneric Digest
 instance (Typeable a, Typeable b) => EGeneric (a -> b) where
   eFrom f = return $ throw $ NotExportable $ typeOf f
   eTo _ = return $ throw $ NotExportable $ typeRep $ Proxy @(a -> b)
+
+instance (EGeneric a, Traversable t) => EGeneric (Container (t a)) where
+  eFrom = fmap Container . traverse eFrom . getContainer
+  eTo = fmap Container . traverse eTo . getContainer
 
 instance (EGeneric1 f, EGeneric1 g) => EGeneric1 (f :+: g) where
   eFrom1 (L1 x) = L1 <$> eFrom1 x

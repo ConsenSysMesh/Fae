@@ -64,7 +64,7 @@ module Blockchain.Fae
     TransactionBody, 
     PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
-    Contract, ContractM, ContractName(..), Exportable, EGeneric, 
+    Contract, ContractM, ContractName(..), 
     Fae, MonadContract, WithEscrows, EscrowID, Reward,
     -- ** Contract API
     spend, release, useEscrow, newEscrow, 
@@ -72,8 +72,8 @@ module Blockchain.Fae
     lookupSigner, signer, signers, 
     lookupMaterial, material, materials,
     (<-|), claimReward, 
-    -- * Opaque classes
-    HasEscrowIDs, {- Versionable,-} ContractArg, ContractVal, 
+    -- * Opaque types and classes
+    HasEscrowIDs, Exportable, EGeneric, Container(..), ContractArg, ContractVal, 
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
     Generic, Identity(..), Void
@@ -102,7 +102,7 @@ import Numeric.Natural (Natural)
 -- * Types
 
 -- | Constraint collection synonym
-type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a)
+type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a, Exportable a)
 -- | Constraint collection synonym
 type ContractArg a = (HasEscrowIDs a, Read a)
 
@@ -143,4 +143,9 @@ usingReader r f = flip runReaderT r . f
 -- the two numbers.
 feedback :: (Monad m) => (a -> m a) -> (a -> m b)
 feedback = fix . (>=>)
+
+-- | This little hack allows you to write a state machine that /doesn't/
+-- loop endlessly, but has halting states that return a value.
+halt :: (HasEscrowIDs a, MonadContract b a m) => a -> m b
+halt x = spend x >> release undefined
 

@@ -3,5 +3,5 @@ keys
   self = $key
   seller = seller
 inputs
-  TransactionOutput $coinTX 0 :# 0 = ()
-  TransactionOutput $aucTX 0 = Just ($coinSCID ::: $coinVersion)
+  $aucTX/Body/0/Current : Bid
+    raise = $coinTX/Body/0/Current : ()

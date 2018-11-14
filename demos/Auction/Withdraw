@@ -1,5 +1,0 @@
-body = Withdraw
-keys
-  self = $key
-inputs
-  TransactionOutput $aucTX 0 :# 3 = Nothing
