@@ -48,7 +48,7 @@ data TXSummary = TXSummary {
   transactionID :: TransactionID,
   txResult :: String,
   txOutputs:: Vector VersionID,
-  txInputSummaries :: InputSummaries,
+  txInputSummaries :: Vector InputSummary,
   txMaterialsSummaries :: MaterialsSummaries,
   txSSigners :: [(String, PublicKey)]
 } deriving (Generic)
@@ -61,12 +61,17 @@ data TXInputSummary = TXInputSummary {
   txInputVersion :: VersionID
 } deriving (Generic)
 
+-- | The 'InputResults' contained the contract ID but the 'TXInputSummary'
+-- does not, because we want to print the ID regardless of whether the
+-- input summary throws an error, so we include it separately.
 type InputSummary = (ContractID, TXInputSummary)
-type InputSummaries = Vector InputSummary
+-- | Materials, in addition, are given names under the contract that calls
+-- them.
 type MaterialsSummaries = Vector (String, InputSummary)
 
 {- Instances -}
 
+-- | -
 instance Pretty ContractID where 
   pPrint = text . prettyContractID
 
@@ -142,6 +147,8 @@ makeInputSummary txID descr ~iR@InputResults{..} =
     err :: a
     err = throw $ ContractOmitted txID descr
 
+-- | Converts materials as 'InputResults' to appropriately error-formatted
+-- summaries.
 makeMaterialsSummaries :: TransactionID -> Materials -> MaterialsSummaries
 makeMaterialsSummaries txID = fmap $ 
   \(name, iR) -> (name, makeInputSummary txID (makeIx name) iR)

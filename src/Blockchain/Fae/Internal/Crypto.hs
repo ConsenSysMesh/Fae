@@ -72,6 +72,7 @@ newtype Digest = HashDigest (Hash.Digest Hash.SHA3_256) deriving (Eq, Ord, NFDat
 -- | A useful abstraction, again allowing semantic improvements in 'sign'.
 data Signed a = Signed {unSigned :: a, sig :: Signature} deriving (Generic)
 
+-- | Possible errors in applying the cryptographic functions
 data CryptoException =
   CryptoParseException String String
 
@@ -113,9 +114,11 @@ class (PassFail (PassFailM a)) => PartialSerialize a where
 
 {- Instances -}
 
+-- | -
 instance Show CryptoException where
   show (CryptoParseException label text) = label ++ " read failed for: " ++ text
 
+-- | -
 instance Exception CryptoException 
 
 -- | Decoding a hash returns a 'Maybe' value.  This is of course the
@@ -297,6 +300,7 @@ readsPrecSer _ s =
     Right x -> [(x, C8.unpack rest)]
   where (bs, rest) = B16.decode $ C8.pack $ dropWhile isSpace s
 
+-- | Same as 'read', except with a better error message for this module.
 readCrypto :: (Read a) => String -> String -> a
 readCrypto l s = fromMaybe (throw $ CryptoParseException l s) $ readMaybe s
 

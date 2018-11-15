@@ -77,6 +77,8 @@ type family GlobalType a = t | t -> a where
   GlobalType (a -> f) = a -> GlobalType f
   GlobalType (FaeTX a) = EscrowsT TXDataM (a, [Output])
 
+-- | Helper class to define an overloaded function that reduces the monad
+-- that a transaction body returns into.
 class Globalizable f where
   globalize :: f -> GlobalType f
 
@@ -114,7 +116,9 @@ class (Globalizable f, Globalizable (FallbackType f)) => TransactionBody f where
 
 {- Instances -}
 
+-- | -
 instance Serialize Input
+-- | -
 instance NFData Input
 
 -- | The base-case instance: a transaction with no arguments.
@@ -140,6 +144,7 @@ instance (Show a) => TransactionBody (FaeTX a) where
     then return (z, os)
     else (_1 .~ z) <$> (put escrows >> fallback)
 
+-- | -
 instance Globalizable (FaeTX a) where
   globalize = mapStateT (fmap sw . runWriterT) . getFaeTX where 
     sw ~(~(x, s), w) = ((x, w), s)
@@ -158,6 +163,7 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
 
   applyFallback body fallback x = applyFallback (body x) (fallback x)
 
+-- | -
 instance (Globalizable f) => Globalizable (a -> f) where
   globalize = fmap globalize
 
@@ -183,6 +189,7 @@ instance {-# OVERLAPPING #-}
 
   applyFallback body fallback x = applyFallback (body x) (fallback x)
 
+-- | -
 instance {-# OVERLAPPING #-} (Globalizable f) => Globalizable (Reward -> f) where
   globalize = fmap globalize
 

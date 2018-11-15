@@ -501,7 +501,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 (<-|) :: String -> String -> Assignment
 (<-|) = flip $ Assignment . SignerName
 
--- | Nicer Unicode alternative to '(<-|)' (U+21a4)
+-- | Nicer Unicode alternative to '<-|' (U+21a4)
 (↤) :: String -> String -> Assignment
 (↤) = (<-|)
 
@@ -509,7 +509,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 (<=|) :: String -> String -> Assignment
 (<=|) = flip $ Assignment . MaterialsName
 
--- | Nicer Unicode alternative to '(<=|)' (U+2906)
+-- | Nicer Unicode alternative to '<=|' (U+2906)
 (⤆ ) :: String -> String -> Assignment
 (⤆ ) = (<=|)
 
@@ -517,7 +517,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 (*<-) :: (HasEscrowIDs a, Exportable a) => String -> a -> Assignment
 (*<-) = flip $ Assignment . NewMaterial . ReturnValue
 
--- | Nicer Unicode alternative to '(*<-)' (U+291d)
+-- | Nicer Unicode alternative to '*<-' (U+291d)
 (⤝) :: (HasEscrowIDs a, Exportable a) => String -> a -> Assignment
 (⤝) = (*<-)
 
@@ -757,14 +757,17 @@ exportReturnValue (ReturnValue x) = exportValue x
 
 -- * 'TXBodyM' stack manipulation
 
+-- | Add an escrow map to the stack
 push :: EscrowMap -> TXBodyM ()
 push = modify . cons 
 
+-- | Remove an escrow map from the stack
 pop :: TXBodyM EscrowMap
 pop = gets uncons >>= maybe err act where
   err = throw EmptyInputStack
   act (em, rest) = put rest >> return em
 
+-- | Modify the top of the stack with additional escrows.
 keep :: EscrowMap -> TXBodyM ()
 keep newEM = gets uncons >>= maybe err act where
   err = throw EmptyInputStack
