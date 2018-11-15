@@ -71,7 +71,7 @@ module Blockchain.Fae
     newContract, usingState, usingReader, feedback,
     lookupSigner, signer, signers, 
     lookupMaterial, material, materials,
-    (<-|), claimReward, 
+    Assignment, (<-|), (<=|), (*<-), (↤), (⤆ ), (⤝), claimReward, 
     -- * Opaque types and classes
     HasEscrowIDs, Exportable, EGeneric, Container(..), ContractArg, ContractVal, 
     -- * Re-exports

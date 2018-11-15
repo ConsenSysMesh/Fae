@@ -38,19 +38,41 @@ import qualified Data.Map as Map
 import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
 
-import GHC.Generics
+import GHC.Generics (Generic)
 
 import Text.Read (readMaybe)
 
 -- * Types
+-- ** Transaction data
+
+-- | The relevant transaction info
+data TXData =
+  TXData
+  {
+    thisTXSigners :: Signers,
+    localHash :: Digest,
+    thisTXID :: TransactionID,
+    localMaterials :: MaterialsMap
+  }
+
+-- | Useful shorthand.
+type MaterialsMap = Map String ReturnValue
+
+-- | A single declaration of a material (or signer) for a nested call.
+data Assignment = Assignment Assignable String
+
+-- | The (private) constructors allow one of the following options: remap
+-- a signer's role name; remap a material's role name; introduce a new
+-- material.
+data Assignable = 
+  SignerName String | MaterialsName String | NewMaterial ReturnValue
+
+-- | Similar to 'WithEscrows' below, but one level more abstract: packages
+-- a contract argument with a set of implicit "materials" values whose
+-- escrows can be extracted in 'acceptLocal' (using the 'Container' modifier).
+data WithMaterials a = WithMaterials (Container MaterialsMap) a 
+
 -- ** Contract data
-
--- | Infix synonym for a pair to make the argument of 'useEscrow' clearer.
-type a <-| b = (a, b)
-
--- | Infix function to construct the pair synonym.
-(<-|) :: a -> b -> a <-| b
-(<-|) = (,)
 
 -- | Another dynamic type, this time including 'Exportable'.  Its
 -- constructor is strict, so as not to distinguish between an error in the
@@ -112,21 +134,6 @@ data Escrows =
     escrowMap :: EscrowMap,
     nextID :: Digest
   }
-
--- ** Transaction data
-
--- | The relevant transaction info
-data TXData =
-  TXData
-  {
-    thisTXSigners :: Signers,
-    localHash :: Digest,
-    thisTXID :: TransactionID,
-    localMaterials :: MaterialsMap
-  }
-
--- | Useful shorthand.
-type MaterialsMap = Map String ReturnValue
 
 -- ** Contract outputs
 
@@ -277,6 +284,12 @@ instance NFData EscrowEntry where
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
 
+instance (HasEscrowIDs a) => HasEscrowIDs (WithMaterials a) where
+  traverseEscrowIDs f (WithMaterials mM x) =
+    WithMaterials
+      <$> traverseEscrowIDs f mM
+      <*> traverseEscrowIDs f x
+
 instance 
   (Typeable (t a), Exportable a, Traversable t, Serialize (t ByteString)) => 
   Exportable (Container (t a)) where
@@ -410,35 +423,106 @@ newEscrow contractName = liftTX $ FaeTX $ do
   _escrowMap %= Map.insert entID EscrowEntry{..}
   return $ EscrowID entID
 
--- | Calls an escrow by ID, which must exist in the present context.
+-- ** Using escrows
+-- The 'useEscrow' API function gets its own subsection due to the
+-- "assignments" feature, which has its own interface.
+
+-- | Calls an escrow by ID, which must exist in the present context.  
+--
+-- The first argument declares the named signers and materials that the
+-- escrow gets during execution.  The names declared in this list are the
+-- /only/ ones available to the escrow, in order to prevent escrow authors
+-- from building in back doors that respond to signers or materials passed
+-- outside the control of the calling contract.
 useEscrow :: 
   (ContractName name, HasEscrowIDs (ArgType name), MonadTX m) =>
-  [(String, String)] -> EscrowID name -> ArgType name -> m (ValType name)
+  [Assignment] -> EscrowID name -> ArgType name -> m (ValType name)
 useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eID $
   \entID escrowVersion nameOrFunction -> return $ do
+    renamedMaterials <- view $ 
+      _localMaterials . to (mapNames MissingMaterial materialsRenames)
     let makeLocalCF NamedContract{..} = localContract $ 
           hideEscrows endowment contractNextID (theContract contractName)
         localCF = either makeLocalCF id nameOrFunction
-    ~(y, resultCFM) <- remapSigners renames $ typeify (callContract localCF) x
-    hash <- view _localHash
+        localMaterials = newMaterials `Map.union` renamedMaterials
+        endowedArg = WithMaterials (Container localMaterials) x
+    ~(y, resultCFM) <- typeify (callContract localCF) endowedArg & 
+      remapMaterials localMaterials . remapSigners signerRenames
+
     -- The "local hash" corresponds either to the transaction ID (if not in
     -- a contract call) or to the arguments of the contract call, and so
     -- the version will accurately reflect the call history of the escrow.
+    hash <- view _localHash
     let newVer = digest (escrowVersion, hash)
+
     _escrowMap . at entID .= fmap (EscrowEntry newVer . Right) resultCFM
     return y
   where typeify f = fmap (_1 %~ returnTyped) . f . acceptTyped
-        renames = Map.fromList rolePairs
+        (signerRenames, materialsRenames, newMaterials) = makeAssignments rolePairs
+
+-- | Infix operator for adding a signer remap.
+(<-|) :: String -> String -> Assignment
+(<-|) = flip $ Assignment . SignerName
+
+-- | Nicer Unicode alternative to '(<-|)' (U+21a4)
+(↤) :: String -> String -> Assignment
+(↤) = (<-|)
+
+-- | Infix operator for adding a materials remap.
+(<=|) :: String -> String -> Assignment
+(<=|) = flip $ Assignment . MaterialsName
+
+-- | Nicer Unicode alternative to '(<=|)' (U+2906)
+(⤆ ) :: String -> String -> Assignment
+(⤆ ) = (<=|)
+
+-- | Infix operator for adding a new material.
+(*<-) :: (HasEscrowIDs a, Exportable a) => String -> a -> Assignment
+(*<-) = flip $ Assignment . NewMaterial . ReturnValue
+
+-- | Nicer Unicode alternative to '(*<-)' (U+291d)
+(⤝) :: (HasEscrowIDs a, Exportable a) => String -> a -> Assignment
+(⤝) = (*<-)
 
 -- * Internal functions
 
--- ** Calling
+-- ** Static data
 
--- | Temporarily changes the map of signers according to its first argument.
+-- | Cases the renamings into signer-specific and materials-specific.
+makeAssignments :: 
+  [Assignment] -> (Map String String, Map String String, Map String ReturnValue)
+makeAssignments = 
+  (_1 %~ Map.fromList) . (_2 %~ Map.fromList) . (_3 %~ Map.fromList) .
+  foldr splitRename ([],[],[])
+  where
+    splitRename (Assignment (SignerName old) new) 
+                (signerPairs, materialsPairs, newMaterialsPairs) 
+      = ((new, old) : signerPairs, materialsPairs, newMaterialsPairs)
+    splitRename (Assignment (MaterialsName old) new) 
+                (signerPairs, materialsPairs, newMaterialsPairs) 
+      = (signerPairs, (new, old) : materialsPairs, newMaterialsPairs)
+    splitRename (Assignment (NewMaterial x) new) 
+                (signerPairs, materialsPairs, newMaterialsPairs) 
+      = (signerPairs, materialsPairs, (new, x) : newMaterialsPairs)
+
+-- | Composes two maps as though they were functions (composition is
+-- left-to-right, unlike '(.)').
+mapNames :: 
+  (String -> ContractException) -> 
+  Map String String -> 
+  Map String b -> 
+  Map String b
+mapNames mkErr renames oldNames = flip renameKey oldNames <$> renames where
+  renameKey oldName = Map.findWithDefault (throw $ mkErr oldName) oldName
+
+-- | Locally replaces the 'localMaterials' datum.
+remapMaterials :: (MonadReader TXData m) => MaterialsMap -> m a -> m a
+remapMaterials newMaterials = local $ _localMaterials .~ newMaterials
+
+-- | Locally replaces the 'thisTXSigners' datum.
 remapSigners :: (MonadReader TXData m) => Map String String -> m a -> m a
-remapSigners renames = local (_thisTXSigners . _getSigners %~ applyRenames) where
-  applyRenames keyMap = fmap (flip renameKey keyMap) renames `Map.union` keyMap
-  renameKey oldName = Map.findWithDefault (throw $ MissingSigner oldName) oldName
+remapSigners renames = local $ 
+  _thisTXSigners . _getSigners %~ mapNames MissingSigner renames
 
 pushArg :: (MonadReader TXData m) => String -> m a -> m a
 pushArg s = local (_localHash .~ digest s)
@@ -452,6 +536,8 @@ txData txID txSigners =
     thisTXID = txID,
     localMaterials = Map.empty
   }
+
+-- ** Calling
 
 -- | Converts a deeply wrapped function returning an awkward type into
 -- a natural stepwise function call.
@@ -492,9 +578,12 @@ acceptLocal ::
   forall argType.
   (HasEscrowIDs argType) =>
   BearsValue -> FaeTXM (WithEscrows argType)
-acceptLocal xDyn = takeEscrows x where
-  x = unBear xDyn $ 
-        throw $ BadArgType (typeRep $ Proxy @argType) (bearerType xDyn)
+acceptLocal xDyn = do
+  WithEscrows escrowMap (WithMaterials _ x) <- takeEscrows xWM
+  return $ WithEscrows escrowMap x
+  where
+    xWM = unBear xDyn $ 
+      throw $ BadArgType (typeRep $ Proxy @argType) (bearerType xDyn)
 
 -- | Prepares a value-bearing result.
 returnLocal :: 

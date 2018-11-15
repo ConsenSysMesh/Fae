@@ -1,0 +1,4 @@
+body = MaterialAssignments2
+materials
+  theMaterial = $txID/Body/0/Current : ()
+

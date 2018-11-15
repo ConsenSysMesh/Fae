@@ -4,5 +4,6 @@ keys
   tom = $tom
 inputs
   -- Should return (0, $ryan, eID)
-  $txID/Body/0/$ver = ()
+  $txID/Body/0/$ver : ()
     cRole = ryan
+

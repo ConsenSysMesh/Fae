@@ -141,7 +141,7 @@ input pre = do
     contractID end = 
       ContractID <$> readPath <*> readPath <*> readPath <*> readEnd end
     itemE = 
-      (Left <$> input (equalsItem literalEnd)) <|> 
+      try (Left <$> input (equalsItem literalEnd)) <|> 
       (Right <$> equalsItem literalEnd literal)
 
 -- | >>> keys
