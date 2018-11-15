@@ -39,17 +39,52 @@ import qualified Data.Vector as Vector
 import qualified Data.Map as Map
 import Data.Map (Map)
 
+import GHC.Generics
+
 -- * Types
 
 -- | How inputs are provided to transactions.  The contract with a given ID
 -- gets an argument and a (possibly empty) remapping of signer names.
-type Inputs = [(ContractID, String, Renames)]
+data Input =
+  InputArgs
+  {
+    inputCID :: ContractID,
+    inputArg :: String,
+    inputRenames :: Renames,
+    inputInputs :: InputMaterials
+  } |
+  InputReward
+  deriving (Generic)
+
+-- | Supplementary contract calls provided separately and not passed
+-- directly as arguments but rather implicitly as part of the transaction
+-- state.  This shows up as a 'Map' but is provided as a list because we
+-- want to ensure execution ordering in case the same contract is called
+-- twice (the only way calls' state changes can interact).
+type InputMaterials = [(String, Input)]
 
 -- | Transaction monad with storage access, for executing contracts and
--- saving the results.
-type TXStorageM = FaeStorageT FaeTXM
+-- saving the results.  Note that outputs and escrows have been hidden;
+-- this is so contracts and the transaction body, and the fallbacks, have
+-- completely independent output lists.
+type TXStorageM = FaeStorageT TXBodyM
 
 -- * Typeclasses
+
+-- | Replaces the ultimate return type with a partially-run monad, so as to
+-- stabilize the outputs.
+type family GlobalType a = t | t -> a where
+  GlobalType (a -> f) = a -> GlobalType f
+  GlobalType (FaeTX a) = EscrowsT TXDataM (a, [Output])
+
+class Globalizable f where
+  globalize :: f -> GlobalType f
+
+-- | Applies to any function of any arity, ending in a 'FaeTX', which it
+-- voids.
+type family FallbackType a where
+  FallbackType (a -> f) = a -> FallbackType f
+  FallbackType (FaeTX a) = FaeTX ()
 
 -- | This class, and its only instances, define what a transaction function
 -- must look like: essentially, any function of the form
@@ -63,36 +98,93 @@ type TXStorageM = FaeStorageT FaeTXM
 -- >>> fallback :: a -> b -> ... -> FaeTX ()
 --
 -- though other return value types are accepted, and ignored.
-class 
-  (Typeable (TransactionResult f), Show (TransactionResult f)) =>
-  TransactionBody f where
+class (Globalizable f, Globalizable (FallbackType f)) => TransactionBody f where
+  -- | The workhorse of this module; steps through the arguments,
+  -- accumulating the input results and the final return value.
+  --
+  -- The 'Result', in our instances, is added in this function, and is
+  -- guaranteed to be defined even if the return value is exceptional,
+  -- unless the transaction itself is exceptional, when it throws that
+  -- exception.
+  callTransactionBody :: 
+    GlobalType f -> [Input] -> TXStorageM ([InputResults], Result, [Output])
 
-  type TransactionResult f :: *
-  type TransactionFallback f :: *
-  callTransactionBody :: f -> [ReturnValue] -> FaeTX (TransactionResult f)
-
--- | A little more concise than its expansion.
-type TransactionConstraints f =
-  (TransactionBody f, TransactionBody (TransactionFallback f))
+  -- | "Installs a handler" on the given transaction body.
+  applyFallback :: GlobalType f -> GlobalType (FallbackType f) -> GlobalType f
 
 {- Instances -}
 
+instance Serialize Input
+instance NFData Input
+
 -- | The base-case instance: a transaction with no arguments.
-instance (Typeable a, Show a) => TransactionBody (FaeTX a) where
-  type TransactionResult (FaeTX a) = a
-  type TransactionFallback (FaeTX a) = FaeTX ()
-  callTransactionBody f [] = f
-  callTransactionBody _ _ = throw TooManyInputs
+instance (Show a) => TransactionBody (FaeTX a) where
+  callTransactionBody doBody [] = lift $ do
+    txID <- view _thisTXID
+    escrows <- pop
+    ~(result, os) <- lift $ evalStateT doBody $ Escrows escrows txID
+    let outputs = if unsafeIsDefined os then os else []
+    return ([], Result result, outputs)
+  callTransactionBody doBody (InputReward : rest) =
+    (_2 .~ err) . (_3 .~ []) <$> callTransactionBody doBody rest 
+    where err = throw UnexpectedReward
+  callTransactionBody _ inputs = return (errIRs, err, []) where 
+    err = throw BadSignature
+    errIRs = fst . errInputResult (const UnexpectedInput) . inputCID <$> inputs
+
+  applyFallback body fallback = do
+    escrows <- get
+    ~(y, os) <- body
+    let z = os `deepseq` y
+    if unsafeIsDefined z
+    then return (z, os)
+    else (_1 .~ z) <$> (put escrows >> fallback)
+
+instance Globalizable (FaeTX a) where
+  globalize = mapStateT (fmap sw . runWriterT) . getFaeTX where 
+    sw ~(~(x, s), w) = ((x, w), s)
 
 -- | The inductive-case instance: a transaction with one more argument.
 instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
-  type TransactionResult (a -> f) = TransactionResult f
-  type TransactionFallback (a -> f) = a -> TransactionFallback f
-  callTransactionBody g [] = throw NotEnoughInputs
-  callTransactionBody g (x : rest) = callTransactionBody (g $ cast x) rest
-    where 
-      cast rv = getReturnValue rv $
-        throw $ BadArgType (returnValueType rv) (typeRep $ Proxy @a)
+  callTransactionBody _ [] = return ([], err, []) where 
+    err = throw NotEnoughInputs
+  callTransactionBody g (InputReward : rest) = 
+    (_2 .~ err) . (_3 .~ []) <$> callTransactionBody (g err) rest 
+    where err = throw UnexpectedReward
+  callTransactionBody g (inputArgs : rest) = do
+    (x, inputResults) <- runInputArgs getReturnValue inputArgs 
+    (restResults, result, outputs) <- callTransactionBody (g x) rest
+    return (inputResults : restResults, result, outputs)
+
+  applyFallback body fallback x = applyFallback (body x) (fallback x)
+
+instance (Globalizable f) => Globalizable (a -> f) where
+  globalize = fmap globalize
+
+-- | The special-case instance: a reward.
+instance {-# OVERLAPPING #-} 
+  (TransactionBody f) => TransactionBody (Reward -> f) where
+
+  callTransactionBody g (InputReward : rest) = do
+    x <- lift . keepEscrows $ 
+      Reward . fst <$> globalize (newEscrow @_ @FaeTX RewardName)
+    callTransactionBody (g x) rest
+    where
+      keepEscrows :: EscrowsT TXDataM a -> TXBodyM a
+      keepEscrows xm = do
+        txID <- view _thisTXID
+        (x, Escrows{..}) <- lift $ runStateT xm $ Escrows Map.empty txID
+        keep escrowMap
+        return x
+
+  callTransactionBody g inputs = 
+    (_2 .~ err) . (_3 .~ []) <$> callTransactionBody (g err) inputs
+    where err = throw ExpectedReward
+
+  applyFallback body fallback x = applyFallback (body x) (fallback x)
+
+instance {-# OVERLAPPING #-} (Globalizable f) => Globalizable (Reward -> f) where
+  globalize = fmap globalize
 
 -- * Functions
 
@@ -101,122 +193,140 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
 -- | Runs a transaction on its inputs, with some basic information about
 -- the context.
 runTransaction :: 
-  (TransactionConstraints f) =>
-  f -> [TransactionFallback f] -> 
-  Inputs -> TransactionID -> Signers -> Bool -> FaeStorage ()
-runTransaction f fallback inputArgs txID txSigners isReward = runTX $ do
-  inputResults <- runInputContracts inputArgs 
-  let inputs = Vector.toList $ fmap (getWithEscrows . iResult) inputResults
-  ~(result, outputs) <- lift $ runTransactionBody isReward f fallback inputs
+  (TransactionBody f) =>
+  f -> [FallbackType f] -> 
+  InputMaterials -> [Input] -> 
+  TransactionID -> Signers -> Bool -> 
+  FaeStorage ()
+runTransaction f fbs materialArgs inputs0 txID txSigners isReward = runTX $ do
+  let body = foldl applyFallback (globalize f) (globalize <$> fbs)
+      inputs
+        | isReward = InputReward : inputs0
+        | otherwise = inputs0
+  (localMaterials, inputMaterials) <- runMaterials materialArgs
+  -- 'callTransactionBody' really must not throw an exception, so we don't
+  -- lazy pattern-match because that would just make things worse.
+  (iRs, result, os) <- 
+    local (_localMaterials .~ localMaterials) $ callTransactionBody body inputs
+  let inputResults = Vector.fromList iRs
+      outputs = Vector.fromList os
   _getStorage . at txID ?= TransactionEntry{..}
-  where
-    runTX = FaeStorage . 
-      (mapStateT $ Identity . fst . runFaeTXM (txData txID txSigners))
+  where runTX = FaeStorage . mapStateT (flip runReaderT r0 . flip evalStateT [])
+        r0 = txData txID txSigners
 
--- | Before calling the transaction function, optionally adds a reward
--- value to the inputs.
-runTransactionBody :: 
-  (TransactionConstraints f) =>
-  Bool -> f -> [TransactionFallback f] -> 
-  [ReturnValue] -> FaeTXM (Result, Outputs)
-runTransactionBody isReward f fallback = withReward isReward >=> doTX f fallback
+-- | Runs the materials as inputs, providing both kinds of result and /not/
+-- type-checking the return values (that is done at the point of use).
+runMaterials :: InputMaterials -> TXStorageM (MaterialsMap, Materials)
+runMaterials ims = do
+  lift $ push Map.empty
+  fmap ((_1 %~ Map.fromList) . (_2 %~ Vector.fromList) . unzip . map split) $
+    traverse (traverse $ runInputArgs Just) uniqueIMs
+  where 
+    split (name, (x, inputResults)) = ((name, x), (name, inputResults))
+    uniqueIMs = adjust <$> ims
+    -- | A materials call _cannot_ be anything other than an 'InputArgs'.
+    adjust (name, input@InputArgs{..}) = (name,) $
+      if name `Map.member` repSet
+      then input{inputArg = throw $ RepeatedMaterial name}
+      else input
+    repSet = Map.filter (> 1) $ Map.fromListWith (+) $ (_2 .~ 1) <$> ims
 
--- | Actually execute the transaction function, followed if necessary by
--- the fallbacks.
-doTX :: 
-  (TransactionConstraints f) => 
-  f -> [TransactionFallback f] -> [ReturnValue] -> FaeTXM (Result, Outputs)
-doTX f fallbacks x = 
-  (_2 %~ listToOutputs . force) <$> callTX (doFallbacks fallbacks) x f
-
--- | Performs all fallback transactions, ignoring return values and errors.
-doFallbacks :: (TransactionBody g) => [g] -> [ReturnValue] -> FaeTXM [Output]
-doFallbacks fallbacks x = fmap concat . 
-  forM fallbacks $ fmap snd . callTX (const $ return []) x
-
--- | Calls the transaction function, keeping the metadata safe.  Escrows
--- are saved in advance and restored before running the fallback function,
--- and errors in the call itself or its outputs are deferred to the return
--- value.
-callTX :: 
-  (TransactionBody f) => 
-  ([ReturnValue] -> FaeTXM [Output]) -> [ReturnValue] -> f ->
-  FaeTXM (Result, [Output])
-callTX g x f = do
-  escrows <- get
-  let fallback = put escrows >> g x
-  ~(y, w) <- listen . getFaeTX $ callTransactionBody f x
-  let result = w `deepseq` Result y
-  (result,) <$> if unsafeIsDefined result then return w else fallback
-
--- ** Running contracts
-
--- | Runs all the input contracts, accumulating a list of results that is
--- recursively provided back to each call, so that they can use previously
--- returned versioned values.
-runInputContracts :: Inputs -> TXStorageM (Vector InputResults)
-runInputContracts = fmap Vector.fromList . mapM nextInput
-
--- | Looks up the contract ID and dispatches to the various possible
--- actions (call, import, error) depending on what's found.
-nextInput ::
-  (ContractID, String, Renames) -> TXStorageM InputResults
--- None of the alternatives here should throw an exception.  If an
--- exception is to be returned, it needs to be via `errInputResult`, so
--- that at least the input /has/ a result.
-nextInput (cID, arg, renames) = do
-  valEM <- use $ at cID
-  maybe (errInputResult BadContractID) (either importedCallResult cCall) valEM cID
-  where cCall = contractCallResult arg renames
-
--- | If the contract function is available, use it, update if it suceeds,
--- and produce the results regardless.
+-- | This is apparently polymorphic, but in fact will fail if the return
+-- type does not agree with the (dynamic) input type.  It is also actually
+-- (not apparently) partial, as it does not handle 'InputReward', whose
+-- result is not dynamically typed.  Other than the (completely avoidable)
+-- exception thrown by calling the missing case, this function never
+-- throws.
 --
--- This used to update the nonce in 'iRealID' from 'Current' to @'Nonce'
--- n@, where @n@ is the actual current nonce.  This allowed exporting and
--- then importing return values of 'Current'-called contracts.  However,
--- the removal of 'iVersions' made it clear that this is unsatisfactory,
--- because a 'Current'-called contract never produces versions, and
--- therefore the versions of its exported-imported result cannot be
--- verified against the transaction message.
---
--- Even with the nonce, there is no guarantee that the version is ever used
--- in the transaction.  This requires future improvements.
-contractCallResult :: 
-  String -> Renames -> StoredContract -> ContractID -> TXStorageM InputResults
-contractCallResult arg (Renames rMap) StoredContract{..} cID 
-  | contractVersion cID `matchesVersion` Version storedVersion = 
-    do
-      ~(iR, gAbsM) <- lift $ 
-        pushArg arg . remapSigners rMap $ 
-          runContract cID storedVersion storedFunction arg
-      let newStoredContractM = flip StoredContract nextVersion <$> gAbsM
-      when (successful iR) $ at cID .= (Right <$> newStoredContractM)
-      return iR
-  | otherwise = errInputResult (BadContractVersion storedVersion) cID
+-- Renames are applied here so that they propagate to the materials calls.
+-- This ensures locality in the renaming logic as it is applied
+-- recursively.
+runInputArgs :: 
+  forall a. 
+  (Typeable a) => (ReturnValue -> Maybe a) -> Input -> TXStorageM (a, InputResults)
+runInputArgs f InputArgs{inputRenames = Renames rMap, ..} = remapSigners rMap $ do
+  (localMaterials, iMaterialsM) <- (_2 %~ Just) <$> runMaterials inputInputs
+  valEM <- use $ at inputCID 
+  (iR, newStoredContractM) <- lift $ 
+    -- The transaction's local materials do not propagate to its regular
+    -- inputs.  Note that none of this contract's local materials
+    -- propagate to their own materials calls either; each contract gets
+    -- just the materials that are declared exactly for it.
+    local (_localMaterials .~ localMaterials) $
+    doInput inputCID inputArg valEM
+  let WithEscrows escrows rv = iResult iR
+      cID = iRealID iR
+      e = BadArgType (returnValueType rv) (typeRep $ Proxy @a)
+      errIR = errInputResult (const e) cID ^. _1
+      (x, inputResults)
+        | unsafeIsDefined rv =
+            maybe (throw BadSignature, errIR{iMaterialsM}) (,iR) $ f rv
+        | otherwise = (throw $ InputFailed cID, iR)
+  lift $ keep escrows
   -- Previously also updated the contract version in 'iRealID', but that
   -- muddles the summary output and also allows exporting things that were
   -- not called by version, which is actually not a good idea since the
   -- version should be explicit in the transaction message for
   -- verification.
+  when (successful inputResults) $ at inputCID .= (Right <$> newStoredContractM)
+  return (x, inputResults{iMaterialsM})
+
+-- ** Running contracts
+
+-- | Looks up the contract ID and dispatches to the various possible
+-- actions (call, import, error) depending on what's found.
+--
+-- Guarantee: the 'InputResults' is never undefined, even if an error
+-- occurred during execution of the input call.
+doInput :: 
+  ContractID -> String -> Maybe (IxValue Storage) ->
+  TXBodyM (InputResults, Maybe StoredContract)
+-- None of the alternatives here should throw an exception.  If an
+-- exception is to be returned, it needs to be via `errInputResult`, so
+-- that at least the input /has/ a result.
+doInput cID arg valEM = cID & 
+  maybe (return . errInputResult BadContractID) 
+        (either importedCallResult $ contractCallResult arg) 
+        valEM 
+
+-- | Uses the stored contract that was found, returning a full
+-- 'InputResults' (including possible exceptional return values) and the
+-- possible updated contract.
+--
+-- The local hash is modified by hashing in the argument here, rather than
+-- in 'runInputArgs', because each of the materials calls gets its own
+-- local hash from its own argument.
+contractCallResult :: 
+  String -> StoredContract -> ContractID -> 
+  TXBodyM (InputResults, Maybe StoredContract)
+contractCallResult arg StoredContract{..} cID 
+  | contractVersion cID `matchesVersion` Version storedVersion = do
+      runResult <- pushArg arg $ 
+        runContract cID storedVersion storedFunction arg
+      return $ runResult & _2 %~ fmap (flip StoredContract nextVersion)
+  | otherwise = return $ errInputResult (BadContractVersion storedVersion) cID
   where nextVersion = digest (storedVersion, arg)
 
--- | If instead we have an imported value, just use that.  
-importedCallResult :: InputResults -> ContractID -> TXStorageM InputResults
-importedCallResult iR@InputResults{..} cID = do
-  at cID .= Nothing -- Just to make sure
-  _ <- lift $ putEscrows iResult
-  return iR
+-- | If there's no stored contract but there is an imported result for this
+-- call, we use that, simulating its execution by depositing its escrows
+-- into context.  This will never fail, and will also never update the
+-- contract (which is not present).
+importedCallResult :: 
+  InputResults -> ContractID -> TXBodyM (InputResults, Maybe StoredContract)
+importedCallResult = const . return . (,Nothing)
 
--- | Otherwise, this input is exceptional (and so, probably, is the
--- transaction result).
-errInputResult ::
-  (Exception e) => (ContractID -> e) -> ContractID -> TXStorageM InputResults
+-- | Constructs a conforming exceptional input result, containing all the
+-- necessary fields for the summary with exceptions in the ones that can't
+-- be known.
+errInputResult :: 
+  (Exception e) => 
+  (ContractID -> e) -> ContractID -> (InputResults, Maybe StoredContract)
 -- A quick way of assigning the same exception to all the fields of the
 -- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
 -- values, which are useful even if the contract itself is missing.
-errInputResult ef cID = return $ (throw $ ef cID) & 
-  \ ~InputResults{..} -> InputResults{iRealID = cID, iStatus = Failed, ..}
+errInputResult ef cID = (,Nothing) $ throw (ef cID) & 
+  \ ~InputResults{iResult = ~(WithEscrows es rv), ..} -> 
+    InputResults{iRealID = cID, iStatus = Failed, iResult = WithEscrows es rv, ..}
 
 -- | Executes the contract function, returning the result and the
 -- continuation function.  This is where the 'iStatus' field of the
@@ -227,13 +337,13 @@ runContract ::
   VersionID ->
   AbstractGlobalContract -> 
   String ->
-  FaeTXM (InputResults, Maybe AbstractGlobalContract)
+  TXBodyM (InputResults, Maybe AbstractGlobalContract)
 runContract iRealID iVersionID fAbs arg = do
-  ~(~(resultE, gAbsM), outputsL) <- listen $ callContract fAbs arg
-  let iResult = gAbsM `deepseq` outputsL `deepseq` resultE
-      iOutputsM = Just $ listToOutputs outputsL
+  ~(~(iResult, outputsL), gAbsM) <- callContract fAbs arg
+  let iOutputsM = Just $ Vector.fromList outputsL
+      iMaterialsM = Nothing -- Changed in 'runInputArgs'
       iStatus
-        | not (unsafeIsDefined iResult) = Failed
+        | not (unsafeIsDefined $ getWithEscrows iResult) = Failed
         | Nothing <- gAbsM = Deleted
         | otherwise = Updated
   return (InputResults{..}, gAbsM)

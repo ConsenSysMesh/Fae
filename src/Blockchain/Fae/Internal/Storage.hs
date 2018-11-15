@@ -67,14 +67,18 @@ data TransactionEntry =
     inputResults :: Vector InputResults,
     outputs :: Outputs,
     txSigners :: Signers,
-    result :: Result
+    result :: Result,
+    inputMaterials :: Materials
   }
 
 -- | The result can be anything, but should be 'show'able so that it has
 -- outside meaning.  This is an existential type, so the record names are
 -- just there for documentation; values have to be extracted by
 -- pattern-matching.
-data Result = forall a. (Show a) => Result a
+--
+-- The constructor is strict so that there is no possibility of a hidden
+-- exception in the value.
+data Result = forall a. (Show a) => Result !a
 
 -- | A minimal set of descriptors of the results of running a contract.
 -- This used to contain an 'iVersions', but that can be derived from
@@ -98,7 +102,8 @@ data InputResults =
     -- | 'Nothing' means that the results were imported and the contract
     -- wasn't actually run.  Perhaps in the future those can be imported
     -- too...
-    iOutputsM :: Maybe Outputs
+    iOutputsM :: Maybe Outputs,
+    iMaterialsM :: Maybe Materials
   } deriving (Generic)
 
 -- | Semantic report of what happened in a contract call.  As such,
@@ -110,6 +115,11 @@ data Status = Updated | Deleted | Failed deriving (Show, Generic)
 -- but the indexing of the others should not change, so we have to keep the
 -- full array.
 type Outputs = Vector Output
+
+-- | Record of the "materials" (extra contract calls) given to
+-- a transaction or contract, in order of declaration but also tagged by
+-- name.
+type Materials = Vector (String, InputResults)
 
 -- | Not only convenient, but also important for ensuring that the three
 -- different source trees using this type all have the same version of it.
@@ -225,12 +235,6 @@ onlyJust err = lens getter setter where
   getter = Just
   setter _ = fromMaybe $ throw err
 
--- ** Manipulating stored values
-
--- | Legacy synonym, though useful for hiding the implementation.
-listToOutputs :: [Output] -> Outputs
-listToOutputs = Vector.fromList
-
 -- | Semantic interpretation of the status, hiding the pattern-match that
 -- establishes the policy.
 successful :: InputResults -> Bool
@@ -249,7 +253,8 @@ addImportedValue valueImporter iRealID iStatus = FaeStorage $
   case contractVersion iRealID of
     Current -> throw $ ImportWithoutVersion iRealID
     Version iVersionID -> 
-      _importedValues . at iRealID ?= InputResults{iOutputsM = Nothing, ..}
+      _importedValues . at iRealID ?= 
+        InputResults{iOutputsM = Nothing, iMaterialsM = Nothing, ..}
   where 
     iResult = WithEscrows escrowMap (ReturnValue importedValue)
     (importedValue, Escrows{..}) = 

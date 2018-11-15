@@ -57,25 +57,23 @@ module Blockchain.Fae
     -- * Transactions
     -- | Transactions are handled outside of Fae's Haskell API, but their
     -- definitions are still within it.  When processed, a transaction must
-    -- be accompanied by a list of @('ContractID', String, Map String
-    -- String)@ pairs denoting the literal arguments passed to the
-    -- contracts with the given IDs, and the role renaming established
-    -- during the call (see 'signers').  These are then 'read' into Haskell
-    -- types, to prevent malicious authors from inserting nonterminating
-    -- code into the contract calls.
-    TransactionBody, TransactionConstraints, 
+    -- be accompanied by a list of @(ContractID, String)@ pairs denoting
+    -- the literal arguments passed to the contracts with the given IDs.
+    -- These are then 'read' into Haskell types, to prevent malicious
+    -- authors from inserting nonterminating code into the contract calls.
+    TransactionBody, 
     PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
-    -- ** Types
-    ContractName(..), Contract, ContractM, Fae, 
-    MonadContract, WithEscrows, EscrowID, Reward, 
-    type (<-|), type (↤),
+    Contract, ContractM, ContractName(..), 
+    Fae, MonadContract, WithEscrows, EscrowID, Reward,
     -- ** Contract API
-    release, spend, useEscrow, newEscrow, 
-    newContract, usingState, usingReader,
-    lookupSigner, signer, signers, claimReward, (<-|), (↤), 
-    -- * Opaque classes
-    HasEscrowIDs, {- Versionable,-} ContractArg, ContractVal, 
+    spend, release, useEscrow, newEscrow, 
+    newContract, usingState, usingReader, feedback,
+    lookupSigner, signer, signers, 
+    lookupMaterial, material, materials,
+    Assignment, (<-|), (<=|), (*<-), (↤), (⤆ ), (⤝), claimReward, 
+    -- * Opaque types and classes
+    HasEscrowIDs, Exportable, EGeneric, Container(..), ContractArg, ContractVal, 
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
     Generic, Identity(..), Void
@@ -91,6 +89,7 @@ import Blockchain.Fae.Internal.Transaction
 
 import Common.Lens
 
+import Control.Monad.Fix
 import Control.Monad.Reader
 import Control.Monad.State
 
@@ -103,7 +102,7 @@ import Numeric.Natural (Natural)
 -- * Types
 
 -- | Constraint collection synonym
-type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a)
+type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a, Exportable a)
 -- | Constraint collection synonym
 type ContractArg a = (HasEscrowIDs a, Read a)
 
@@ -150,4 +149,23 @@ usingReader ::
   (a -> ReaderT r m b) ->
   (a -> m b)
 usingReader r f = flip runReaderT r . f
+
+-- | A shorthand for defining a contract that is, essentially, a state
+-- machine: the value of each 'release' is fed back into the same contract
+-- function, and no branch ends with 'spend'.  Used like this:
+--
+-- >>> c :: Contract Bool Int
+-- >>> c = feedback $ \case
+-- >>>   True -> release 42
+-- >>>   False -> release 57
+--
+-- it defines a contract that forever accepts a 'Bool' and returns one of
+-- the two numbers.
+feedback :: (Monad m) => (a -> m a) -> (a -> m b)
+feedback = fix . (>=>)
+
+-- | This little hack allows you to write a state machine that /doesn't/
+-- loop endlessly, but has halting states that return a value.
+halt :: (HasEscrowIDs a, MonadContract b a m) => a -> m b
+halt x = spend x >> release undefined
 

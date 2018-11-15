@@ -41,6 +41,7 @@ instance ToJSON TXInputSummary where
     object [
       "txInputStatus" .= txInputStatus,
       "txInputOutputs" .= wrapExceptions txInputOutputs,
+      "txInputMaterialsSummaries" .= txInputMaterialsSummaries,
       "txInputVersion" .= wrapExceptions txInputVersion ]
 
 -- | -
@@ -50,6 +51,7 @@ instance ToJSON TXSummary where
     "txResult" .= wrapExceptions txResult,
     "txOutputs" .= wrapExceptions txOutputs,
     "txInputSummaries" .= txInputSummaries,
+    "txMaterialsSummaries" .= txMaterialsSummaries,
     "txSSigners" .= txSSigners ]
 
 -- | -
@@ -59,6 +61,7 @@ instance FromJSON TXInputSummary where
       TXInputSummary
         <$> readJSONField "txInputStatus" o
         <*> readJSONField "txInputOutputs" o
+        <*> o .: "txInputMaterialsSummaries"
         <*> readJSONField "txInputVersion" o
       
 -- | -
@@ -69,6 +72,7 @@ instance FromJSON TXSummary where
       <*> readJSONField "txResult" o
       <*> readJSONField "txOutputs" o
       <*> o .: "txInputSummaries"
+      <*> o .: "txMaterialsSummaries"
       <*> o .: "txSSigners"
 
 -- | -

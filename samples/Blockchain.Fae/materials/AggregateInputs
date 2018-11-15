@@ -1,0 +1,5 @@
+body = AggregateInputs
+materials
+  pay1 = $paymentID/Body/0/Current : ()
+  pay2 = $paymentID/Body/0/Current : ()
+  pay3 = $paymentID/Body/0/Current : ()

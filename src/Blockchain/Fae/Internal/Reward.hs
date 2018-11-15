@@ -49,13 +49,3 @@ claimReward (Reward eID) = do
   Value <- useEscrow [] eID Token
   return ()
 
--- | For the "Transaction" module, optionally fabricates a new reward token
--- and prepends it to the "input" results.  It goes without saying that
--- this should not be publicly visible.
-withReward :: (MonadTX m) => Bool -> [ReturnValue] -> m [ReturnValue]
-withReward isReward inputsL
-  | isReward = do
-      eID <- newEscrow RewardName
-      return $ ReturnValue (Reward eID) : inputsL
-  | otherwise = return inputsL
-

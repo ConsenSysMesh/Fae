@@ -1,7 +1,7 @@
 import Control.Monad
 
-body :: Transaction Void ()
-body _ = newContract C
+body :: FaeTX ()
+body = newContract C
 
 data C = C deriving (Generic)
 

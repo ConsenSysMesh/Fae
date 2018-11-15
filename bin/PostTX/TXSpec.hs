@@ -17,7 +17,7 @@ the message.
 module PostTX.TXSpec 
   (
     module PostTX.TXSpec, 
-    Inputs, Module, ModuleMap, Renames(..), TransactionID, getTXID
+    Input(..), Module, ModuleMap, Renames(..), TransactionID, getTXID
   ) where
 
 import Blockchain.Fae.FrontEnd
@@ -55,7 +55,8 @@ data TXData =
   {
     dataModules :: LoadedModules,
     fallback :: [String],
-    inputs :: Inputs,
+    materials :: InputMaterials,
+    inputs :: [Input],
     keys :: [(String, String)],
     reward :: Bool,
     parent :: Maybe TransactionID
@@ -148,18 +149,19 @@ getMakeTXSpec TXData{..} = do
     keys' = if null keys then [("self", "self")] else keys
     (signerNames, keyNames) = unzip keys'
   privKeys <- mapM resolveKeyName keyNames
-  let privKeyMap = Map.fromList $ zip signerNames privKeys 
-  return $ makeTXSpec dataModules inputs privKeyMap fallback parent reward 
+  let keyMap = Map.fromList $ zip signerNames privKeys 
+  return $ makeTXSpec dataModules materials inputs keyMap fallback parent reward 
 
 -- | Fills in the 'TXMessage' with the supplied parameters, and also
 -- extracts file previews for each module, then signs the whole thing with
 -- the provided keys.
 makeTXSpec ::
   (Serialize a) => 
-  LoadedModules -> Inputs -> Keys -> [Identifier] -> 
+  LoadedModules -> InputMaterials -> [Input] -> Keys -> [Identifier] -> 
   Maybe TransactionID -> Bool -> a ->
   TXSpec a
-makeTXSpec specModules inputCalls keys fallbackFunctions parentM isReward salt = 
+makeTXSpec specModules materialsCalls inputCalls keys 
+           fallbackFunctions parentM isReward salt = 
   TXSpec
   {
     txMessage = addSignatures keys

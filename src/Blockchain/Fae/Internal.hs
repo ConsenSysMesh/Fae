@@ -24,7 +24,6 @@ module Blockchain.Fae.Internal
     module Blockchain.Fae.Internal.TX,
     module Blockchain.Fae.Internal.TXSummary,
     module Blockchain.Fae.Internal.Transaction
---    module Blockchain.Fae.Internal.Versions
   ) where
 
 import Blockchain.Fae.Internal.Contract
@@ -40,5 +39,4 @@ import Blockchain.Fae.Internal.Suspend
 import Blockchain.Fae.Internal.TX
 import Blockchain.Fae.Internal.TXSummary
 import Blockchain.Fae.Internal.Transaction
---import Blockchain.Fae.Internal.Versions
 
