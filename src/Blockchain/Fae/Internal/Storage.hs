@@ -19,6 +19,7 @@ import Blockchain.Fae.Internal.IDs
 import Common.Lens 
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad.State
 import Control.Monad.Trans
 
@@ -139,36 +140,20 @@ instance Show Result where
 instance Serialize Status
 
 -- | -
+instance NFData Status
+
+-- | -
 instance Serialize ExportData
 
 -- * Functions
 
--- | For the 'At' instance
-type instance Index Storage = ContractID
--- | For the 'At' instance
-type instance IxValue Storage = Either InputResults StoredContract
--- | For the 'At' instance
-instance Ixed Storage
--- | We define this instance /in addition to/ the natural 'TransactionID'
--- indexing of a 'StorageT' so that we can look up contracts by ID, which
--- requires descending through several levels of lookups, any of which may
--- fail (in different ways).
-instance At Storage where
-  at cID = lens getter setter where
-    getter :: Storage -> Maybe (IxValue Storage)
-    getter st = 
-      case st ^. contractAt cID of
-        Nothing -> Left <$> st ^. _importedValues . at cID
-        x -> Right <$> x
-    setter :: Storage -> Maybe (IxValue Storage) -> Storage
-    setter st (Just (Right x)) = st & contractAt cID ?~ x
-    setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
-    setter st Nothing = st
-      & contractAt cID .~ Nothing
-      & _importedValues . at cID .~ Nothing
-
-contractAt :: ContractID -> Lens' Storage (Maybe StoredContract)
-contractAt cID = outputAt cID . uncertain _storedContract
+-- | A getter/dispatcher for the storage contents, using Church encoding
+-- for 'Either' to avoid strict pattern-matches on the return value.
+atCID :: 
+  ContractID -> (InputResults -> a) -> (StoredContract -> a) -> a -> Storage -> a
+atCID cID ivF scF a0 st
+  | Just o <- st ^. outputAt cID = maybe a0 scF $ storedContract o
+  | otherwise = maybe a0 ivF $ st ^. _importedValues . at cID
 
 outputAt :: ContractID -> Lens' Storage (Maybe Output)
 outputAt cID@ContractID{..} =
@@ -197,10 +182,6 @@ vectorAt n =
         Just $ Vector.modify (\w -> Vector.unsafeWrite w n y) v
       | otherwise = Nothing
 
-joinUncertainty :: 
-  (Monad m) => Lens s (m (m t)) (m (m a)) (m b) -> Lens s (m t) (m a) (m b)
-joinUncertainty = ((fmap join .) .) . (. (. join))
-
 uncertain :: (Monad m) => Lens' s (m a) -> Lens' (m s) (m a)
 uncertain l = lens getter setter where
   getter = (>>= view l)
@@ -210,11 +191,6 @@ onlyJust :: (Exception e) => e -> Lens' a (Maybe a)
 onlyJust err = lens getter setter where
   getter = Just
   setter _ = fromMaybe $ throw err
-
-successful :: InputResults -> Bool
-successful InputResults{..}
-  | Failed <- iStatus = False
-  | otherwise = True
 
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not

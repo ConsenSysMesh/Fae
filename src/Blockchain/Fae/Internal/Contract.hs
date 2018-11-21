@@ -571,7 +571,8 @@ globalContract = ContractF .
     extractOutputs mp = lift $ do
       ~(~(y, sfM), w) <- runWriterT mp
       let wForced = force w
-      return ((wForced `seq` sfM `deepseq` y, wForced), sfM)
+          yForced = wForced `seq` sfM `deepseq` y
+      return ((yForced, wForced), yForced `seq` sfM)
 
 -- | Prepares a value-bearing argument.
 acceptLocal :: 

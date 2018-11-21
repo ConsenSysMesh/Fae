@@ -20,8 +20,9 @@ module Blockchain.Fae.FrontEnd
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
     exportValue, importValue,
-    -- * Types and Instances for Clients
+    -- * Transaction evaluation
     module Blockchain.Fae.Internal.TXSummary,
+    module Blockchain.Fae.Internal.Monitors,
     -- * Cryptography types and functions
     module Blockchain.Fae.Internal.Crypto,
     -- * Fae exceptions
@@ -51,6 +52,12 @@ import Blockchain.Fae.Internal.Messages hiding
     unsignedTXMessage, unsignTXMessage
   )
 import Blockchain.Fae.Internal.TXSummary
+  (
+    TXSummary(..), TXInputSummary(..), 
+    InputSummary, InputSummaries, MaterialsSummaries,
+    collectTransaction
+  )
+import Blockchain.Fae.Internal.Monitors
 import Blockchain.Fae.Internal.Storage hiding 
   (
     txPartLens, txInputLens, vectorAt, joinUncertainty, uncertain, onlyJust

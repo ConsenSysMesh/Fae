@@ -56,6 +56,9 @@ data Input =
   InputReward
   deriving (Generic)
 
+-- | Only to cause the transaction signature check to fail.
+data BadType
+
 -- | Supplementary contract calls provided separately and not passed
 -- directly as arguments but rather implicitly as part of the transaction
 -- state.  This shows up as a 'Map' but is provided as a list because we
@@ -128,9 +131,17 @@ instance (Show a) => TransactionBody (FaeTX a) where
   callTransactionBody doBody (InputReward : rest) =
     (_2 .~ err) . (_3 .~ []) <$> callTransactionBody doBody rest 
     where err = throw UnexpectedReward
-  callTransactionBody _ inputs = return (errIRs, err, []) where 
-    err = throw BadSignature
-    errIRs = fst . errInputResult (const UnexpectedInput) . inputCID <$> inputs
+  callTransactionBody _ inputs = do
+    iRs <- foldInputErrors $ \case
+      InputReward -> return Nothing
+      input -> do
+        iR <- snd <$> runInputArgs @BadType (const Nothing) input
+        let errIR = fst $ errInputResult (const UnexpectedInput) (inputCID input)
+        return $ Just errIR{iMaterialsM = iMaterialsM iR}
+    return (iRs, throw BadSignature, []) 
+    where 
+      foldInputErrors f = 
+        foldl (\mIRs i -> maybe id (:) <$> f i <*> mIRs) (return []) inputs
 
   applyFallback body fallback = do
     escrows <- get
@@ -246,48 +257,37 @@ runInputArgs ::
   (Typeable a) => (ReturnValue -> Maybe a) -> Input -> TXStorageM (a, InputResults)
 runInputArgs f InputArgs{inputRenames = Renames rMap, ..} = remapSigners rMap $ do
   (localMaterials, iMaterialsM) <- (_2 %~ Just) <$> runMaterials inputInputs
-  valEM <- use $ at inputCID 
+  getResult <- gets $ atCID inputCID getImport getContract (return . errIR)
   (iR, newStoredContractM) <- lift $ 
     -- The transaction's local materials do not propagate to its regular
     -- inputs.  Note that none of this contract's local materials
     -- propagate to their own materials calls either; each contract gets
     -- just the materials that are declared exactly for it.
-    local (_localMaterials .~ localMaterials) $
-    doInput inputCID inputArg valEM
+    local (_localMaterials .~ localMaterials) $ getResult inputCID
   let WithEscrows escrows rv = iResult iR
-      cID = iRealID iR
       e = BadArgType (returnValueType rv) (typeRep $ Proxy @a)
-      errIR = errInputResult (const e) cID ^. _1
-      (x, inputResults)
-        | unsafeIsDefined rv =
-            maybe (throw BadSignature, errIR{iMaterialsM}) (,iR) $ f rv
-        | otherwise = (throw $ InputFailed cID, iR)
+      errIR' = errInputResult (const e) inputCID ^. _1
+      -- The lazy pattern match defers nonterminating computations; all
+      -- other exceptions are handled, so that 'inputResults' is either
+      -- well-defined or incalculable.
+      ~(x, inputResults)
+        | unsafeIsDefined rv = maybe (throw BadSignature, errIR') (,iR) $ f rv
+        | otherwise = (throw $ InputFailed inputCID, iR)
   lift $ keep escrows
   -- Previously also updated the contract version in 'iRealID', but that
   -- muddles the summary output and also allows exporting things that were
   -- not called by version, which is actually not a good idea since the
   -- version should be explicit in the transaction message for
   -- verification.
-  when (successful inputResults) $ at inputCID .= (Right <$> newStoredContractM)
-  return (x, inputResults{iMaterialsM})
+  outputAt inputCID %= fmap (_storedContract %~ (>>= newStoredContractM))
+  return (x, (cloakInputResults inputCID inputResults){iMaterialsM})
+
+  where
+    getImport = importedCallResult 
+    getContract = contractCallResult inputArg 
+    errIR = errInputResult BadContractID 
 
 -- ** Running contracts
-
--- | Looks up the contract ID and dispatches to the various possible
--- actions (call, import, error) depending on what's found.
---
--- Guarantee: the 'InputResults' is never undefined, even if an error
--- occurred during execution of the input call.
-doInput :: 
-  ContractID -> String -> Maybe (IxValue Storage) ->
-  TXBodyM (InputResults, Maybe StoredContract)
--- None of the alternatives here should throw an exception.  If an
--- exception is to be returned, it needs to be via `errInputResult`, so
--- that at least the input /has/ a result.
-doInput cID arg valEM = cID & 
-  maybe (return . errInputResult BadContractID) 
-        (either importedCallResult $ contractCallResult arg) 
-        valEM 
 
 -- | Uses the stored contract that was found, returning a full
 -- 'InputResults' (including possible exceptional return values) and the
@@ -298,12 +298,13 @@ doInput cID arg valEM = cID &
 -- local hash from its own argument.
 contractCallResult :: 
   String -> StoredContract -> ContractID -> 
-  TXBodyM (InputResults, Maybe StoredContract)
-contractCallResult arg StoredContract{..} cID 
+  TXBodyM (InputResults, StoredContract -> Maybe StoredContract)
+contractCallResult arg sc@StoredContract{..} cID 
   | contractVersion cID `matchesVersion` Version storedVersion = do
-      runResult <- pushArg arg $ 
+      ~(iR, newFM) <- pushArg arg $ 
         runContract cID storedVersion storedFunction arg
-      return $ runResult & _2 %~ fmap (flip StoredContract nextVersion)
+      let newSCF = (mapMOf _storedFunction newFM) . (_storedVersion .~ nextVersion)
+      return (iR, newSCF)
   | otherwise = return $ errInputResult (BadContractVersion storedVersion) cID
   where nextVersion = digest (storedVersion, arg)
 
@@ -312,21 +313,26 @@ contractCallResult arg StoredContract{..} cID
 -- into context.  This will never fail, and will also never update the
 -- contract (which is not present).
 importedCallResult :: 
-  InputResults -> ContractID -> TXBodyM (InputResults, Maybe StoredContract)
-importedCallResult = const . return . (,Nothing)
+  InputResults -> ContractID -> 
+  TXBodyM (InputResults, StoredContract -> Maybe StoredContract)
+importedCallResult = const . return . (,Just)
 
 -- | Constructs a conforming exceptional input result, containing all the
 -- necessary fields for the summary with exceptions in the ones that can't
 -- be known.
 errInputResult :: 
   (Exception e) => 
-  (ContractID -> e) -> ContractID -> (InputResults, Maybe StoredContract)
--- A quick way of assigning the same exception to all the fields of the
--- 'InputResults', but setting the 'iRealID' and 'iStatus' to actual
+  (ContractID -> e) -> ContractID -> 
+  (InputResults, StoredContract -> Maybe StoredContract)
+errInputResult ef cID = (errIR, Just) where
+  errIR = (cloakInputResults cID $ throw $ ef cID){iStatus = Failed}
+
+-- | A quick way of assigning the same exception to all the fields of the
+-- 'InputResults', but setting the 'iRealID' and 'iResult' to actual
 -- values, which are useful even if the contract itself is missing.
-errInputResult ef cID = (,Nothing) $ throw (ef cID) & 
-  \ ~InputResults{iResult = ~(WithEscrows es rv), ..} -> 
-    InputResults{iRealID = cID, iStatus = Failed, iResult = WithEscrows es rv, ..}
+cloakInputResults :: ContractID -> InputResults -> InputResults
+cloakInputResults cID ~InputResults{iResult = ~(WithEscrows es rv), ..} = 
+  InputResults{iRealID = cID, iResult = WithEscrows es rv, ..}
 
 -- | Executes the contract function, returning the result, the structured
 -- outputs, the new map of all currently defined versions, and the
@@ -336,14 +342,14 @@ runContract ::
   VersionID ->
   AbstractGlobalContract -> 
   String ->
-  TXBodyM (InputResults, Maybe AbstractGlobalContract)
+  TXBodyM (InputResults, AbstractGlobalContract -> Maybe AbstractGlobalContract)
 runContract iRealID iVersionID fAbs arg = do
   ~(~(iResult, outputsL), gAbsM) <- callContract fAbs arg
   let iOutputsM = Just $ Vector.fromList outputsL
       iMaterialsM = Nothing -- Changed in 'runInputArgs'
-      iStatus
-        | not (unsafeIsDefined $ getWithEscrows iResult) = Failed
-        | Nothing <- gAbsM = Deleted
-        | otherwise = Updated
-  return (InputResults{..}, gAbsM)
+      ~(iStatus, newFM)
+        | not (unsafeIsDefined gAbsM) = (Failed, Just)
+        | Nothing <- gAbsM = (Deleted, const Nothing)
+        | otherwise = (Updated, const gAbsM)
+  return (InputResults{..}, newFM)
 

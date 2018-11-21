@@ -77,13 +77,12 @@ data TransactionException =
   EmptyInputStack |
   RepeatedMaterial String
 
-newtype TXFieldException = TXFieldException String
+data DisplayException = 
+  TXFieldException String |
+  MonitorException String |
+  Timeout Int
 
 -- * Instances
-
--- | - 
-instance Show TXFieldException where
-  show (TXFieldException e) = e
 
 -- | -
 instance Show StorageException where
@@ -151,10 +150,16 @@ instance Show TransactionException where
   show (RepeatedMaterial name) = "Repeated material name '" ++ name ++ "'"
 
 -- | -
+instance Show DisplayException where
+  show (TXFieldException s) = "Error in transaction summary: " ++ s
+  show (MonitorException s) = "Error in monitor operation: " ++ s
+  show (Timeout t) = "Exceeded timeout of " ++ show t ++ " milliseconds"
+
+-- | -
 instance Exception StorageException
 -- | -
 instance Exception ContractException
 -- | -
 instance Exception TransactionException
 -- | -
-instance Exception TXFieldException
+instance Exception DisplayException
