@@ -53,6 +53,7 @@ data StorageException =
 
 -- | Exceptions for contract-related errors.
 data ContractException =
+  ContractDeleted ContractID |
   BadContractVersion VersionID ContractID |
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
@@ -110,6 +111,7 @@ instance Show StorageException where
 
 -- | -
 instance Show ContractException where
+  show (ContractDeleted cID) = "Contract " ++ show cID ++ " was deleted"
   show (BadContractVersion ver cID) =
     "Incorrect version in contract ID: " ++ prettyContractID cID ++
     "; correct version is: " ++ show ver
@@ -151,7 +153,7 @@ instance Show TransactionException where
 
 -- | -
 instance Show DisplayException where
-  show (TXFieldException s) = "Error in transaction summary: " ++ s
+  show (TXFieldException s) = s
   show (MonitorException s) = "Error in monitor operation: " ++ s
   show (Timeout t) = "Exceeded timeout of " ++ show t ++ " milliseconds"
 

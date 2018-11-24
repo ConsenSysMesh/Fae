@@ -118,8 +118,8 @@ collectTransaction txID = do
     use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   let transactionID = txID
       txSSigners = Map.toList $ getSigners txSigners
-  txInputSummaries <- Vector.imapM (makeInputSummary txID . makeTag) inputResults
   txMaterialsSummaries <- makeMaterialsSummaries txID inputMaterials
+  txInputSummaries <- Vector.imapM (makeInputSummary txID . makeTag) inputResults
   ~(txResult, txOutputs) <- evalArg (show result, makeOut <$> outputs)
   return TXSummary{..}
 
@@ -128,7 +128,7 @@ collectTransaction txID = do
 -- | Get the 'TXInputSummary' for a given 'TransactionID' 
 makeInputSummary :: 
   (Monad m) => TransactionID -> String -> InputResults -> EvalT m InputSummary
-makeInputSummary txID descr ~InputResults{..} = do
+makeInputSummary txID descr InputResults{..} = do
   txInputMaterialsSummaries <- 
     maybe (return err) (makeMaterialsSummaries txID) iMaterialsM
   ~(txInputVersion, outputsM, status) <- evalArg (iVersionID, iOutputsM, iStatus)

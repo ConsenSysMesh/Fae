@@ -119,7 +119,7 @@ data ExportData =
     exportedCID :: ContractID,
     exportStatus :: Status,
     neededModules :: [String],
-    exportNameType :: String,
+    exportValType :: String,
     exportedValue :: ByteString
   }
   deriving (Generic)
@@ -150,10 +150,15 @@ instance Serialize ExportData
 -- | A getter/dispatcher for the storage contents, using Church encoding
 -- for 'Either' to avoid strict pattern-matches on the return value.
 atCID :: 
-  ContractID -> (InputResults -> a) -> (StoredContract -> a) -> a -> Storage -> a
+  ContractID -> 
+  (InputResults -> ContractID -> a) -> 
+  (Output -> ContractID -> a) -> 
+  (ContractID -> a) -> 
+  Storage -> 
+  a
 atCID cID ivF scF a0 st
-  | Just o <- st ^. outputAt cID = maybe a0 scF $ storedContract o
-  | otherwise = maybe a0 ivF $ st ^. _importedValues . at cID
+  | Just o <- st ^. outputAt cID = scF o cID
+  | otherwise = maybe a0 ivF (st ^. _importedValues . at cID) cID
 
 outputAt :: ContractID -> Lens' Storage (Maybe Output)
 outputAt cID@ContractID{..} =
@@ -223,7 +228,7 @@ getExportedValue txID ix = do
     {
       exportedCID = iRealID,
       exportStatus = iStatus,
-      exportNameType = show contractNameType,
+      exportValType = show contractValType,
       ..
     }
 
@@ -240,4 +245,11 @@ getExportedValue txID ix = do
 
 runStorageT :: (Monad m) => FaeStorageT m a -> m a
 runStorageT = flip evalStateT $ Storage Map.empty Map.empty
+
+-- | A quick way of assigning the same exception to all the fields of the
+-- 'InputResults', but setting the 'iRealID' and 'iResult' to actual
+-- values, which are useful even if the contract itself is missing.
+cloakInputResults :: ContractID -> InputResults -> InputResults
+cloakInputResults cID ~InputResults{iResult = ~(WithEscrows es rv), ..} = 
+  InputResults{iRealID = cID, iResult = WithEscrows es rv, ..}
 

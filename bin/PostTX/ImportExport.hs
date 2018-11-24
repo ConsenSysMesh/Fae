@@ -32,6 +32,6 @@ buildImportRequest :: ExportData -> String -> IO Request
 buildImportRequest ExportData{..} importHost =
   flip formDataBody (requestURL importHost) $
     modulePart "import" "import" 
-      (S.encode (exportedCID, exportStatus, neededModules, exportNameType)) :
+      (S.encode (exportedCID, exportStatus, neededModules, exportValType)) :
     modulePart "valuePackage" "valuePackage" exportedValue : []
 

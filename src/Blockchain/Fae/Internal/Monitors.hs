@@ -14,6 +14,7 @@ import Data.Maybe
 import System.Posix.Process
 import System.Posix.Signals
 
+import System.Exit
 import System.Timeout
    
 -- | An 'evaluate'-like function, e.g. a timeout or memory usage limit.
@@ -31,12 +32,8 @@ evalTimed evalTimeout = flip runReaderT (EvalF $ timed evalTimeout) where
 
 -- | Basic impure timeout function.
 timed :: (MonadIO m, NFData a) => Int -> a -> m a
-timed evalTimeout = 
-  liftIO . fmap (fromMaybe err) . cloak . 
-  posixTimeout evalTimeout . evaluate . force 
-  where 
-    err = throw $ Timeout evalTimeout
-    cloak = handleAll (return . throw)
+timed evalTimeout = liftIO . fmap (fromMaybe err) . posixTimeout evalTimeout 
+  where err = throw $ Timeout evalTimeout
 
 -- | GHC has an actual /bug/ in its concurrency that non-allocating
 -- evaluations can never be pre-empted, so the stock @timeout@ function
@@ -50,13 +47,13 @@ timed evalTimeout =
 -- to avoid having to communicate the value between the processes) the
 -- evaluation happens twice: once to check that it terminates, and once to
 -- get the actual value.
-posixTimeout :: Int -> IO a -> IO (Maybe a)
-posixTimeout mSec act = do
-  pID <- forkProcess $ void act
+posixTimeout :: (NFData a) => Int -> a -> IO (Maybe a)
+posixTimeout mSec x = do
+  pID <- forkProcess $ handleAll (const exitFailure) $ void $ evaluate $ force x
   stMM <- timeout (mSec * halfMillisecond) $ getProcessStatus True True pID
   case stMM of
     Nothing -> do
       signalProcess killProcess pID
       return Nothing
-    _ -> Just <$> act
+    _ -> return $ Just x
   where halfMillisecond = 500
