@@ -40,7 +40,7 @@ parseArgs = foldl addArg $
   {
     serverMode = FaeMode,
     newSession = True,
-    evalTimeout = 0,
+    evalTimeout = 1000,
     faePort = 27182,
     importExportPort = 27183,
     faethHostname = defaultFaethHost,
