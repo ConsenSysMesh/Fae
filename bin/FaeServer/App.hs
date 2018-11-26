@@ -119,7 +119,7 @@ importExportApp sendTXExecData = \request respond -> do
     importDataM = either error id . S.decode <$> getFileMaybe files "import"
     exportDataM = either error id . S.decode <$> getFileMaybe files "export"
   case (importDataM, exportDataM) of
-    (Just (exportedCID, exportStatus, neededModules, exportNameType), Nothing) ->
+    (Just (exportedCID, exportStatus, neededModules, exportValType), Nothing) ->
       let exportedValue = getFile files "valuePackage"
           exportData = ExportData{..}
       in send signalVar $ \callerTID signalVar -> ImportValue{..}

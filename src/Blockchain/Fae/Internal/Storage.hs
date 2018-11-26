@@ -19,6 +19,7 @@ import Blockchain.Fae.Internal.IDs
 import Common.Lens 
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad.State
 import Control.Monad.Trans
 
@@ -131,7 +132,7 @@ data ExportData =
     exportedCID :: ContractID,
     exportStatus :: Status,
     neededModules :: [String],
-    exportNameType :: String,
+    exportValType :: String,
     exportedValue :: ByteString
   }
   deriving (Generic)
@@ -152,37 +153,25 @@ instance Show Result where
 instance Serialize Status
 
 -- | -
+instance NFData Status
+
+-- | -
 instance Serialize ExportData
 
 -- * Functions
 
--- | For the 'At' instance
-type instance Index Storage = ContractID
--- | For the 'At' instance
-type instance IxValue Storage = Either InputResults StoredContract
--- | For the 'At' instance
-instance Ixed Storage
--- | We define this instance /in addition to/ the natural 'TransactionID'
--- indexing of the 'getStorage' field so that we can look up contracts by
--- ID, which requires descending through several levels of lookups, any of
--- which may fail (in different ways).
-instance At Storage where
-  at cID = lens getter setter where
-    getter :: Storage -> Maybe (IxValue Storage)
-    getter st = 
-      case st ^. contractAt cID of
-        Nothing -> Left <$> st ^. _importedValues . at cID
-        x -> Right <$> x
-    setter :: Storage -> Maybe (IxValue Storage) -> Storage
-    setter st (Just (Right x)) = st & contractAt cID ?~ x
-    setter st (Just (Left x)) = st & _importedValues . at cID ?~ x
-    setter st Nothing = st
-      & contractAt cID .~ Nothing
-      & _importedValues . at cID .~ Nothing
-
--- | Accesses just the contract entry at a given ID.
-contractAt :: ContractID -> Lens' Storage (Maybe StoredContract)
-contractAt cID = outputAt cID . uncertain _storedContract
+-- | A getter/dispatcher for the storage contents, using Church encoding
+-- for 'Either' to avoid strict pattern-matches on the return value.
+atCID :: 
+  ContractID -> 
+  (InputResults -> ContractID -> a) -> 
+  (Output -> ContractID -> a) -> 
+  (ContractID -> a) -> 
+  Storage -> 
+  a
+atCID cID ivF scF a0 st
+  | Just o <- st ^. outputAt cID = scF o cID
+  | otherwise = maybe a0 ivF (st ^. _importedValues . at cID) cID
 
 -- | Accesses the full 'Output' at a contract ID.
 outputAt :: ContractID -> Lens' Storage (Maybe Output)
@@ -235,13 +224,6 @@ onlyJust err = lens getter setter where
   getter = Just
   setter _ = fromMaybe $ throw err
 
--- | Semantic interpretation of the status, hiding the pattern-match that
--- establishes the policy.
-successful :: InputResults -> Bool
-successful InputResults{..}
-  | Failed <- iStatus = False
-  | otherwise = True
-
 -- | Deserializes an exported value as the correct type and puts it in
 -- imported value storage for the future.  This is in `FaeStorage` and not
 -- `FaeStorageT` because the former is not an instance of the latter, and
@@ -276,7 +258,7 @@ getExportedValue txID ix = do
     {
       exportedCID = iRealID,
       exportStatus = iStatus,
-      exportNameType = show contractNameType,
+      exportValType = show contractValType,
       ..
     }
 
@@ -294,4 +276,11 @@ getExportedValue txID ix = do
 -- | Hides the particular structure of 'Storage' from other modules.
 runStorageT :: (Monad m) => FaeStorageT m a -> m a
 runStorageT = flip evalStateT $ Storage Map.empty Map.empty
+
+-- | A quick way of assigning the same exception to all the fields of the
+-- 'InputResults', but setting the 'iRealID' and 'iResult' to actual
+-- values, which are useful even if the contract itself is missing.
+cloakInputResults :: ContractID -> InputResults -> InputResults
+cloakInputResults cID ~InputResults{iResult = ~(WithEscrows es rv), ..} = 
+  InputResults{iRealID = cID, iResult = WithEscrows es rv, ..}
 

@@ -146,7 +146,10 @@ data Output =
     storedContract :: Maybe StoredContract,
     -- | This is not @Maybe@ because even when the contract is spent, we
     -- need its type for exporting.
-    contractNameType :: TypeRep 
+    contractNameType :: TypeRep ,
+    -- | Likewise, this is needed to type-check the contract when it is
+    -- called (without examining the possibly-uncomputable return value).
+    contractValType :: TypeRep
   }
   deriving (Generic)
 
@@ -444,6 +447,7 @@ newContract x = liftTX $ FaeTX $ do
   let storedFunction = 
         globalContract $ hideEscrows (withEscrows xE) nextID (theContract x)
       contractNameType = typeRep $ Proxy @name
+      contractValType = typeRep $ Proxy @(ValType name)
       storedContract = Just StoredContract{..}
   tell [Output{..}]
 
@@ -615,7 +619,8 @@ globalContract = ContractF .
     extractOutputs mp = lift $ do
       ~(~(y, sfM), w) <- runWriterT mp
       let wForced = force w
-      return ((wForced `seq` sfM `deepseq` y, wForced), sfM)
+          yForced = wForced `seq` sfM `deepseq` y
+      return ((yForced, wForced), yForced `seq` sfM)
 
 -- | Prepares a value-bearing argument.
 acceptLocal :: 
@@ -763,13 +768,21 @@ push = modify . cons
 
 -- | Remove an escrow map from the stack
 pop :: TXBodyM EscrowMap
-pop = gets uncons >>= maybe err act where
-  err = throw EmptyInputStack
-  act (em, rest) = put rest >> return em
+pop = do
+  (em, rest) <- unconsTXBodyM
+  put rest >> return em
 
 -- | Modify the top of the stack with additional escrows.
 keep :: EscrowMap -> TXBodyM ()
-keep newEM = gets uncons >>= maybe err act where
-  err = throw EmptyInputStack
-  act (oldEM, rest) = put $ newEM `Map.union` oldEM : rest
+keep newEM = do
+  (oldEM, rest) <- unconsTXBodyM
+  put $ newEM `Map.union` oldEM : rest
+
+-- | The common denominator for 'pop' and 'keep', carefully written so that
+-- the monad is always defined and any bottom, not necessarily just the one
+-- from the 'Nothing' case of 'uncons', lies in the inner values.
+unconsTXBodyM :: TXBodyM (EscrowMap, [EscrowMap])
+unconsTXBodyM = do
+  ~(em, rest) <- fromMaybe (throw EmptyInputStack) <$> gets uncons 
+  return (em, rest)
 

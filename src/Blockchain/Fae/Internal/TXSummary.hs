@@ -16,16 +16,18 @@ import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
+import Blockchain.Fae.Internal.Monitors
 import Blockchain.Fae.Internal.Storage
 import Blockchain.Fae.Internal.TX
 
 import Common.Lens
 
+import Control.DeepSeq
+
 import System.IO.Unsafe
 
 import Control.DeepSeq
 import Control.Monad
-import Control.Monad.IO.Class
 import Control.Monad.State
 
 import qualified Data.IntMap as IntMap
@@ -34,8 +36,6 @@ import qualified Data.Vector as Vector
 import Data.Vector (Vector)
 
 import Data.Foldable
-import Data.List
-import Data.Typeable
 
 import GHC.Generics hiding (to)
 
@@ -83,8 +83,8 @@ instance Pretty TXSummary where
     outputs = prettyVector "outputs" txOutputs
     txSSigners' = prettyList "signers" txSSigners
     inputs = 
-      vcat . toList . Vector.imap (printInputSummary . makeIx) $ txInputSummaries 
-      where makeIx = ("input #" ++) . show
+      vcat . toList . Vector.imap (printInputSummary . makeTag) $ txInputSummaries 
+      where makeTag = ("input #" ++) . show
     materials = printMaterialsSummaries txMaterialsSummaries
     entry = vcat [outcome, rest]
     outcome = displayException $ vcat [result, outputs] 
@@ -107,8 +107,8 @@ instance Pretty TXInputSummary where
 -- | This occurs twice, so it's worth having its own function.
 printMaterialsSummaries :: MaterialsSummaries -> Doc
 printMaterialsSummaries = 
-  vcat . toList . fmap (uncurry $ printInputSummary . makeIx) 
-  where makeIx name = "material '" ++ name ++ "'" 
+  vcat . toList . fmap (uncurry $ printInputSummary . makeTag) 
+  where makeTag name = "material '" ++ name ++ "'" 
 
 -- | This occurs twice, so it's worth having its own function.
 printInputSummary :: String -> InputSummary -> Doc
@@ -123,36 +123,43 @@ printInputSummary tag (cID, txInputSummary@TXInputSummary{..}) =
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
 collectTransaction :: 
-  (MonadState Storage m, MonadCatch m, MonadIO m) => TransactionID -> m TXSummary
+  (MonadState Storage m, MonadCatch m, MonadIO m) => 
+  TransactionID -> EvalT m TXSummary
 collectTransaction txID = do
   TransactionEntry{..} <- 
     use $ _getStorage . at txID . defaultLens (throw $ BadTransactionID txID)
   let transactionID = txID
       txSSigners = Map.toList $ getSigners txSigners
-      txResult = show result 
-      txOutputs = makeOut <$> outputs
-      txInputSummaries = Vector.imap (makeInputSummary txID . makeIx) inputResults
-        where makeIx = ("Input contract call #" ++) . show
-      txMaterialsSummaries = makeMaterialsSummaries txID inputMaterials
-  return $ TXSummary{..}
+  txMaterialsSummaries <- makeMaterialsSummaries txID inputMaterials
+  txInputSummaries <- Vector.imapM (makeInputSummary txID . makeTag) inputResults
+  ~(txResult, txOutputs) <- evalArg (show result, makeOut <$> outputs)
+  return TXSummary{..}
+
+  where makeTag = ("Input contract call #" ++) . show
 
 -- | Get the 'TXInputSummary' for a given 'TransactionID' 
-makeInputSummary :: TransactionID -> String -> InputResults -> InputSummary
-makeInputSummary txID descr ~iR@InputResults{..} =
-  (iRealID, TXInputSummary{txInputStatus = iStatus, ..})
+makeInputSummary :: 
+  (Monad m) => TransactionID -> String -> InputResults -> EvalT m InputSummary
+makeInputSummary txID descr InputResults{..} = do
+  txInputMaterialsSummaries <- 
+    maybe (return err) (makeMaterialsSummaries txID) iMaterialsM
+  ~(txInputVersion, outputsM, status) <- evalArg (iVersionID, iOutputsM, iStatus)
+  let txInputOutputs = maybe err (makeOut <$>) outputsM
+      txInputStatus | unsafeIsDefined status = status
+                    | otherwise = Failed
+  return (iRealID, TXInputSummary{..})
+
   where 
-    txInputVersion = iVersionID
-    txInputOutputs = maybe err (fmap makeOut) iOutputsM
-    txInputMaterialsSummaries = maybe err (makeMaterialsSummaries txID) iMaterialsM
     err :: a
     err = throw $ ContractOmitted txID descr
 
 -- | Converts materials as 'InputResults' to appropriately error-formatted
 -- summaries.
-makeMaterialsSummaries :: TransactionID -> Materials -> MaterialsSummaries
-makeMaterialsSummaries txID = fmap $ 
-  \(name, iR) -> (name, makeInputSummary txID (makeIx name) iR)
-  where makeIx = ("Materials contract call " ++)
+makeMaterialsSummaries :: 
+  (Monad m) => TransactionID -> Materials -> EvalT m MaterialsSummaries
+makeMaterialsSummaries txID = traverse $ 
+  \(name, iR) -> (name,) <$> makeInputSummary txID (makeTag name) iR
+  where makeTag = ("Materials contract call " ++)
 
 -- | If outputs showed more detailed information, like contract types, this
 -- would construct it.  As it is, it just grabs the version.

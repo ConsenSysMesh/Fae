@@ -35,6 +35,7 @@ data ServerArgs =
   {
     serverMode :: ServerMode,
     newSession :: Bool,
+    evalTimeout :: Int, -- ^ microseconds, 0 is disabled
     faePort :: Int,
     importExportPort :: Int,
     faethHostname :: String,
@@ -68,6 +69,7 @@ parseArgs = foldl addArg $
   {
     serverMode = FaeMode,
     newSession = False,
+    evalTimeout = 1000,
     faePort = 27182,
     importExportPort = 27183,
     faethHostname = defaultFaethHost,
@@ -96,9 +98,14 @@ getArgAction = \case
         (_ArgsServer . _faethPort .~ readErr err portArgument) .
         setFaeth
     | ("--fae-port", '=' : faePortArg) <- break (== '=') x ->
-      Just $ _ArgsServer . _faePort .~ read faePortArg
+      let err = error $ "Could not read port argument: " ++ faePortArg in  
+      Just $ _ArgsServer . _faePort .~ readErr err faePortArg
     | ("--import-export-port", '=' : importExportPortArg) <- break (== '=') x ->
-      Just $ _ArgsServer . _importExportPort .~ read importExportPortArg
+      let err=error $ "Could not read port argument: " ++ importExportPortArg in  
+      Just $ _ArgsServer . _importExportPort .~ readErr err importExportPortArg
+    | ("--eval-timeout", '=' : evalTimeoutArg) <- break (== '=') x ->
+      let err = error $ "Could not read timeout argument: " ++ evalTimeoutArg in
+      Just $ _ArgsServer . _evalTimeout .~ readErr err evalTimeoutArg
   "--normal-mode" -> Just $ _ArgsServer . _serverMode .~ FaeMode
   "--resume-session" -> Just $ _ArgsServer . _newSession .~ False
   "--new-session" -> Just $ _ArgsServer . _newSession .~ True

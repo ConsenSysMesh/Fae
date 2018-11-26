@@ -39,7 +39,7 @@ import Text.Read
 instance ToJSON TXInputSummary where
   toJSON TXInputSummary{..} = 
     object [
-      "txInputStatus" .= txInputStatus,
+      "txInputStatus" .= wrapExceptions txInputStatus,
       "txInputOutputs" .= wrapExceptions txInputOutputs,
       "txInputMaterialsSummaries" .= txInputMaterialsSummaries,
       "txInputVersion" .= wrapExceptions txInputVersion ]
@@ -57,12 +57,11 @@ instance ToJSON TXSummary where
 -- | -
 instance FromJSON TXInputSummary where
   parseJSON = withObject "TXInputSummary" $ \o -> do
-    exceptionValue o <|>
-      TXInputSummary
-        <$> readJSONField "txInputStatus" o
-        <*> readJSONField "txInputOutputs" o
-        <*> o .: "txInputMaterialsSummaries"
-        <*> readJSONField "txInputVersion" o
+    TXInputSummary
+      <$> readJSONField "txInputStatus" o
+      <*> readJSONField "txInputOutputs" o
+      <*> o .: "txInputMaterialsSummaries"
+      <*> readJSONField "txInputVersion" o
       
 -- | -
 instance FromJSON TXSummary where
@@ -129,10 +128,11 @@ readJSONField :: forall a. (FromJSON a) => Text -> Object -> Parser a
 readJSONField fieldName obj = 
   obj .: fieldName <|> (obj .: fieldName >>= exceptionValue) 
 
+-- | Reads a value from a JSON text expression.
 readJSONText :: (Read a) => String -> Value -> Parser a
 readJSONText l = withText l $ \t -> return $
   let s = T.unpack t in
-  fromMaybe (throw $ JSONTextError s) $ readMaybe s 
+  fromMaybe (throw $ JSONException s) $ readMaybe s 
 
 -- | Parses a tagged exception.
 exceptionValue :: Object -> Parser a

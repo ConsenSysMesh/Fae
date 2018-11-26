@@ -53,6 +53,7 @@ data StorageException =
 
 -- | Exceptions for contract-related errors.
 data ContractException =
+  ContractDeleted ContractID |
   BadContractVersion VersionID ContractID |
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
@@ -75,10 +76,12 @@ data TransactionException =
   EmptyInputStack |
   RepeatedMaterial String
 
--- | Exceptions for formatting transaction summaries
+-- | Exceptions arising in @TXSummary@ and @JSON@.
 data DisplayException = 
   TXFieldException String |
-  JSONTextError String
+  JSONException String |
+  MonitorException String |
+  Timeout Int
 
 -- * Instances
 
@@ -108,6 +111,7 @@ instance Show StorageException where
 
 -- | -
 instance Show ContractException where
+  show (ContractDeleted cID) = "Contract " ++ show cID ++ " was deleted"
   show (BadContractVersion ver cID) =
     "Incorrect version in contract ID: " ++ prettyContractID cID ++
     "; correct version is: " ++ show ver
@@ -143,10 +147,12 @@ instance Show TransactionException where
   show EmptyInputStack = "(internal error) Tried to use an empty stack!"
   show (RepeatedMaterial name) = "Repeated material name '" ++ name ++ "'"
 
--- | - 
+-- | -
 instance Show DisplayException where
-  show (TXFieldException e) = e
-  show (JSONTextError s) = "Couldn't read JSON text value: " ++ s
+  show (TXFieldException s) = s
+  show (JSONException s) = "Error in JSON serialization: " ++ s
+  show (MonitorException s) = "Error in monitor operation: " ++ s
+  show (Timeout t) = "Exceeded timeout of " ++ show t ++ " milliseconds"
 
 -- | -
 instance Exception StorageException

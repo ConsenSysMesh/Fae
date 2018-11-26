@@ -147,7 +147,7 @@ interpretImportedValue ExportData{..} =
       [
         "addImportedValue",
         ".",
-        "importValueThrow @(ValType (" ++ exportNameType ++ "))"
+        "importValueThrow @(" ++ exportValType ++ ")"
       ]
 
 -- | A top-level function (so that it can be in scope in the interpreter of
