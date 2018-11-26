@@ -247,7 +247,7 @@ runMaterials ims = do
     uniqueIMs = adjust <$> ims
     adjust (name, input) = (name,) $
       if name `Map.member` repSet
-      -- | A materials call _cannot_ be anything other than an 'InputArgs'.
+      -- A materials call /cannot/ be anything other than an 'InputArgs'.
       then input{inputArg = throw $ RepeatedMaterial name}
       else input
     repSet = Map.filter (> 1) $ Map.fromListWith (+) $ (_2 .~ 1) <$> ims
