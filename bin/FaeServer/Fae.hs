@@ -2,6 +2,8 @@ module FaeServer.Fae where
 
 import Blockchain.Fae.FrontEnd
 
+import Common.JSON
+
 import Control.Concurrent
 import Control.Concurrent.STM
 
@@ -12,13 +14,12 @@ import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Trans.Cont
 
-import Common.JSON
-
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.Map as Map
+import Data.Maybe
 import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
-import qualified Data.Map as Map
 
 import FaeServer.Args
 import FaeServer.Concurrency
@@ -45,12 +46,13 @@ runFae mainTID ServerArgs{..} = reThrow mainTID $ runFaeInterpretWithHistory $ d
       "Replayed transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
   forever $ do
     txExecData <- readTXExecData
-    reThrowExit mainTID (callerTID txExecData) $ runTXExecData txExecData
-  
+    reThrowExit mainTID (callerTID txExecData) $ 
+      runTXExecData evalTimeout txExecData
+
 runTXExecData :: 
   (Typeable m, MonadIO m, MonadMask m) => 
-  TXExecData -> FaeInterpretWithHistoryT m ()
-runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
+  Int -> TXExecData -> FaeInterpretWithHistoryT m ()
+runTXExecData evalTimeout TXExecData{tx=tx@TX{..}, ..} = do
   dup <- gets $ Map.member txID . txStorageAndCounts
   when dup $ throw $ ErrorCall $ "Duplicate transaction ID: " ++ show txID
 
@@ -59,7 +61,7 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
     if lazy
     then return $ "Transaction " ++ show txID ++ " (#" ++ show txCount ++ ")"
     else do
-      txSummary <- lift $ collectTransaction txID
+      txSummary <- lift . evalTimed evalTimeout $ collectTransaction txID
       -- Strict because I've seen a case where an exception is thrown so
       -- late that it isn't caught by the app and a response isn't even sent.
       return $! encodeJSON txSummary
@@ -71,17 +73,17 @@ runTXExecData TXExecData{tx=tx@TX{..}, ..} = do
     liftIO $ gitCommit txID
   ioAtomically $ putTMVar resultVar txResult
 
-runTXExecData View{..} = do
+runTXExecData evalTimeout View{..} = do
   void $ recallHistory parentM
-  txSummary <- lift $ collectTransaction viewTXID
+  txSummary <- lift . evalTimed evalTimeout $ collectTransaction viewTXID
   ioAtomically $ putTMVar resultVar (encodeJSON txSummary)
 
-runTXExecData ExportValue{..} = do
+runTXExecData _ ExportValue{..} = do
   void $ recallHistory parentM
   exportResult <- lift $ lift $ getExportedValue calledInTX ixInTX
   ioAtomically $ putTMVar exportResultVar exportResult
 
-runTXExecData ImportValue{..} = do
+runTXExecData _ ImportValue{..} = do
   parentCount <- recallHistory parentM
   lift $ interpretImportedValue exportData
   updateHistory parentM parentCount

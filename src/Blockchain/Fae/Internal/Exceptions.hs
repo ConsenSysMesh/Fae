@@ -53,6 +53,7 @@ data StorageException =
 
 -- | Exceptions for contract-related errors.
 data ContractException =
+  ContractDeleted ContractID |
   BadContractVersion VersionID ContractID |
   BadInputParse String TypeRep |
   BadArgType TypeRep TypeRep | 
@@ -77,13 +78,12 @@ data TransactionException =
   EmptyInputStack |
   RepeatedMaterial String
 
-newtype TXFieldException = TXFieldException String
+data DisplayException = 
+  TXFieldException String |
+  MonitorException String |
+  Timeout Int
 
 -- * Instances
-
--- | - 
-instance Show TXFieldException where
-  show (TXFieldException e) = e
 
 -- | -
 instance Show StorageException where
@@ -111,6 +111,7 @@ instance Show StorageException where
 
 -- | -
 instance Show ContractException where
+  show (ContractDeleted cID) = "Contract " ++ show cID ++ " was deleted"
   show (BadContractVersion ver cID) =
     "Incorrect version in contract ID: " ++ prettyContractID cID ++
     "; correct version is: " ++ show ver
@@ -151,10 +152,16 @@ instance Show TransactionException where
   show (RepeatedMaterial name) = "Repeated material name '" ++ name ++ "'"
 
 -- | -
+instance Show DisplayException where
+  show (TXFieldException s) = s
+  show (MonitorException s) = "Error in monitor operation: " ++ s
+  show (Timeout t) = "Exceeded timeout of " ++ show t ++ " milliseconds"
+
+-- | -
 instance Exception StorageException
 -- | -
 instance Exception ContractException
 -- | -
 instance Exception TransactionException
 -- | -
-instance Exception TXFieldException
+instance Exception DisplayException
