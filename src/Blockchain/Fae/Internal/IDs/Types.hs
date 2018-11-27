@@ -87,7 +87,7 @@ newtype EscrowID name = EscrowID { entID :: EntryID }
 -- | A wrapper for defining general instances of classes for types that
 -- can't use the generic ones, but are in some general sense a container
 -- for values that can.
-newtype Container a = Container { getContainer :: a }
+newtype Container a = Container { getContainer :: a } deriving (Serialize)
 
 -- Instances
 

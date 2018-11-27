@@ -76,8 +76,9 @@ data TransactionException =
   EmptyInputStack |
   RepeatedMaterial String
 
--- | Exceptions arising in @TXSummary@ and @JSON@.
+-- | Exceptions arising non-core UI components.
 data DisplayException = 
+  InterpretException String |
   TXFieldException String |
   JSONException String |
   MonitorException String |
@@ -111,7 +112,8 @@ instance Show StorageException where
 
 -- | -
 instance Show ContractException where
-  show (ContractDeleted cID) = "Contract " ++ show cID ++ " was deleted"
+  show (ContractDeleted cID) = 
+    "Contract " ++ prettyContractID cID ++ " was deleted"
   show (BadContractVersion ver cID) =
     "Incorrect version in contract ID: " ++ prettyContractID cID ++
     "; correct version is: " ++ show ver
@@ -149,6 +151,7 @@ instance Show TransactionException where
 
 -- | -
 instance Show DisplayException where
+  show (InterpretException s) = s
   show (TXFieldException s) = s
   show (JSONException s) = "Error in JSON serialization: " ++ s
   show (MonitorException s) = "Error in monitor operation: " ++ s

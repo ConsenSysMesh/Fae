@@ -1,6 +1,0 @@
-body = RunNametagFactory
-reward = True
-inputs
-  $txID/Body/0/Current = "$name"
-keys
-  self = $name

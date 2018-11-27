@@ -1,9 +1,0 @@
-body = BuyNametag2
-inputs
-  $coinTX/Body/0/Current = ()
-    self = person1
-  $salesTX/Body/0/Current = ()
-    self = person2
-keys
-  person1 = $person1
-  person2 = $person2

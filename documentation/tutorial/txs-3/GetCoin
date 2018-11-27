@@ -1,6 +1,0 @@
-body = GetCoin
-reward = True
-inputs
-  $coinTX/Body/0/Current = ()
-keys
-  self = $self

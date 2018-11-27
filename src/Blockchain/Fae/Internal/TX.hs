@@ -18,6 +18,7 @@ indispensable:
   - FlexibleInstances
   - FunctionalDependencies
   - GeneralizedNewtypeDeriving
+  - LambdaCase
   - MultiParamTypeClasses
   - MultiWayIf
   - NamedFieldPuns
@@ -183,11 +184,12 @@ faeInterpret moduleNames runString apply = handle fixGHCErrors $ do
     isTXModule = isPrefixOf "Blockchain.Fae.Transactions.TX"
     isInternalModule = isPrefixOf "Blockchain.Fae.Internal"
 
-    fixGHCErrors (WontCompile []) = error "Compilation error"
-    fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
-    fixGHCErrors (UnknownError e) = error e
-    fixGHCErrors (NotAllowed e) = error e
-    fixGHCErrors (GhcException e) = error e
+    fixGHCErrors (WontCompile []) = throw $ InterpretException "Compilation error"
+    fixGHCErrors (WontCompile (ghcE : _)) = 
+      throw $ InterpretException $ errMsg ghcE
+    fixGHCErrors (UnknownError e) = throw $ InterpretException e
+    fixGHCErrors (NotAllowed e) = throw $ InterpretException e
+    fixGHCErrors (GhcException e) = throw $ InterpretException e
 
     liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
 
@@ -221,6 +223,7 @@ runFaeInterpret x = do
             FlexibleContexts,
             FlexibleInstances,
             FunctionalDependencies,
+            LambdaCase,
             MultiParamTypeClasses,
             MultiWayIf,
             NamedFieldPuns,

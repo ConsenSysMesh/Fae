@@ -1,6 +1,0 @@
-body = SellNametag
-reward = True
-inputs
-  $installTX/Body/0/Current = "$name"  
-keys
-  name = $name

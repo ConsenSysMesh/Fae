@@ -1,9 +1,0 @@
-body = TradeNametags
-inputs
-  $tx1ID/Body/0/Current = ()
-    self = person1
-  $tx2ID/Body/0/Current = ()
-    self = person2
-keys
-  person1 = $person1
-  person2 = $person2
