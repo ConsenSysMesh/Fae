@@ -1,6 +1,6 @@
 body = ExitLottery
+keys
+  self = $self
 inputs
   $lotteryID/Body/0/Current : Exit
     self = self
-keys
-  self = ryan

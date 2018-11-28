@@ -47,7 +47,8 @@ data LotteryState =
   RunningState
   {
     nametags :: Entries,
-    count :: Natural
+    count :: Natural,
+    winningCount :: Natural
   } |
   FinishedState
   {
@@ -60,7 +61,7 @@ type Entries = Map PublicKey (Seq Nametag)
 type Nametags = Container (Seq Nametag)
 
 startingState :: LotteryState
-startingState = RunningState Map.empty 0
+startingState = RunningState Map.empty 0 0
 
 addEntry :: Nametag -> PublicKey -> Entries -> (Natural, Entries)
 addEntry tag = Map.alterF $ finish . maybe (Seq.singleton tag) (tag Seq.<|)
@@ -91,11 +92,19 @@ newEntry limit = do
       entrant <- signer "self"
       let (enterCount, nametags') = addEntry nametag entrant nametags
           count' = count + 1
+          winningCount'
+            | enterCount > winningCount = enterCount
+            | otherwise = winningCount
       put $ 
         if count' == limit
-        then let (winners, nonWinners) = splitEntries limit nametags' in
+        then let (winners, nonWinners) = splitEntries winningCount' nametags' in
              FinishedState{totalWinners = fromIntegral $ Map.size winners, ..}
-        else RunningState{nametags = nametags', count = count'}
+        else RunningState
+             {
+               nametags = nametags', 
+               count = count', 
+               winningCount = winningCount'
+             }
       return $! EnterResult{..}
 
 getEntry :: 

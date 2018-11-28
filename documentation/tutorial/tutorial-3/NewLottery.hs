@@ -1,4 +1,4 @@
 import Lottery
 
 body :: FaeTX ()
-body = newContract $ Lottery 3
+body = newContract $ Lottery 5
