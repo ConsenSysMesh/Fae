@@ -168,6 +168,6 @@ feedback f = (>=> spend) . fix . (>=>) $ f >=> release
 
 -- | This little hack allows you to write a state machine that /doesn't/
 -- loop endlessly, but has halting states that return a value.
-halt :: (HasEscrowIDs a, MonadContract b a m) => a -> m b
-halt x = spend x >> release x
+halt :: (HasEscrowIDs a, MonadContract b a m) => a -> m a
+halt x = spend x >> return x
 
