@@ -528,8 +528,11 @@ remapSigners :: (MonadReader TXData m) => Map String String -> m a -> m a
 remapSigners renames = local $ 
   _thisTXSigners . _getSigners %~ mapNames MissingSigner renames
 
-pushArg :: (MonadReader TXData m) => String -> m a -> m a
-pushArg s = local (_localHash .~ digest s)
+-- | Bumps the local hash by hashing it; if performed with each call,
+-- ensures that its starting local hash reflects the external circumstances
+-- (i.e. preceding calls that might affect it) of that call.
+pushCall :: (MonadReader TXData m) => m a -> m a
+pushCall = local (_localHash %~ digest)
 
 txData :: TransactionID -> Signers -> TXData
 txData txID txSigners =
@@ -546,10 +549,11 @@ txData txID txSigners =
 -- | Converts a deeply wrapped function returning an awkward type into
 -- a natural stepwise function call.
 callContract :: 
-  (Monad m) =>
+  (MonadReader TXData m) =>
   ContractF m argType valType -> 
   argType -> m (valType, Maybe (ContractF m argType valType))
-callContract (ContractF (SuspendStepF f)) = fmap (fmap (fmap ContractF)) . f
+callContract (ContractF (SuspendStepF f)) = 
+  pushCall . fmap (fmap (fmap ContractF)) . f
 
 -- ** Contract function converters
 

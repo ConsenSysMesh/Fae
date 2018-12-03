@@ -314,11 +314,13 @@ contractCallResult ::
   String -> Maybe StoredContract -> ContractID -> 
   TXBodyM (InputResults, StoredContract -> Maybe StoredContract)
 contractCallResult arg scM cID = do
-  (iR, newFM) <- pushArg arg $ runContract cID storedVersion storedFunction arg
+  (iR, newFM) <- runContract cID storedVersion storedFunction arg
+  -- The new version reflects the entire transaction that calls the
+  -- contract, and therefore, everything that might change its state.
+  nextVersion <- asks $ digest . (storedVersion,) . thisTXID
   let newSCF = (mapMOf _storedFunction newFM) . (_storedVersion .~ nextVersion)
   return (iR, newSCF)
   where 
-    nextVersion = digest (storedVersion, arg)
     deletedErr = throw (ContractDeleted cID)
     badVersionErr = throw (BadContractVersion storedVersion cID)
     ~StoredContract{..} 
