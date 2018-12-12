@@ -134,7 +134,17 @@ getEntry lotteryLimit = do
       let (returnedM, nametags') = takeEntry entrant nametags
           returned = fromMaybe (throw NotFound) returnedM
           result = ExitResult{..}
-          newState = lotteryState{nametags = nametags'}
+          count' = count - 1
+          winningCount' 
+            | count < winningCount = winningCount
+            | otherwise = fromIntegral $ maximum $ fmap Seq.length nametags'
+          newState = 
+            RunningState
+            {
+              nametags = nametags',
+              count = count',
+              winningCount = winningCount'
+            }
       return (result, newState)
     FinishedState{..} -> do
       let (wSetM, winners') = takeEntry entrant winners

@@ -1,4 +1,6 @@
 import Lottery
 
 body :: FaeTX ()
-body = newContract $ Lottery 5
+body = do
+  owner <- signer "self"
+  newContract $ Lottery 5 owner
