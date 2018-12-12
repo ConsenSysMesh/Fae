@@ -1,0 +1,6 @@
+body = RewardNametag
+others
+  - Nametag
+reward = True
+keys
+  self = ryan

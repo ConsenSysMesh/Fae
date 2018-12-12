@@ -80,6 +80,8 @@ type family GlobalType a = t | t -> a where
   GlobalType (a -> f) = a -> GlobalType f
   GlobalType (FaeTX a) = EscrowsT TXDataM (a, [Output])
 
+-- | Helper class to define an overloaded function that reduces the monad
+-- that a transaction body returns into.
 class Globalizable f where
   globalize :: f -> GlobalType f
 
@@ -117,7 +119,9 @@ class (Globalizable f, Globalizable (FallbackType f)) => TransactionBody f where
 
 {- Instances -}
 
+-- | -
 instance Serialize Input
+-- | -
 instance NFData Input
 
 -- | The base-case instance: a transaction with no arguments.
@@ -152,6 +156,7 @@ instance (Show a) => TransactionBody (FaeTX a) where
     then return (z, os)
     else (_1 .~ z) <$> (put escrows >> fallback)
 
+-- | -
 instance Globalizable (FaeTX a) where
   globalize = mapStateT (fmap sw . runWriterT) . getFaeTX where 
     sw ~(~(x, s), w) = ((x, w), s)
@@ -170,6 +175,7 @@ instance (TransactionBody f, Typeable a) => TransactionBody (a -> f) where
 
   applyFallback body fallback x = applyFallback (body x) (fallback x)
 
+-- | -
 instance (Globalizable f) => Globalizable (a -> f) where
   globalize = fmap globalize
 
@@ -195,6 +201,7 @@ instance {-# OVERLAPPING #-}
 
   applyFallback body fallback x = applyFallback (body x) (fallback x)
 
+-- | -
 instance {-# OVERLAPPING #-} (Globalizable f) => Globalizable (Reward -> f) where
   globalize = fmap globalize
 
@@ -240,7 +247,7 @@ runMaterials ims = do
     uniqueIMs = adjust <$> ims
     adjust (name, input) = (name,) $
       if name `Map.member` repSet
-      -- | A materials call _cannot_ be anything other than an 'InputArgs'.
+      -- A materials call /cannot/ be anything other than an 'InputArgs'.
       then input{inputArg = throw $ RepeatedMaterial name}
       else input
     repSet = Map.filter (> 1) $ Map.fromListWith (+) $ (_2 .~ 1) <$> ims
@@ -347,9 +354,10 @@ errInputResult ::
 errInputResult ef cID = (errIR, Just) where
   errIR = (cloakInputResults cID $ throw $ ef cID){iStatus = Failed}
 
--- | Executes the contract function, returning the result, the structured
--- outputs, the new map of all currently defined versions, and the
--- continuation function.
+-- | Executes the contract function, returning the result and the
+-- continuation function.  This is where the 'iStatus' field of the
+-- 'InputResults' value is set, because this is the last place where the
+-- 'Maybe' on the continuation is readily available.
 runContract ::
   ContractID ->
   VersionID ->

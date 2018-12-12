@@ -1,23 +1,17 @@
-{- Server usage:
-- Parameter 'key': String (name of a private key, stored on the server)
-- Parameter 'main': file (containing 'body :: Transaction a b' definition)
-- Parameter 'other': file (containing any module)
-- Parameter 'input': (ContractID, String)
--
-- If 'main' is not present, then the public key for the 'key' parameter
-- will be sent in the response.
--
-- The 'main' file and any of the 'other' files can import the 'other' files
-- as modules using their local name (say, "module M" is imported as "import
-- M" in 'main').  From the 'main' or 'other' file of any other transaction,
-- they are imported qualified by "Blockchain.Fae.TX<txID>" (say, "module M"
-- in transaction 0a1f34b9 is imported as
-- "Blockchain.Fae.Transactions.TX0a1f34b9.M" from another transaction).
-- The module declarations are automatically corrected to allow this; you
-- upload them with just the local names.
--
-- The 'input' parameters are parsed and considered in order as the
-- transaction input list.
+{- |
+Module: FaeServer
+Description: Simple HTTP-based server for Fae transactions
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This program, which rises to slightly above the level of a utility, is
+a complete Fae node, excepting the part of that job that involves the
+blockchain.  It exposes its functionality via a regular HTTP
+query-parameter interface (it would be misleading to call it a REST
+protocol) and returns the results, mostly, as JSON, both of which are
+hopefully standard enough to be interoperable with other things.
 -}
 
 import Control.Concurrent.Lifted
@@ -106,5 +100,34 @@ usage = do
       "on 'import-export-port'.",
       "",
       "Recognized environment variables:",
-      "  FAE_HOME    Directory where transaction modules and history are stored"
+      "  FAE_HOME    Directory where transaction modules and history are stored",
+      "",
+      "In normal-mode, it receives requests having the following parameters:",
+      "  parent: the transaction ID that this one should immediately follow",
+      "  view: just recall an existing transaction result",
+      "  lazy: don't evaluate the transaction result, just print a generic message",
+      "  fake: don't save the transaction in the history, just run it once",
+      "  reward: take this to be a 'reward transaction' getting a Reward argument",
+      "and expecting, except if 'view = True', the following file parameters",    
+      "each one expected to have the filename matching its module name:",
+      "  message: the binary serialization of the 'TXMessage'",
+      "  body: the module defining 'body :: a -> b -> ... -> FaeTX c'",
+      "  other: each time it appears, contains another module that is part of the transaction",
+      "In Faeth mode, these are also accepted, but 'fake' is forced to",
+      "'True'; live transactions are only accepted through the Ethereum",
+      "blockchain.",
+      "",
+      "The import/export server accepts requests of the form:",
+      "  for exporting:",
+      "    parent: as for normal mode",
+      "    export: a pair (transaction ID, index in its input list) to export",
+      "  for importing:",
+      "    parent: as for normal mode",
+      "    import: a quadruple (cID, status, names, type) where:",
+      "      cID = the contract ID to import, with an explicit version",
+      "      status = the Status of the call to the cID",
+      "      names = list of module names required to express the contract's ContractName",
+      "      type = the ContractName itself",
+      "    valuePackage: a file containing the binary serialization of the",
+      "                  value to be imported"
     ]

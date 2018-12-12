@@ -106,14 +106,32 @@ type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a, Exportable a)
 -- | Constraint collection synonym
 type ContractArg a = (HasEscrowIDs a, Read a)
 
--- | A contract transformer to apply effects to 'Fae'
+-- | A contract transformer to apply effects to 'Fae'.  Concretely, it is
+--
+-- >>> type ContractM t name = ArgType name -> t (Fae (ArgType name) (ValType name)) (ValType name)
+--
+-- To demystify the kind signature, it is used like
+--
+-- >>> type StateContract s argType valType = ContractM (StateT s) argType valType
+--
+-- with the first component being a monad /transformer/.  This can then be
+-- evaluated back down to a @Contract argType valType@ via 'usingState'.
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =
   ContractT (t (Fae argType valType)) argType valType
--- | A transaction transformer like 'ContractM'
+
+-- | A transaction transformer to apply effects to 'FaeTX'.  To demystify the
+-- kind signature, it is used like
+--
+-- >>> type StateTransaction s a b = TransactionM (StateT s) a b
+--
+-- with the first component being a monad /transformer/.  This can then be
+-- evaluated back down to a @Transaction a b@ via 'usingState'.
 type TransactionM (t :: (* -> *) -> (* -> *)) a b = a -> t FaeTX b
 
 -- | A simple utility for adding mutable state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
+-- The second argument should be a @ContractM StateT@ or @TransactionM
+-- StateT@.
 usingState ::
   (Monad m) =>
   s ->
@@ -123,6 +141,8 @@ usingState s f = flip evalStateT s . f
 
 -- | A simple utility for adding constant state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
+-- The second argument should be a @ContractM StateT@ or @TransactionM
+-- ReaderT@.
 usingReader ::
   (Monad m) =>
   r ->
@@ -131,21 +151,23 @@ usingReader ::
 usingReader r f = flip runReaderT r . f
 
 -- | A shorthand for defining a contract that is, essentially, a state
--- machine: the value of each 'release' is fed back into the same contract
--- function, and no branch ends with 'spend'.  Used like this:
+-- machine: each evaluation is passed to 'release' and the return value
+-- (the next argument) is fed back into the same contract function.  Used
+-- like this:
 --
 -- >>> c :: Contract Bool Int
 -- >>> c = feedback $ \case
--- >>>   True -> release 42
--- >>>   False -> release 57
+-- >>>   True -> 42
+-- >>>   False -> 57
 --
 -- it defines a contract that forever accepts a 'Bool' and returns one of
 -- the two numbers.
-feedback :: (Monad m) => (a -> m a) -> (a -> m b)
-feedback = fix . (>=>)
+feedback :: 
+  (ContractVal b, MonadContract a b m) => (a -> m b) -> (a -> m (WithEscrows b))
+feedback f = (>=> spend) . fix . (>=>) $ f >=> release 
 
 -- | This little hack allows you to write a state machine that /doesn't/
 -- loop endlessly, but has halting states that return a value.
-halt :: (HasEscrowIDs a, MonadContract b a m) => a -> m b
-halt x = spend x >> release undefined
+halt :: (HasEscrowIDs a, MonadContract b a m) => a -> m a
+halt x = spend x >> return x
 

@@ -11,7 +11,10 @@ the server (@faeServer@) and the client (@postTX@) when communicating with
 an Ethereum client via JSON-RPC.  Primary among these is the
 request/response/error framework of 'SendRequest', 'ReceiveResponse', and
 'Error', together with 'sendProtocolT', 'receiveProtocolT',
-'receiveRequest', and 'sendReceiveProtocolT'.  The communication abstraction of the 'ProtocolT' monad is also defined with its initializer 'runProtocolT'.  Finally, the basic Faeth transaction types are defined here. 
+'receiveRequest', and 'sendReceiveProtocolT'.  The communication
+abstraction of the 'ProtocolT' monad is also defined with its initializer
+'runProtocolT'.  Finally, the basic Faeth transaction types are defined
+here. 
 
 -}
 {-# LANGUAGE TemplateHaskell #-}

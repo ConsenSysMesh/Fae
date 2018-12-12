@@ -1,0 +1,3 @@
+body = CallEscrow1
+inputs
+  $txID/Body/0/Current = "Ryan Reich"

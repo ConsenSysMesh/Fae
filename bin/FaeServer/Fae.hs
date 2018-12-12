@@ -1,3 +1,17 @@
+{- |
+Module: FaeServer.Fae
+Description: The Fae interpreter in faeServer
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This module is essentially the interpreter thread.  It reads from the
+'TXQueue' to which all the Warp threads write, updating an in-memory
+history with each new state or import, or reading from that history for
+viewing or export.
+-}
+
 module FaeServer.Fae where
 
 import Blockchain.Fae.FrontEnd
@@ -31,6 +45,13 @@ import System.Directory
 import System.FilePath
 import System.IO
 
+-- | Not just an infinite event loop, this also handles initializing the
+-- storage from cached transactions when a new session was not requested,
+-- or clearing that cache when it was.  It is guaranteed never to die from
+-- an exception (unless that exception is actually uncatchable), though any
+-- exception that is only caught here is bounced to the main thread and,
+-- thus, ends the program.  Once in the event loop, only actual 'ExitCode'
+-- exceptions can terminate the program.
 runFae :: ThreadId -> ServerArgs -> TXQueueT IO ()
 runFae mainTID ServerArgs{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
   if newSession 
@@ -39,6 +60,9 @@ runFae mainTID ServerArgs{..} = reThrow mainTID $ runFaeInterpretWithHistory $ d
     removePathForcibly "txcache"
     createDirectory "txcache"
     gitInit 
+  -- Note that this case runs transactions but does not catch exceptions as
+  -- the main loop does.  This is because it runs them lazily, and so the
+  -- exceptions are never thrown.
   else forM_TXCache $ \tx@TX{..} parentM -> do
     txCount <- innerRun tx parentM gitReset
     incrementHistory txID txCount
@@ -49,9 +73,13 @@ runFae mainTID ServerArgs{..} = reThrow mainTID $ runFaeInterpretWithHistory $ d
     reThrowExit mainTID (callerTID txExecData) $ 
       runTXExecData evalTimeout txExecData
 
+-- | Gives operational meaning to the various 'TXExecData' alternatives.
 runTXExecData :: 
   (Typeable m, MonadIO m, MonadMask m) => 
   Int -> TXExecData -> FaeInterpretWithHistoryT m ()
+-- This, the normal case, surrounds actually running the transaction with
+-- a great deal of bookkeeping to build the longest chain and save and
+-- restore history from the correct point in time.
 runTXExecData evalTimeout TXExecData{tx=tx@TX{..}, ..} = do
   dup <- gets $ Map.member txID . txStorageAndCounts
   when dup $ throw $ ErrorCall $ "Duplicate transaction ID: " ++ show txID
@@ -73,22 +101,31 @@ runTXExecData evalTimeout TXExecData{tx=tx@TX{..}, ..} = do
     liftIO $ gitCommit txID
   ioAtomically $ putTMVar resultVar txResult
 
+-- For a 'View', we just roll back the history and build the transaction
+-- summary.
 runTXExecData evalTimeout View{..} = do
   void $ recallHistory parentM
   txSummary <- lift . evalTimed evalTimeout $ collectTransaction viewTXID
   ioAtomically $ putTMVar resultVar (encodeJSON txSummary)
 
+-- 'ExportValue' is quite similar to 'View', except an 'ExportData' is
+-- built instead.
 runTXExecData _ ExportValue{..} = do
   void $ recallHistory parentM
   exportResult <- lift $ lift $ getExportedValue calledInTX ixInTX
   ioAtomically $ putTMVar exportResultVar exportResult
 
+-- 'ImportValue' is just the bookkeeping part of the 'TXExecData' case's
+-- operation, calling out to the interpreter to insert the imported value
+-- directly rather than running a new transaction.
 runTXExecData _ ImportValue{..} = do
   parentCount <- recallHistory parentM
   lift $ interpretImportedValue exportData
   updateHistory parentM parentCount
   ioAtomically $ putTMVar signalVar ()
 
+-- | The interpreter is actually run here; this appears both in the initial
+-- fast-forward from the transaction cache and in 'runTXExecData'.
 innerRun :: 
   (Typeable m, MonadIO m, MonadMask m) =>
   TX -> Maybe TransactionID -> (TransactionID -> IO ()) ->
@@ -99,11 +136,18 @@ innerRun tx@TX{..} parentM placeModules = do
   lift $ interpretTX tx
   return txCount
 
+-- | Appends a new transaction to the cache.  The cache is not very
+-- complicated: it has a file for each transaction object, and a line in
+-- a single file for each transaction ID, in order of appearance,
+-- regardless of how they depend on earlier ones.
 extendTXCache :: (MonadIO m) => TX -> Maybe TransactionID -> m ()
 extendTXCache tx@TX{..} parentM = liftIO $ do
   B.writeFile (makeTXFileName txID) $ S.encode (tx, parentM)
   B.appendFile indexFileName $ S.encode txID
 
+-- | Does...something...to each transaction in the cache.  Though the
+-- definition is somewhat extended, most of it is just handling filesystem
+-- stuff.
 forM_TXCache :: (MonadIO m) => (TX -> Maybe TransactionID -> m ()) -> m ()
 forM_TXCache f = evalContT $ callCC $ \done -> do
   let 
@@ -129,12 +173,15 @@ forM_TXCache f = evalContT $ callCC $ \done -> do
     decodeFile err getter = fmap (either (const err) id . S.decode) . getter
     getTX err = decodeFile err (liftIO . B.readFile)
 
+-- | Establishes the location of the transaction cache's index file.
 indexFileName :: String
 indexFileName = "txcache" </> "index"
 
+-- | Establishes the location of the transaction cache files.
 makeTXFileName :: TransactionID -> String
 makeTXFileName txID = "txcache" </> show txID
 
+-- | A constant that, no doubt, is equal to 32 (bytes).
 txIDLength :: Int
 txIDLength = B.length $ S.encode nullID
 

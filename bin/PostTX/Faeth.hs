@@ -1,3 +1,15 @@
+{- |
+Module: PostTX.Faeth
+Description: Handler for postTX's Faeth mode
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+The two 'submit' functions craft a JSON-RPC message for Parity describing
+the transaction to submit or to look up.  All that logic, however, is in
+'Common.ProtocolT'; we just fill in some blanks here.
+-}
 module PostTX.Faeth where
 
 import Blockchain.Fae.FrontEnd
@@ -17,14 +29,21 @@ import System.Console.Haskeline
 
 import Text.Read
 
+-- | Since an 'EthTXID' is actually just a byte string, this gives it
+-- a distinct identity so that it can have the following instances.
 newtype GetFaethTX = GetFaethTX EthTXID
 
+-- | -
 instance ToJSON GetFaethTX where
   toJSON (GetFaethTX ethTXID) = toJSON [ethTXID]
 
+-- | -
 instance ToRequest GetFaethTX where
   requestMethod _ = "eth_getTransactionByHash"
 
+-- | Sends a new Fae transaction to Parity, wrapped in an Ethereum
+-- transaction.  The details of this are in 'Common.ProtocolT' and
+-- 'FaeServer.Faeth'.
 submitFaeth :: String -> Maybe Integer -> Maybe EthAddress -> TXSpec Salt -> IO ()
 submitFaeth host valM faethTo TXSpec{specModules = LoadedModules{..}, ..} = do
   senderEthAccount <- inputAccount
@@ -49,6 +68,10 @@ submitFaeth host valM faethTo TXSpec{specModules = LoadedModules{..}, ..} = do
       "Ethereum transaction ID: " ++ ethTXID ++
       "\nFae transaction ID: " ++ show (getTXID txMessage)
 
+-- | Requests a previously entered Faeth transaction from Parity (or
+-- rather, requests an Ethereum transaction and tries to extract a Fae
+-- transaction from it), then changes various parameters of the Ethereum
+-- transaction to match the ones required in the Fae transaction's 'Salt'.
 resubmitFaeth :: String -> EthTXID -> FaethArgs -> IO ()
 resubmitFaeth host ethTXID FaethArgs{..} = do
   senderEthAccount <- inputAccount
@@ -74,16 +97,19 @@ resubmitFaeth host ethTXID FaethArgs{..} = do
 
   where (newNames, newKeyNames) = unzip newSigners
 
+-- | Console routine to take Ethereum account information.
 inputAccount :: IO EthAccount
 inputAccount = runInputT defaultSettings $ 
   EthAccount <$> inputAddress <*> inputPassphrase
 
+-- | Accepts the account address, echoing the input.
 inputAddress :: InputT IO EthAddress
 inputAddress = do
   addressSM <- getInputLine "Ethereum address: "
   let addressM = addressSM >>= readMaybe
   maybe (error "Bad address") return addressM
 
+-- | Accepts the account password, /not/ echoing it.
 inputPassphrase :: InputT IO String
 inputPassphrase = do
   passphraseM <- getInputLine "Passphrase: "

@@ -37,7 +37,7 @@ import GHC.Generics
 data TXMessage a =
   TXMessage
   {
-    salt :: a, -- ^ Needs to be the first field
+    salt :: a, -- ^ Needs to be the first field, for Faeth
     mainModulePreview :: ModulePreview,
     otherModulePreviews :: Map String ModulePreview,
     materialsCalls :: InputMaterials,
@@ -85,7 +85,9 @@ makeLenses ''ModulePreview
 unsignedTXMessage :: TXMessage a -> TXMessage a
 unsignedTXMessage = over _signatures $ fmap (_2 .~ Nothing)
 
--- | Adds a single signature, overwriting one that's already there
+-- | Adds a single signature, overwriting one that's already there.  This
+-- does not ensure that the new signature is /valid/, though; that is the
+-- job of 'unsignTXMessage'.
 signTXMessage :: 
   (Serialize a) => String -> PrivateKey -> TXMessage a -> Maybe (TXMessage a)
 signTXMessage name privKey txm = do
@@ -104,8 +106,7 @@ unsignTXMessage txm = do
   return utxm
 
   where 
-    checkSignature pubKey sigM = (pubKey ==) <$> signerKeyM sigM 
-    signerKeyM sigM = (Signed utxm <$> sigM) >>= unsign
+    checkSignature pubKey = fmap $ verify pubKey . Signed utxm 
     utxm = unsignedTXMessage txm
 
 -- | The transaction ID is its hash.  This has to be the hash of the

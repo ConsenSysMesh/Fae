@@ -82,7 +82,7 @@ copyLibraryDirs InstalledPackageInfo{libraryDirs, importDirs} = do
   liftIO $ forM_ (libraryDirs `union` importDirs) $ \libDir -> do
     let newDir = replaceDirectory libDir (libSubdir newRoot)
     alreadyCopied <- doesDirectoryExist newDir
-    let cond file = takeExtension file == ".dyn_hi" -- || takeExtension file == ".hi"
+    let cond file = takeExtension file == ".dyn_hi" 
     unless alreadyCopied $ fastCopyDir cond newDir libDir
 
 copyDynLibs :: InstalledPackageInfo -> InfoM ()

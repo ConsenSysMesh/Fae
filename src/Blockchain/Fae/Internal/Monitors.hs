@@ -1,3 +1,13 @@
+{- |
+Module: Blockchain.Fae.Internal.Monitors
+Description: Resource monitoring tools (timeouts, etc.)
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+This module provides tools to limit the resource usage of transactions and contract calls.  Currently it just has a timeout function (and a particularly inefficient one at that, due to a limitation of GHC's runtime) but it could have, in addition, at least a memory limit as well.
+-}
 module Blockchain.Fae.Internal.Monitors where
 
 import Blockchain.Fae.Internal.Exceptions

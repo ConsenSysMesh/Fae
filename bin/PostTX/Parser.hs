@@ -6,7 +6,8 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-PostTX accepts transactions written in a yaml-like format, which is parsed by this module.
+PostTX accepts transactions written in a yaml-like format, which is parsed
+by this module.
 -}
 module PostTX.Parser where
 

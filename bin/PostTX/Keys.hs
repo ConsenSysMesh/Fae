@@ -1,3 +1,13 @@
+{- |
+Module: PostTX.Keys
+Description: Handler for postTX's show-keys mode
+Copyright: (c) Ryan Reich, 2017-2018
+License: MIT
+Maintainer: ryan.reich@gmail.com
+Stability: experimental
+
+Implements the key-lookup logic.
+-}
 module PostTX.Keys where
 
 import Blockchain.Fae.FrontEnd (PrivateKey, PublicKey, public)
@@ -21,8 +31,8 @@ import System.Exit
 import System.FilePath
 
 
--- Prints a set of the stored public keys inside of the FaeHome directory.
--- The empty list in the first pattern match denote that all stored keys 
+-- | Prints a set of the stored public keys inside of the FaeHome directory.
+-- The empty list in the first pattern match denotes that all stored keys 
 -- are to be shown.
 showKeys :: FilePath -> [String] -> IO ()
 showKeys faeHome [] = do  -- Empty list denotes that all keys should be shown 
@@ -35,7 +45,7 @@ showKeys faeHome [] = do  -- Empty list denotes that all keys should be shown
 showKeys faeHome keyNamesList = 
   sequence_ $ showHomeKey faeHome <$> keyNamesList
 
--- Decodes and prints the contents of a given home key
+-- | Decodes and prints the contents of a given home key
 showHomeKey :: FilePath -> String -> IO ()
 showHomeKey faeHome keyName = do
   maybeFile <- findFile [faeHome] keyName
@@ -51,7 +61,7 @@ showHomeKey faeHome keyName = do
           maybe "Couldn't validate key" showKey $ public key
           where showKey key = takeBaseName file ++ ": " ++ show key
 
--- Retrieves all valid key files from the FaeHome directory.
+-- | Retrieves all valid key files from the FaeHome directory.
 getHomeKeys :: FilePath -> IO [(String, PrivateKey)]
 getHomeKeys path = do
   dirList <- getDirectoryContents path

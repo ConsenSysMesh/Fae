@@ -7,7 +7,11 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-If you are writing a Fae client, this module is for you.  It exposes the functions for running blocks and transactions, and for showing the storage.
+If you are writing a Fae client, this module is for you.  It exposes the
+functions for running blocks and transactions, and for showing the storage.
+Most of the re-exported modules were imported with restricted lists, but
+due to a deficiency in Haddock this is not reflected in the generated
+document.
 -}
 module Blockchain.Fae.FrontEnd
   (
@@ -54,7 +58,7 @@ import Blockchain.Fae.Internal.Messages hiding
 import Blockchain.Fae.Internal.TXSummary
   (
     TXSummary(..), TXInputSummary(..), 
-    InputSummary, InputSummaries, MaterialsSummaries,
+    InputSummary, MaterialsSummaries,
     collectTransaction
   )
 import Blockchain.Fae.Internal.Monitors

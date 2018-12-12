@@ -18,6 +18,7 @@ indispensable:
   - FlexibleInstances
   - FunctionalDependencies
   - GeneralizedNewtypeDeriving
+  - LambdaCase
   - MultiParamTypeClasses
   - MultiWayIf
   - NamedFieldPuns
@@ -110,8 +111,7 @@ instance (Monad m) => MonadState Storage (FaeInterpretT m) where
 -- * Functions
 
 -- | Interprets a transaction, looking it up as a module named after its
--- transaction ID; the first argument is whether or not the transaction
--- gets a reward.  We set up the module search path carefully so that this
+-- transaction ID.  We set up the module search path carefully so that this
 -- transaction can effectively import both its own other modules, and those
 -- of other transactions.  Now that we dynamically link @faeServer@, the
 -- load-up time for the first transaction is pretty short; subsequent
@@ -135,10 +135,9 @@ interpretTX TX{..} = do
 -- | This has to be interpreted because, even though all the information is
 -- known /to the sender/ of the value to be imported, it can only be
 -- transmitted textually, and therefore has to be re-parsed into a valid
--- type.  We assume that the type is present in the top module of the
--- transaction that (in the sender) created the contract.  The module must
--- be present for the caller of this function, but the transaction need not
--- have been run.
+-- type.  The modules necessary for expressing this type are carried in
+-- 'neededModules'; they must be present for the recipient, but the
+-- corresponding transactions, if any, need not have been fully evaluated.
 interpretImportedValue :: 
   (Typeable m, MonadMask m, MonadIO m) => ExportData -> FaeInterpretT m ()
 interpretImportedValue ExportData{..} = 
@@ -161,6 +160,9 @@ importValueThrow (WrappedByteString bs) =
   fromMaybe (throw $ CantImport bs rep) <$> liftEscrowState (importValue bs)
   where rep = typeRep $ Proxy @a
 
+-- | The inner interpretation function that appropriately loads modules,
+-- sets imports, and uses the result both for 'interpretTX' and
+-- 'interpretImportedValue'.
 faeInterpret :: 
   (Typeable m, MonadMask m, MonadIO m, Typeable a) => 
   [String] -> 
@@ -182,15 +184,16 @@ faeInterpret moduleNames runString apply = handle fixGHCErrors $ do
     isTXModule = isPrefixOf "Blockchain.Fae.Transactions.TX"
     isInternalModule = isPrefixOf "Blockchain.Fae.Internal"
 
-    fixGHCErrors (WontCompile []) = error "Compilation error"
-    fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
-    fixGHCErrors (UnknownError e) = error e
-    fixGHCErrors (NotAllowed e) = error e
-    fixGHCErrors (GhcException e) = error e
+    fixGHCErrors (WontCompile []) = throw $ InterpretException "Compilation error"
+    fixGHCErrors (WontCompile (ghcE : _)) = 
+      throw $ InterpretException $ errMsg ghcE
+    fixGHCErrors (UnknownError e) = throw $ InterpretException e
+    fixGHCErrors (NotAllowed e) = throw $ InterpretException e
+    fixGHCErrors (GhcException e) = throw $ InterpretException e
 
     liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
 
--- | runs the interpreter.
+-- | Runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
@@ -220,6 +223,7 @@ runFaeInterpret x = do
             FlexibleContexts,
             FlexibleInstances,
             FunctionalDependencies,
+            LambdaCase,
             MultiParamTypeClasses,
             MultiWayIf,
             NamedFieldPuns,

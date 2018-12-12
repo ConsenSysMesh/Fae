@@ -1,0 +1,4 @@
+body = RewardNametag
+reward = True
+keys
+  self = $self

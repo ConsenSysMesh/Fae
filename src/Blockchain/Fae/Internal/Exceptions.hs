@@ -67,8 +67,6 @@ data ContractException =
 
 -- | Exceptions for transaction-related errors.
 data TransactionException =
-  IncompleteContract ContractID |
-  IncompleteTransaction TransactionID |
   NotEnoughInputs |
   UnexpectedInput |
   ExpectedReward |
@@ -78,8 +76,11 @@ data TransactionException =
   EmptyInputStack |
   RepeatedMaterial String
 
+-- | Exceptions arising non-core UI components.
 data DisplayException = 
+  InterpretException String |
   TXFieldException String |
+  JSONException String |
   MonitorException String |
   Timeout Int
 
@@ -111,12 +112,13 @@ instance Show StorageException where
 
 -- | -
 instance Show ContractException where
-  show (ContractDeleted cID) = "Contract " ++ show cID ++ " was deleted"
+  show (ContractDeleted cID) = 
+    "Contract " ++ prettyContractID cID ++ " was deleted"
   show (BadContractVersion ver cID) =
     "Incorrect version in contract ID: " ++ prettyContractID cID ++
     "; correct version is: " ++ show ver
   show (BadInputParse input inputType) = 
-    "Unable to parse '" ++ show input ++ "' as type: " ++ show inputType
+    "Unable to parse '" ++ input ++ "' as type: " ++ show inputType
   show (BadArgType bad good) = 
     "Expected argument type: " ++ show good ++ "; got: " ++ show bad
   show (BadValType bad good) =
@@ -137,10 +139,6 @@ instance Show ContractException where
 
 -- | -
 instance Show TransactionException where
-  show (IncompleteContract cID) =
-    "Contract " ++ show cID ++ " has missing result"
-  show (IncompleteTransaction txID) =
-    "Transaction " ++ show txID ++ " has missing result"
   show NotEnoughInputs = "Transaction expected more inputs"
   show UnexpectedInput = "Excess input given transaction body's signature"
   show ExpectedReward = "Transaction expected a reward as its first argument"
@@ -153,7 +151,9 @@ instance Show TransactionException where
 
 -- | -
 instance Show DisplayException where
+  show (InterpretException s) = s
   show (TXFieldException s) = s
+  show (JSONException s) = "Error in JSON serialization: " ++ s
   show (MonitorException s) = "Error in monitor operation: " ++ s
   show (Timeout t) = "Exceeded timeout of " ++ show t ++ " milliseconds"
 

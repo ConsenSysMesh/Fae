@@ -1,0 +1,5 @@
+body = CallRewardNametag
+inputs
+  $txID/Body/0/Current = ()
+keys
+  self = $self

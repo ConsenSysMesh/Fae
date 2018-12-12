@@ -6,9 +6,10 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-There are several identifier types in Fae: two kinds of contract ID (one
-detailed, one convenient but lossy), transaction IDs, escrow IDs, and
-version IDs.
+There are several identifier types in Fae: contract IDs, transaction IDs,
+escrow IDs, and version IDs.  Previously there was also a "short contract
+ID" that was the hash of the regular one, but this was rendered unnecessary
+and has been removed.
 -}
 {-# LANGUAGE TemplateHaskell #-}
 module Blockchain.Fae.Internal.IDs.Types where
@@ -86,18 +87,25 @@ newtype EscrowID name = EscrowID { entID :: EntryID }
 -- | A wrapper for defining general instances of classes for types that
 -- can't use the generic ones, but are in some general sense a container
 -- for values that can.
-newtype Container a = Container { getContainer :: a }
+newtype Container a = Container { getContainer :: a } deriving (Serialize)
 
 -- Instances
 
+-- | -
 instance Serialize ContractID
+-- | -
 instance Digestible ContractID
+-- | -
 instance NFData ContractID
 
+-- | -
 instance Serialize TransactionPart
+-- | -
 instance NFData TransactionPart
 
+-- | -
 instance Serialize Version
+-- | -
 instance NFData Version
 
 -- | Useful for debugging
@@ -131,6 +139,8 @@ prettyContractID ContractID{..} = intercalate "/" $
       Version vID -> "Version " ++ printShortHex vID
   ]
 
+-- | A semantic equality for versions; the 'Current' version always matches
+-- whatever is there.
 matchesVersion :: Version -> Version -> Bool
 matchesVersion (Version vID1) (Version vID2) = vID1 == vID2
 matchesVersion _ _ = True

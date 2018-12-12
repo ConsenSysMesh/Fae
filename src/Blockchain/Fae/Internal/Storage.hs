@@ -81,22 +81,35 @@ data TransactionEntry =
 -- exception in the value.
 data Result = forall a. (Show a) => Result !a
 
--- | We save the versions map, with the actual values scrubbed, so that it
--- can be displayed to learn the actual version IDs.
+-- | A minimal set of descriptors of the results of running a contract.
+-- This used to contain an 'iVersions', but that can be derived from
+-- 'iResult' now that it is 'WithEscrows'.
 data InputResults =
   InputResults
   {
+    -- | This used to be guaranteed to have a specific nonce (rather than
+    -- 'Current') but this is no longer the case; it is exactly the
+    -- 'ContractID' with which the call was made.
     iRealID :: ContractID,
+    -- | Though 'Failed' corresponds to an exception being thrown from
+    -- 'iResult', it is not possible to detect 'Deleted' from the other
+    -- fields here, so this one is necessary.
     iStatus :: Status,
     iVersionID :: VersionID,
     -- | This is /very dangerous/ because these escrows are duplicates.
     -- This value /must not/ be used inside Fae, but only exposed to
     -- external applications (such as import/export).
     iResult :: WithEscrows ReturnValue,
+    -- | 'Nothing' means that the results were imported and the contract
+    -- wasn't actually run.  Perhaps in the future those can be imported
+    -- too...
     iOutputsM :: Maybe Outputs,
     iMaterialsM :: Maybe Materials
   } deriving (Generic)
 
+-- | Semantic report of what happened in a contract call.  As such,
+-- creating a 'Status' value requires a policy decision, made in
+-- "Blockchain.Fae.Internal.Transaction".
 data Status = Updated | Deleted | Failed deriving (Show, Generic)
 
 -- | The elements are 'Maybe' because an output contract may be deleted,
@@ -160,6 +173,7 @@ atCID cID ivF scF a0 st
   | Just o <- st ^. outputAt cID = scF o cID
   | otherwise = maybe a0 ivF (st ^. _importedValues . at cID) cID
 
+-- | Accesses the full 'Output' at a contract ID.
 outputAt :: ContractID -> Lens' Storage (Maybe Output)
 outputAt cID@ContractID{..} =
   _getStorage .
@@ -167,6 +181,8 @@ outputAt cID@ContractID{..} =
   uncertain (txPartLens transactionPart) .
   vectorAt creationIndex
 
+-- | Routes to the correct outputs list depending on where in the
+-- transaction it happened.
 txPartLens :: TransactionPart -> Lens' TransactionEntry (Maybe Outputs)
 txPartLens p = 
   case p of
@@ -175,9 +191,16 @@ txPartLens p =
       txInputLens n . 
       uncertain _iOutputsM
 
+-- | Kind of redundant but used as a piece in several places, so worth
+-- a named synonym.
 txInputLens :: Int -> Lens' TransactionEntry (Maybe InputResults)
 txInputLens n = _inputResults . onlyJust DeletedEntry . vectorAt n
 
+-- | This is a bit of a fake lens, as it slightly fails the law that
+-- setting following getting is the identity; if you go out-of-bounds, the
+-- former is an exception and the latter is, of course, a no-op.  Barring
+-- that, this just marshals 'Vector.!?' and 'Vector.modify' to get and
+-- set.
 vectorAt :: Int -> Lens' (Maybe (Vector a)) (Maybe a)
 vectorAt n = 
   lens ((=<<) (Vector.!? n)) (\mv my -> mv >>= (my >>=) . setter)
@@ -187,11 +210,15 @@ vectorAt n =
         Just $ Vector.modify (\w -> Vector.unsafeWrite w n y) v
       | otherwise = Nothing
 
+-- | Upgrades a lens that starts from a definite value to one that starts
+-- from an "uncertain" (i.e. monadic) one.  Useful for chaining with 'at'.
 uncertain :: (Monad m) => Lens' s (m a) -> Lens' (m s) (m a)
 uncertain l = lens getter setter where
   getter = (>>= view l)
   setter ms my = (l .~ my) <$> ms
 
+-- | A fake lens that is kind of the reverse of 'defaultLens'; this
+-- purifies the result of a set at the expense of an exception.
 onlyJust :: (Exception e) => e -> Lens' a (Maybe a)
 onlyJust err = lens getter setter where
   getter = Just
@@ -215,6 +242,9 @@ addImportedValue valueImporter iRealID iStatus = FaeStorage $
     (importedValue, Escrows{..}) = 
       runState valueImporter (Escrows Map.empty nullDigest)
 
+-- | Converts the stored 'InputResults', which could actually have been the
+-- result of a previous import, into the serialized return value plus other
+-- metadata necessary for import elsewhere.
 getExportedValue :: (Monad m) => TransactionID -> Int -> FaeStorageT m ExportData
 getExportedValue txID ix = do
   InputResults{..} <- use $ getInputResults .
@@ -243,6 +273,7 @@ getExportedValue txID ix = do
     listTyCons rep = con : (reps >>= listTyCons) where
       (con, reps) = splitTyConApp rep
 
+-- | Hides the particular structure of 'Storage' from other modules.
 runStorageT :: (Monad m) => FaeStorageT m a -> m a
 runStorageT = flip evalStateT $ Storage Map.empty Map.empty
 

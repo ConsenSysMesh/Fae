@@ -157,7 +157,6 @@ instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i m f) where
 
 -- * Functions
 
--- | Take the hash of a contract ID.
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue 

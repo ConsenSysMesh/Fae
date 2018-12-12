@@ -1,0 +1,6 @@
+body = NewLottery
+others
+  - Nametag
+  - Lottery
+keys
+  self = $self

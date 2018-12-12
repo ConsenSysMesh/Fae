@@ -153,6 +153,9 @@ data Output =
   }
   deriving (Generic)
 
+-- | If the contract can be called again, this contains its function (which
+-- is called) and nonce (which is verified when the contract ID used
+-- contains a nonce).
 data StoredContract =
   StoredContract
   {
@@ -221,7 +224,12 @@ newtype FaeTX a =
   }
   deriving (Functor, Applicative, Monad)
 
--- | The user-provided form of a contract function
+-- | The user-provided form of a contract function.  Concretely, this is:
+--
+-- >>> type Contract argType valType = argType -> Fae argType valType (WithEscrows valType)
+--
+-- That is, a function from the argument type to the escrow-bearing value
+-- type, inside a Fae monad that expects these argument and value types.
 type Contract argType valType = ContractT (Fae argType valType) argType valType
 -- | Useful generalization to add effects
 type ContractT m argType valType = argType -> m (WithEscrows valType)
@@ -231,14 +239,25 @@ type ContractT m argType valType = argType -> m (WithEscrows valType)
 -- | Instances of this class can be serialized, at least with the
 -- assistance of some Fae contextual data (namely, the escrow storage).
 class (Typeable a) => Exportable a where
+  -- | A lousy imitation of the 'put' function from 'Serialize' that
+  -- doesn't use a builder but goes straight to bytes.
   exportValue :: (MonadState EscrowMap m) => a -> m ByteString
+  -- | A lousy imitation of the 'get' function from 'Serialize' that
+  -- doesn't use a parser but takes straight from bytes.
   importValue :: (MonadState EscrowMap m) => ByteString -> m (Maybe a)
 
 -- | Instances of 'ContractName' are always defined by contract authors,
--- who will inevitably have to define 'theContract' to point to a global
--- function.  Since it's global, it is still present when we deserialize,
--- so this is effectively a contract that is portable between Fae
--- instances.
+-- making 'theContract' a global function.  Since it's global, if a name is
+-- serialized and then deserialized in another Fae instance, the function is
+-- still present when we deserialize, so this is effectively a contract
+-- that is portable between Fae instances (provided that both instances
+-- have the module with the instance; it need not be run, just
+-- interpreted).
+--
+-- A 'ContractName' is the only way to pass data into a new contract, so
+-- the type should have fields for all the parameters of the contract,
+-- /including/ valuables that it is supposed to "own".  Their escrows are
+-- deposited at the beginning of the contract.
 class 
   (HasEscrowIDs a, Typeable (ArgType a), HasEscrowIDs (ValType a)) => 
   ContractName a where
@@ -251,7 +270,7 @@ class
 -- Instances of this class have access to the full Fae API, allowing them
 -- to define multi-stage contracts.  As for 'MonadTX', these instances must
 -- have their own evaluation function to get down to the base 'Fae' monad.
--- Notably, 'Transaction's are /not/ written in a 'MonadContract', because
+-- Notably, @Transaction@s are /not/ written in a 'MonadContract', because
 -- they are one-shot.
 class (MonadTX m) => MonadContract argType valType m | m -> argType valType where
   -- | Injects the Fae contract API into 'm'.
@@ -278,21 +297,28 @@ makeLenses ''StoredContract
 
 {- Instances -}
 
+-- | -
 instance NFData Output
+
+-- | -
 instance NFData StoredContract
 
+-- | -
 instance NFData EscrowEntry where
   rnf = (`seq` ())
 
+-- | -
 instance HasEscrowIDs ReturnValue where
   traverseEscrowIDs f (ReturnValue x) = ReturnValue <$> traverseEscrowIDs f x
 
+-- | -
 instance (HasEscrowIDs a) => HasEscrowIDs (WithMaterials a) where
   traverseEscrowIDs f (WithMaterials mM x) =
     WithMaterials
       <$> traverseEscrowIDs f mM
       <*> traverseEscrowIDs f x
 
+-- | -
 instance 
   (Typeable (t a), Exportable a, Traversable t, Serialize (t ByteString)) => 
   Exportable (Container (t a)) where
@@ -303,12 +329,14 @@ instance
            (fmap (fmap Container . sequence) . traverse importValue) . 
     S.decode
 
+-- | -
 instance {-# OVERLAPPABLE #-}
   (Typeable a, Serialize a) => Exportable (Container a) where
 
   exportValue = return . S.encode . getContainer
   importValue = return . either (const Nothing) (Just . Container) . S.decode
 
+-- | -
 instance (HasEscrowIDs a, HasEscrowIDs b) => ContractName (Contract a b) where
   type ArgType (Contract a b) = a
   type ValType (Contract a b) = b
@@ -372,32 +400,40 @@ materials = liftTX . FaeTX $ Map.mapMaybe getReturnValue <$> view _localMaterial
 lookupSigner :: (MonadTX m) => String -> m (Maybe PublicKey)
 lookupSigner s = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners . at s
 
--- | Looks up a named signatory, or throws if not found.
+-- | Looks up a named signatory, or throws a 'MissingSigner' if not found.
 signer :: (MonadTX m) => String -> m PublicKey
 signer s = fromMaybe (throw $ MissingSigner s) <$> lookupSigner s
 
--- | Returns the map of all signatories.
+-- | Returns the map of all signatories.  This map is immutable within
+-- a single transaction, but when descending into a contract or escrow
+-- call, may be modified by "renamings" that reassign old roles' public
+-- keys to new role names.
 signers :: (MonadTX m) => m (Map String PublicKey)
 signers = liftTX $ FaeTX $ view $ _thisTXSigners . _getSigners
 
--- | Terminates the contract entirely, transferring escrows backing the
--- return value.
+-- | Terminates the contract entirely, returning its argument and
+-- automatically transferring escrows backing the return value.
 spend :: 
   forall m argType valType.
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m (WithEscrows valType)
 spend = liftContract . Fae . (takeEscrows >=> lift . terminate)
 
--- | Terminates the current contract call, transferring escrows backing the
--- return value to the caller and awaiting an argument, depositing its
--- escrows.
+-- | Terminates the current contract call, returning its argument and
+-- automatically transferring escrows backing the return value to the
+-- caller.  A 'release' expression evaluates to the argument of the
+-- subsequent contract call, whose escrows are automatically deposited into
+-- the contract at that point.
 release :: 
   forall argType valType m.
   (HasEscrowIDs valType, MonadContract argType valType m) => 
   valType -> m argType
 release = liftContract . Fae . (takeEscrows >=> lift . suspend >=> putEscrows)
 
--- | Emits a new output contract endowed with a given list of valuables.
+-- | Emits a new output contract with a given 'ContractName', whose backing
+-- escrows are deposited into the contract's context at the first call.
+-- Unlike 'newEscrow', this returns nothing rather than the 'ContractID',
+-- because there is no use for contract IDs within contract code.
 newContract :: 
   forall name m.
   (
@@ -415,7 +451,8 @@ newContract x = liftTX $ FaeTX $ do
       storedContract = Just StoredContract{..}
   tell [Output{..}]
 
--- | Creates a new escrow endowed with a given list of valuables.
+-- | Creates a new escrow with a given 'ContractName', whose backing
+-- escrows are deposited into the new escrow's context at the first call.
 newEscrow :: 
   (ContractName name, MonadTX m) =>
   name -> m (EscrowID name)
@@ -468,7 +505,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 (<-|) :: String -> String -> Assignment
 (<-|) = flip $ Assignment . SignerName
 
--- | Nicer Unicode alternative to '(<-|)' (U+21a4)
+-- | Nicer Unicode alternative to '<-|' (U+21a4)
 (↤) :: String -> String -> Assignment
 (↤) = (<-|)
 
@@ -476,7 +513,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 (<=|) :: String -> String -> Assignment
 (<=|) = flip $ Assignment . MaterialsName
 
--- | Nicer Unicode alternative to '(<=|)' (U+2906)
+-- | Nicer Unicode alternative to '<=|' (U+2906)
 (⤆ ) :: String -> String -> Assignment
 (⤆ ) = (<=|)
 
@@ -484,7 +521,7 @@ useEscrow rolePairs eID x = liftTX . FaeTX . joinEscrowState . useNamedEscrow eI
 (*<-) :: (HasEscrowIDs a, Exportable a) => String -> a -> Assignment
 (*<-) = flip $ Assignment . NewMaterial . ReturnValue
 
--- | Nicer Unicode alternative to '(*<-)' (U+291d)
+-- | Nicer Unicode alternative to '*<-' (U+291d)
 (⤝) :: (HasEscrowIDs a, Exportable a) => String -> a -> Assignment
 (⤝) = (*<-)
 
@@ -534,6 +571,8 @@ remapSigners renames = local $
 pushCall :: (MonadReader TXData m) => m a -> m a
 pushCall = local (_localHash %~ digest)
 
+-- | Basically the 'TXData' constructor, except for the policy choice to
+-- initialize the 'localHash' to the transaction ID.
 txData :: TransactionID -> Signers -> TXData
 txData txID txSigners =
   TXData
@@ -722,14 +761,17 @@ exportReturnValue (ReturnValue x) = exportValue x
 
 -- * 'TXBodyM' stack manipulation
 
+-- | Add an escrow map to the stack
 push :: EscrowMap -> TXBodyM ()
 push = modify . cons 
 
+-- | Remove an escrow map from the stack
 pop :: TXBodyM EscrowMap
 pop = do
   (em, rest) <- unconsTXBodyM
   put rest >> return em
 
+-- | Modify the top of the stack with additional escrows.
 keep :: EscrowMap -> TXBodyM ()
 keep newEM = do
   (oldEM, rest) <- unconsTXBodyM

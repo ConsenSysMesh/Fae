@@ -85,6 +85,7 @@ data Stages = Stage1 | Stage2
 -- | Swaps two values of any types.
 data TwoPartySwap a b = TwoPartySwap PublicKey PublicKey a b deriving (Generic)
 
+-- | _
 instance (ContractVal a, ContractVal b) => ContractName (TwoPartySwap a b) where
   type ArgType (TwoPartySwap a b) = Maybe Bool
   type ValType (TwoPartySwap a b) = Maybe (Either a b)
@@ -172,6 +173,7 @@ sell x price seller = keyTo (Sell x price) seller
 -- denomination of the second type.
 data Sell a coin = Sell a (Valuation coin) PublicKey deriving (Generic)
 
+-- | -
 instance (ContractVal a, Currency coin) => ContractName (Sell a coin) where
   type ArgType (Sell a coin) = coin
   type ValType (Sell a coin) = (a, Maybe coin)
@@ -243,6 +245,7 @@ keyTo f owner = do
 -- public key.
 data SignOver a = SignOver PublicKey a deriving (Generic)
 
+-- | -
 instance (ContractVal a) => ContractName (SignOver a) where
   type ArgType (SignOver a) = ()
   type ValType (SignOver a) = a

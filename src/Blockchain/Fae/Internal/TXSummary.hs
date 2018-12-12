@@ -6,8 +6,7 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-This module defines TXSummary type aswell as the Pretty Fae Class and associated pretty-printing instances.
-Note that the pretty-printing has to be done in a 'FaeStorage' monad, so the class can't just be 'Pretty'.
+This module defines a 'TXSummary' type as well as 'Pretty' instances.
 -}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -43,16 +42,18 @@ import GHC.Generics hiding (to)
 import Text.PrettyPrint
 import Text.PrettyPrint.HughesPJClass
 
--- | Useful for Fae clients communicating with faeServer
+-- | Heavy-handed total information about the result of a transaction, in
+-- a relatively printable format
 data TXSummary = TXSummary {
   transactionID :: TransactionID,
   txResult :: String,
   txOutputs:: Vector VersionID,
-  txInputSummaries :: InputSummaries,
+  txInputSummaries :: Vector InputSummary,
   txMaterialsSummaries :: MaterialsSummaries,
   txSSigners :: [(String, PublicKey)]
 } deriving (Generic)
 
+-- | Printable results of calling a contract.
 data TXInputSummary = TXInputSummary {
   txInputStatus :: Status,
   txInputOutputs :: Vector VersionID,
@@ -60,13 +61,21 @@ data TXInputSummary = TXInputSummary {
   txInputVersion :: VersionID
 } deriving (Generic)
 
+-- | The 'InputResults' contained the contract ID but the 'TXInputSummary'
+-- does not, because we want to print the ID regardless of whether the
+-- input summary throws an error, so we include it separately.
 type InputSummary = (ContractID, TXInputSummary)
-type InputSummaries = Vector InputSummary
+-- | Materials, in addition, are given names under the contract that calls
+-- them.
 type MaterialsSummaries = Vector (String, InputSummary)
 
+{- Instances -}
+
+-- | -
 instance Pretty ContractID where 
   pPrint = text . prettyContractID
 
+-- | -
 instance Pretty TXSummary where
   pPrint TXSummary{..} = prettyHeader header entry where 
     header = labelHeader "Transaction" transactionID
@@ -81,6 +90,7 @@ instance Pretty TXSummary where
     outcome = displayException $ vcat [result, outputs] 
     rest = vcat [txSSigners', inputs, materials]
 
+-- | -
 instance Pretty TXInputSummary where
   pPrint TXInputSummary{..} = vcat $ 
     [
@@ -107,6 +117,8 @@ printInputSummary tag (cID, txInputSummary@TXInputSummary{..}) =
   where
     printCID = pPrint cID <+> parens (text $ show txInputStatus) 
     prettyInput = pPrint txInputSummary
+
+-- * Functions
 
 -- | Get a well-typed 'TXSummary' that can be communicated from the server
 -- to a user (i.e. @faeServer@ to @postTX@) as JSON.
@@ -141,12 +153,16 @@ makeInputSummary txID descr InputResults{..} = do
     err :: a
     err = throw $ ContractOmitted txID descr
 
+-- | Converts materials as 'InputResults' to appropriately error-formatted
+-- summaries.
 makeMaterialsSummaries :: 
   (Monad m) => TransactionID -> Materials -> EvalT m MaterialsSummaries
 makeMaterialsSummaries txID = traverse $ 
   \(name, iR) -> (name,) <$> makeInputSummary txID (makeTag name) iR
   where makeTag = ("Materials contract call " ++)
 
+-- | If outputs showed more detailed information, like contract types, this
+-- would construct it.  As it is, it just grabs the version.
 makeOut :: Output -> VersionID
 -- We assume (justifiably!) that a new output does, in fact, store a live
 -- contract.
@@ -160,6 +176,7 @@ labelHeader h l = text h <+> text (show l)
 prettyHeader :: Doc -> Doc -> Doc
 prettyHeader header body = header $+$ nest 2 body 
 
+-- | Prints a vector as an @Int@-indexed list.
 prettyVector :: (Show v) => String -> Vector v -> Doc
 prettyVector headString v 
   | Vector.null v = empty
