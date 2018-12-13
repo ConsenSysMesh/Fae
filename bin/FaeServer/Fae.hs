@@ -54,11 +54,12 @@ import System.IO
 -- exceptions can terminate the program.
 runFae :: ThreadId -> ServerArgs -> TXQueueT IO ()
 runFae mainTID ServerArgs{..} = reThrow mainTID $ runFaeInterpretWithHistory $ do
-  if newSession 
+  indexExists <- liftIO $ doesFileExist indexFileName
+  if newSession || not indexExists
   then liftIO $ do
     removePathForcibly "Blockchain"
-    removePathForcibly "txcache"
-    createDirectory "txcache"
+    removePathForcibly cacheDirName
+    createDirectory cacheDirName
     gitInit 
   -- Note that this case runs transactions but does not catch exceptions as
   -- the main loop does.  This is because it runs them lazily, and so the
@@ -173,13 +174,16 @@ forM_TXCache f = evalContT $ callCC $ \done -> do
     decodeFile err getter = fmap (either (const err) id . S.decode) . getter
     getTX err = decodeFile err (liftIO . B.readFile)
 
+cacheDirName :: String
+cacheDirName = "txcache"
+
 -- | Establishes the location of the transaction cache's index file.
 indexFileName :: String
-indexFileName = "txcache" </> "index"
+indexFileName = cacheDirName </> "index"
 
 -- | Establishes the location of the transaction cache files.
 makeTXFileName :: TransactionID -> String
-makeTXFileName txID = "txcache" </> show txID
+makeTXFileName txID = cacheDirName </> show txID
 
 -- | A constant that, no doubt, is equal to 32 (bytes).
 txIDLength :: Int

@@ -8,6 +8,12 @@ if [[ -n $FAE_VERSION ]]
 then imgName=$imgName:$FAE_VERSION
 fi
 
+faeDir=${FAE_HOME:-~/fae}
+[[ -d $faeDir ]] || mkdir -p $faeDir
+
+FAE_UID=$(id -u)
+FAE_GID=$(id -g)
+
 declare -a envlist
 n=0
 while true; do
@@ -30,7 +36,8 @@ docker run \
   --rm \
   --interactive --tty \
   --network host \
+  --user $FAE_UID:$FAE_GID \
   --mount type=bind,src=$PWD,dst=/txs/,readonly \
-  --mount type=bind,src=${FAE_HOME:-~/fae},dst=/fae/ \
+  --mount type=bind,src=$faeDir,dst=/fae/ \
   "${envlist[@]}" $imgName $txfile $@
 
