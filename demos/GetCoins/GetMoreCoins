@@ -4,3 +4,4 @@ keys
   self = $self
 inputs
   $coinTX / Body / 0 / $ver : ()
+    self = self

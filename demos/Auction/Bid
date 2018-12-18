@@ -1,7 +1,10 @@
 body = Bid
 keys
-  self = $key
-  seller = seller
+ self = $key
+ seller = seller
 inputs
-  $aucTX/Body/0/Current : Bid
-    raise = $coinTX/Body/0/Current : ()
+ $aucTX/Body/0/Current : Bid
+   raise = $coinTX/Body/0/Current : ()
+     self = self
+   seller = seller
+   self = self
