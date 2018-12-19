@@ -3,3 +3,4 @@ keys
   self = $key
 inputs
   $aucTX/Body/0/Current : Collect
+    self = self

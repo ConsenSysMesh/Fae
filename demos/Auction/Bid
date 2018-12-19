@@ -4,4 +4,7 @@ keys
   seller = seller
 inputs
   $aucTX/Body/0/Current : Bid
+    self = self
+    seller = seller
     raise = $coinTX/Body/0/Current : ()
+      self = self
