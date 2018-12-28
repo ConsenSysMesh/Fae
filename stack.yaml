@@ -41,6 +41,7 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps: 
   - Cabal-2.0.1.0
+  - unix-compat-0.5.1
 
 ghc-options: {}
 
