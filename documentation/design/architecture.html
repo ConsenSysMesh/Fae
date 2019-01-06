@@ -1,0 +1,598 @@
+<!doctype html>
+<html><head><title>Fae architecture</title><meta charset="UTF-8"><link href="http://fonts.googleapis.com/css?family=Crimson+Text:400,400italic,700,700italic|Roboto:400,700,700italic,400italic" rel="stylesheet" type="text/css"><style>/*
+ * Copyright 2014 Quip
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+    font-size: 15px;
+    color: #333;
+    background: #fff;
+    padding: 60px 95px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern";
+    font-kerning: normal;
+    -moz-font-feature-settings: "kern";
+    -webkit-font-feature-settings: "kern";
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+th {
+    font-family: Roboto, sans-serif;
+    font-weight: 700;
+    margin: 0;
+    margin-top: 1.25em;
+    margin-bottom: 0.75em;
+}
+
+h1 {
+    font-size: 35px;
+    line-height: 42px;
+}
+
+h1:first-child {
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+h3 {
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Body text */
+body,
+p,
+ul,
+ol,
+td {
+    font-family: "Crimson Text", serif;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+blockquote,
+q {
+    display: block;
+    margin: 1em 0;
+    font-style: italic;
+}
+
+blockquote a,
+q a {
+    text-decoration: underline;
+}
+
+blockquote {
+    padding-left: 10px;
+    border-left: 4px solid #a6a6a6;
+}
+
+q {
+    color: #a6a6a6;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    quotes: none;
+}
+
+q a {
+    color: #a6a6a6;
+}
+
+code,
+pre {
+    font-family: Consolas, "Liberation Mono", Menlo, "Courier Prime Web",
+        Courier, monospace;
+    background: #f3f3f3;
+}
+
+code {
+    padding: 1px;
+    margin: 0 -1px;
+    border-radius: 3px;
+}
+
+pre {
+    display: block;
+    line-height: 20px;
+    text-shadow: 0 1px white;
+    padding: 5px 5px 5px 30px;
+    white-space: nowrap;
+    position: relative;
+    margin: 1em 0;
+}
+
+pre:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    border-left: solid 1px #dadada;
+}
+
+/* Lists */
+div[data-section-style="5"],
+div[data-section-style="6"],
+div[data-section-style="7"] {
+    margin: 12px 0;
+}
+
+ul {
+    padding: 0 0 0 40px;
+}
+
+ul li {
+    margin-bottom: 0.4em;
+}
+
+/* Bulleted list */
+div[data-section-style="5"] ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul {
+    list-style-type: square;
+}
+div[data-section-style="5"] ul ul ul ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul ul ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul ul ul ul {
+    list-style-type: square;
+}
+
+/* Numbered list */
+div[data-section-style="6"] ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul {
+    list-style-type: lower-roman;
+}
+div[data-section-style="6"] ul ul ul ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul ul ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul ul ul ul {
+    list-style-type: lower-roman;
+}
+
+/* Checklist */
+div[data-section-style="7"] ul {
+    list-style-type: none;
+}
+
+div[data-section-style="7"] ul li:before {
+    content: "\2610";
+    position: absolute;
+    display: inline;
+    margin-right: 1.2em;
+    margin-left: -1.2em;
+}
+
+div[data-section-style="7"] ul li.parent:before {
+    content: "";
+}
+
+div[data-section-style="7"] ul li.parent {
+    font-weight: bold;
+}
+
+div[data-section-style="7"] ul li.checked {
+    text-decoration: line-through;
+}
+
+div[data-section-style="7"] ul li.checked:before {
+    content: "\2611";
+    text-decoration: none;
+}
+
+/* Tables */
+div[data-section-style="8"] {
+    margin: 12px 0;
+}
+
+table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: solid 1px #bbb;
+    table-layout: fixed;
+    position: relative;
+}
+
+table th,
+table td {
+    padding: 2px 2px 0;
+    min-width: 1.5em;
+    word-wrap: break-word;
+}
+
+table th {
+    border-bottom: 1px solid #e1e1e1;
+    background: #f4f4f4;
+    font-weight: bold;
+    vertical-align: bottom;
+    color: #3a4449;
+    text-align: center;
+}
+
+table td {
+    padding-top: 0;
+    border-left: 1px solid #e1e1e1;
+    border-top: 1px solid #e1e1e1;
+    vertical-align: top;
+}
+
+table td.bold {
+    font-weight: bold;
+}
+
+table td.italic {
+    font-style: italic;
+}
+
+table td.underline {
+    text-decoration: underline;
+}
+
+table td.strikethrough {
+    text-decoration: line-through;
+}
+
+table td.underline.strikethrough {
+    text-decoration: underline line-through;
+}
+
+table td:first-child {
+    border-left: hidden;
+}
+
+table tr:first-child td {
+    border-top: hidden;
+}
+
+/* Images */
+div[data-section-style="11"] {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-section-style="11"][data-section-float="0"] {
+    clear: both;
+    text-align: center;
+}
+
+div[data-section-style="11"][data-section-float="1"] {
+    float: left;
+    clear: left;
+    margin-right: 20px;
+}
+
+div[data-section-style="11"][data-section-float="2"] {
+    float: right;
+    clear: right;
+    margin-left: 20px;
+}
+
+div[data-section-style="11"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: auto;
+}
+
+hr {
+    width: 70px;
+    margin: 20px auto;
+}
+
+/* Apps */
+div[data-section-style="19"].placeholder {
+    margin: 0.8em auto;
+    padding: 4px 0;
+    display: block;
+    color: #29b6f2;
+    text-align: center;
+    border: 1px solid rgba(41, 182, 242, 0.2);
+    border-radius: 3px;
+    background: #e9f8fe;
+    font-family: Roboto, sans-serif;
+}
+
+div[data-section-style="19"].first-party-element {
+    margin-bottom: 10px;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+div[data-section-style="19"].first-party-element.kanban {
+    background-image: url("https://quip-cdn.com/nK0hSyhsb4jrLIL2s5Ma-g");
+    height: 166px;
+}
+
+div[data-section-style="19"].first-party-element.calendar {
+    background-image: url("https://quip-cdn.com/OYujqLny03RILxcLIiyERg");
+    height: 244px;
+}
+
+div[data-section-style="19"].first-party-element.poll {
+    background-image: url("https://quip-cdn.com/fbIiFrcKGv__4NB7CBfxoA");
+    height: 116px;
+}
+
+div[data-section-style="19"].first-party-element.countdown {
+    background-image: url("https://quip-cdn.com/3bPhykD2dBei9sSjCWteTQ");
+    height: 96px;
+}
+
+div[data-section-style="19"].first-party-element.process_bar {
+    background-image: url("https://quip-cdn.com/ybQlHnHEIIBLog5rZmYs_w");
+    height: 36px;
+}
+
+div[data-section-style="19"].first-party-element.project_tracker {
+    background-image: url("https://quip-cdn.com/OFQU087b4Mxzz1ZaHwtjXA");
+    height: 164px;
+}
+
+div[data-section-style="19"] img {
+    margin: 0.5em;
+}
+
+div[data-section-style="19"] img.masked-image {
+    margin: 0;
+    transform-origin: top left;
+}
+
+div[data-section-style="19"] .image-mask {
+    position: relative;
+    overflow: hidden;
+}
+</style></head><body><h1 id='UUbACAy0ETv'>Fae architecture</h1>
+
+In order to make explicit what is implicit in the other documents here, this one will describe the workings of Fae, at least insofar as they visibly affect the experience.<br/>
+
+<h2 id='UUbACAOty5c'>Overview</h2>
+
+Fae has three main executable abstractions: transactions, contracts, and escrows.  Users submit transactions, while contracts and escrows are created during the course of executing the code in one of the abstractions.  All three abstractions are general functions with static argument and return value types, returning values in a monad specific to Fae.  They differ in their calling conventions and availability, which support different guarantees on their semantics.<br/>
+
+<h2 id='UUbACAuAHGB'>Transaction messages</h2>
+
+Transactions straddle the line between Fae-internal and Fae-external, as they are propagated across a Fae network as textual messages from which the corresponding Fae code and environment is constructed.  These messages include the following data:<br/>
+
+<div data-section-style='5'><ul id='UUbACAICRTY'><li id='UUbACATQPo7' class='' value='1'>The hash and file size of the transaction's main module, containing in addition to general Haskell definitions the function <a href="https://consensys.quip.com/a85bACrE0zpp/Fae-architecture#UUbACAnvUWu"><code>body</code></a><i>, </i>the Fae analogue of <code>main</code>.
+
+<br/></li><li id='UUbACAnUa3L' class=''>A list of <i><a href="https://consensys.quip.com/a85bACrE0zpp/Fae-architecture#UUbACAnWdh6">other modules</a></i>.  This is simply a list of hashes of the modules as source code files, with file sizes.
+
+<br/></li><li id='UUbACAAQDwD' class='parent'>A list of <a href="https://consensys.quip.com/a85bACrE0zpp/Fae-architecture#UUbACACmIzE"><i>input contract calls</i></a>, each of which consists of:
+
+<br/></li><ul><li id='UUbACAIFwey' class=''>A <a href="https://consensys.quip.com/a85bACrE0zpp/Fae-architecture#UUbACAqUsKs">path contract ID</a>, optionally annotated with a value for the contract's <a href="https://consensys.quip.com/a85bACrE0zpp/Fae-architecture#UUbACA7izfF">nonce</a>.
+
+<br/></li><li id='UUbACA9aafa' class=''>A textual literal for the contract's argument type.
+
+<br/></li></ul><li id='UUbACAvY3KT' class=''>A list of <i><a href="https://consensys.quip.com/a85bACrE0zpp/Fae-architecture#UUbACADlW86">fallback functions</a></i>, which are simply names of functions defined in the main module.
+
+<br/></li><li id='UUbACAq41sb' class='parent'>A list of <i>signers</i>, which may <i>not</i> be empty.  This has two forms, both of which have entries associating a textual name with one of:
+
+<br/></li><ul><li id='UUbACAQRpwZ' class=''><b>Pre-signature:</b> a public key.
+
+<br/></li><li id='UUbACAt3Zs0' class=''><b>Post-signature:</b> the pre-signature value together with a signature by the corresponding private key.  The message that is signed is the present transaction message with the pre-signature list of signers.
+
+<br/></li></ul><li id='UUbACA9MoS2' class=''>An optional <a href="https://consensys.quip.com/a85bACrE0zpp/Fae-architecture#UUbACAcg3Lt"><i>salt</i></a>, which is any text whatsoever.
+
+<br/></li></ul></div>The signature scheme ensures that the signers' public keys can be recovered and the transaction message, including these keys, be validated.  The salt value serves the purpose of ensuring that the transaction hash, which is used as the transaction's identifier, is unique; transaction messages with the same hash as a previous message are discarded.  All of the cryptographic functions mentioned here may be implemented in any decent public-key system; my implementation uses Ed25519, an elliptic-curve system.<br/>
+
+<br/>
+
+The modules that are referenced by hash and file size are expected to be distributed together with the transaction message, but possibly separately.  These data allow the recipient to decide if the transaction is too large to accept, and to validate the source files if it chooses to accept them.  To complete this picture, the transaction-delivery protocol should initiate with a declaration of the size of the transaction message itself, for the same purpose.<br/>
+
+<h2 id='UUbACA1Q3o6'>What is stored</h2>
+
+Transactions and escrows are identified by a single hash, while contracts are identified by a “path” describing its point of creation.  The structure of contract and transaction storage is:<br/>
+
+<br/>
+
+<b>Transaction storage</b><br/>
+
+<div data-section-style='5'><ul id='UUbACAOVYcE'><li id='UUbACA6Ry5s' class='parent' value='1'>Transaction ID: hash of the transaction message
+
+<br/></li><ul><li id='UUbACA3M0Dz' class=''>Transaction return value
+
+<br/></li><li id='UUbACANfAyi' class=''>Transaction signers: public keys by name
+
+<br/></li><li id='UUbACABBN0y' class='parent'><b>Created contracts list: </b>each entry
+
+<br/></li><ul><li id='UUbACAoO3MX' class=''>Ordinal of contract as created by parent contract: determines path contract ID<br><code>/transactionID/Body/thisOrdinal</code>
+
+<br/></li><li id='UUbACAem3Fr' class=''>Current contract function
+
+<br/></li><li id='UUbACA7izfF' class=''>Current version (a hash incorporating all arguments up to the present call)
+
+<br/></li></ul><li id='UUbACAk0glT' class='parent'><b>Input contract list: </b>each entry
+
+<br/></li><ul><li id='UUbACAJMcnB' class=''>Path contract ID of original entry in some created contracts list
+
+<br/></li><li id='UUbACA3OUL3' class=''>Map of versions to parts of the contract return value
+
+<br/></li><li id='UUbACAoGWrK' class='parent'><b>Created contracts list: </b>each entry
+
+<br/></li><ul><li id='UUbACAS56SG' class=''>Ordinal of contract as created by parent contract: determines path contract ID<br><code>/transactionID//thisOrdinal</code>
+
+<br/></li><li id='UUbACAyv9Iu' class=''>Current contract function
+
+<br/></li><li id='UUbACAu9Jr5' class=''>Current nonce
+
+<br/></li></ul></ul><li id='UUbACAjKWKI' class='parent'><b>Materials mapping:</b> an array of key-value pairs where
+
+<br/></li><ul><li id='UUbACAuoCvw' class=''>The key is any string, serving as a human-readable identifier
+
+<br/></li><li id='UUbACAQ36DI' class=''>The value is an entry as in the input contract list.
+
+<br/></li></ul></ul></ul></div>The path contract ID is the two- or three-component path specifying the creating transaction, possibly the input contract that actually did the creation, and the order within the list of created contracts for this transaction or possibly contract.  This allows a contract ID to precisely specify the chain of prerequisite executions to get the current contract function with that ID, and therefore eliminate the need to execute other contracts or transactions to retrieve that one.<br/>
+
+<br/>
+
+Each contract function hides an internal state that tracks its escrows.  During transaction execution, a state with the same structure is present in the transaction's memory as well.  Escrow storage is:<br/>
+
+<br/>
+
+<b>Escrow storage</b><br/>
+
+<div data-section-style='5'><ul id='UUbACAuqX2C'><li id='UUbACAOKzPz' class='' value='1'>Next escrow ID
+
+<br/></li><li id='UUbACATumuU' class='parent'><b>Escrow map:</b> each entry
+
+<br/></li><ul><li id='UUbACAnYVBM' class=''>Current escrow function
+
+<br/></li><li id='UUbACAKXnHW' class=''>Current escrow version
+
+<br/></li></ul></ul></div>Therefore, an escrow ID only refers to a valid escrow entry in the context of the contract (or transaction) that contains that entry in its escrow map.  The uniqueness of this contract-or-transaction is assured by the Fae API.<br/>
+
+<br/>
+
+In addition to the Fae abstractions, Fae also stores plain Haskell modules (the “other modules” in the transaction message) associated with each transaction.  These modules can be imported either by that transaction or any later one, using the following convenient conventions:<br/>
+
+<div data-section-style='5'><ul id='UUbACAN3RfQ'><li id='UUbACA47yYz' class='' value='1'>In the original transaction, a module named <code>ModuleName</code> may be imported via <code>import ModuleName</code>.
+
+<br/></li><li id='UUbACAT6hZS' class=''>In other transactions, the same module may be imported via <code>import Blockchain.Fae.Transactions.TX&lt;transactionID&gt;.ModuleName</code>; i.e. the module is placed in a namespace below the same one containing the Fae libraries, tagged by the transaction ID.
+
+<br/></li><li id='UUbACAqvqpA' class=''>The main module itself is also available to other transactions under the qualified import name but without the final component.
+
+<br/></li></ul></div><h2 id='UUbACAbqTNg'>Escrow-backed value</h2>
+
+Valuable quantities in Fae are constructed from escrows, as recognized by having an instance of <code>HasEscrowIDs</code>; the escrow IDs actually discovered by the traversal in that class denote the <i>backing escrows</i> for the value.   Types without any backing escrows are not valuable because they may be copied “sneakily” as ordinary Haskell values; at the other extreme, a type with many valuable fields is a “derived value”.  Escrows protect value in several ways:<br/>
+
+<div data-section-style='5'><ul id='UUbACArp4f7'><li id='UUbACA2LWz2' class='' value='1'>An escrow is owned by exactly one contract.
+
+<br/></li><li id='UUbACAzY3KC' class=''>Escrow IDs are parametrized by the argument and return types of the escrow.
+
+<br/></li><li id='UUbACAiCOIg' class=''>Escrow calls are deterministically sequenced.
+
+<br/></li><li id='UUbACAc5MHV' class=''>Escrow calls are type-checked against the escrow ID.
+
+<br/></li><li id='UUbACA3Dt2l' class=''>Backing escrows are transferred automatically via contract and escrow returns.
+
+<br/></li></ul></div>The combination of these effects is that a Haskell value is “valuable” in the Fae sense in exactly one contract, which if no sneaky copying was performed is the contract holding the Haskell value; if<i> </i>a sneaky copy is returned, then its backing escrows come with it and the original loses its value; if a valuable and its sneaky copy are both used in their original context, the first use affects the state of the backing escrows and the sneaky copy therefore does not necessarily have an equivalent value to the original, i.e. is not a genuine copy.<br/>
+
+<br/>
+
+The inner workings of the escrow function, which is provided by the creator, determine the nature of the escrow as a valuable.  The most extensive of these workings is the function's ongoing internal state, which persists between escrow calls; a blunt example of state is whether the escrow exists at all, which is the source of the name of the <code>spend</code> API function that returns a value and deletes the returning escrow (or contract).<br/>
+
+<br/>
+
+A more subtle feature is the combination of strictly checked argument and return value types with private types that the escrow author uses to implement public interface functions but does not export to users.  Without access to the private types that run the escrow, users cannot create a valid counterfeit escrow, nor “hack” a valid escrow by calling it in an insecure manner.  This technique is easily implemented by defining the private types and the interface in modules attached to some transaction, and providing restricted export lists that include the interface functions but not the types.<br/>
+
+<h2 id='UUbACAB0nZK'>Contract-like and transaction-like code</h2>
+
+There are two classes of monad in which Fae makes its API available, called <code>MonadContract argType valType</code> and <code>MonadTX</code>, where <code>argType</code> and <code>valType</code> parametrize the monad according to the contract's argument and return value types.  The base instances of these classes are monads called, respectively, <code>Fae</code> (which is also in <code>MonadTX</code>) and <code>FaeTX</code>, and any monad transformer stack on top of one of these is also in the same class.  The base instances are state monads tracking the following data:<br/>
+
+<div data-section-style='5'><ul id='UUbACAt33F3'><li id='UUbACAkWj8H' class='' value='1'>Escrow storage (as above)
+
+<br/></li><li id='UUbACApiEQP' class=''>List of created contracts
+
+<br/></li><li id='UUbACAjyJ95' class='parent'><b>Read-only:</b> current transaction data
+
+<br/></li><ul><li id='UUbACAADjGD' class=''>Transaction signers
+
+<br/></li><li id='UUbACA40kBH' class=''>Transaction ID
+
+<br/></li></ul><li id='UUbACAEXuMS' class=''>Current continuation function (void for <code>FaeTX</code>)
+
+<br/></li></ul></div>These monad classes differ in how much of the Fae API (described in <a href="https://consensys.github.io/Fae/Blockchain-Fae.html">the haddocks</a>) they provide; contracts and escrows operate in a <code>MonadContract</code>. with the appropriate parameters, while transactions operate in a <code>MonadTX</code>.<br/>
+
+<br/>
+
+In <code>MonadContract argType valType</code>,, the <code>spend</code> and <code>release</code> functions are available, which create return values of a wrapper type <code>WithEscrows valType</code>; a value so wrapped is accompanied by its backing escrows and can be constructed in no other way, so that a contract or escrow execution must end with one of these function calls.  The difference is that <code>release</code> updates the current continuation function, while <code>spend</code> causes the contract-or-escrow to be deleted from storage.<br/>
+
+<br/>
+
+A <code>MonadTX</code> does not necessarily include these functions; in particular, <code>FaeTX</code> does not, and is therefore not allowed to return a <code>WithEscrows</code>-wrapped value; transactions terminate with a simple <code>return</code> statement or monadic value, as usual for Haskell.  It provides the API functions <code>newContract</code>, <code>newEscrow</code>, and <code>useEscrow</code> that function as described, as well as various functions to obtain the transaction signers.  Note that there is no <code>useContract</code>, which is one of the calling conventions that differentiate contracts from escrows.<br/>
+
+<br/>
+
+The API also depends on the following type classes, none of which may be explicitly instantiated:<br/>
+
+<div data-section-style='5'><ul id='UUbACAF0VOE'><li id='UUbACAnJAjv' class='' value='1'><code>HasEscrowIDs :: * -&gt; Constraint</code>: an instance of this class may be traversed for all escrow IDs it contains.  It is accompanied by a type <code>BearsValue</code> that is dynamically resolved to a static instance of <code>HasEscrowIDs</code>.  Automatic instances are provided for <code>Generic</code> types (e.g. <code>data T = ... deriving Generic</code>, which simply recurse into an ADT to extract the fields with escrow ID type.
+
+<br/></li><li id='UUbACAxyUFn' class=''><code>Versionable :: * -&gt; Constraint</code>: an instance of this class may be folded into a map of the versions of its component values.  It is accompanied by a newtype <code>Versioned</code>.  Automatic instances are provided for <code>Generic</code> types, which construct the map by structural induction that terminates at any <code>Versioned</code>-wrapped value.
+
+<br/></li><li id='UUbACAazW1q' class=''><code>GetInputValues :: * -&gt; Constraint</code>: an instance of this class may be constructed from a list of <code>BearsValue</code>s.  Automatic instances are provided for <code>Generic</code> types, which construct the value by assigning each element of the list to each field of a product type, or reading a sum type from a single element.  Too-long or too-short lists yield errors.
+
+<br/></li></ul></div>As described, Fae users do not need to even mention these classes, but simply derive <code>Generic</code>.  This also provides an automatic instance of <code>Control.DeepSeq.NFData</code> (or rather, a shadowing class with an identical interface) that is guaranteed to force each field by structural induction.  Manual <code>NFData</code> instances are not allowed.<br/>
+
+<br/>
+
+Since all of the classes above are automatic for any <code>Generic</code> type, they may be safely ignored by Fae users who are not attempting to write a polymorphic contract library; type signatures are the only place they need appear.<br/>
+
+<br/>
+
+<h2 id='UUbACACmIzE'>Contract execution</h2>
+
+Contracts are executed as input contracts for a transaction, and only in this way.  Any transaction may call any contract with any argument; it is looked up in storage by the provided ID, potentially validated against the optional nonce annotation, and called on the value obtained by parsing the literal argument.  To enable this parsing, contract argument types must be instances of the <code>Read</code> type class.  The automatic <code>deriving Read</code> instance allows contract arguments to be given as Haskell record syntax, but as this instance is implicitly part of the contractual behavior, users may also write their own parser.  The rationale for this strict calling convention is to prevent transaction authors from writing nonterminating code as part of the contract arguments; instead, all the code is under the control of the contract author.<br/>
+
+<br/>
+
+Contract calls are resolved as follows:<br/>
+
+<div data-section-style='5'><ul id='UUbACAWFQVD'><li id='UUbACAUYp7S' class='' value='1'>Each call is lazy: the execution occurs not when the transaction is received but when the return value of the contract is used in the transaction body.
+
+<br/></li><li id='UUbACArNKlF' class=''>The argument is scanned for versions and the corresponding values are fetched from the current version map to replace the identifiers.
+
+<br/></li><li id='UUbACAnGp4r' class=''>The argument with versions resolved is scanned for escrow IDs via its <code>HasEscrowIDs</code> instance and these escrows are transferred from the context of the ongoing transaction into the contract.  (The only place an escrow ID may appear in a contract argument is in a versioned value.)
+
+<br/></li><li id='UUbACA8d1nv' class=''>The escrows accompanying the contract's return value are deposited in the context of the ongoing transaction.
+
+<br/></li><li id='UUbACAO1YXv' class=''>If the contract call included a nonce, the version map of the return value is exposed to the input contracts.  The versions are available to future input contracts.
+
+<br/></li></ul></div><h2 id='UUbACAuKZim'>Transaction execution</h2>
+
+Transaction execution builds on the input contract calls to construct an argument to the transaction body via its <code>GetInputValues</code> instance.  The transaction's return value must be an instance of the <code>Show</code> type class to display the outcome to external users.  This display has no internal use, so manual <code>Show</code> instances are purely for informational purposes; the automatic <code>deriving Show</code> instance is expedient but not pretty.<br/>
+
+<br/>
+
+The course of transaction execution is:<br/>
+
+<div data-section-style='5'><ul id='UUbACAawqmv'><li id='UUbACAnvUWu' class='' value='1'>The input contract list is run and the return values used to construct the argument to <code>body</code> (defined in the main module) as above.
+
+<br/></li><li id='UUbACAf83Ww' class=''>When the transaction terminates, its return value is placed in storage under the newly-created entry for this transaction.
+
+<br/></li><li id='UUbACAdudQi' class=''>If any exception is thrown in any code in the transaction body, including in escrow calls, this exception terminates the transaction body; the return value in storage is then taken to be this exception since no valid value is returned.
+
+<br/></li><li id='UUbACADlW86' class=''>In the event of an exception, the fallback functions given in the transaction message are run in order.  Each of these functions accepts the same argument as the transaction body, and returns nothing; if an exception occurs during any one, it terminates and is rolled back, but the exception is ignored and the next fallback function is run.
+
+<br/></li></ul></div>The purpose of the fallback functions is to reclaim valuables that are returned from the input contracts in the event that the transaction raises an exception before they can be deposited as intended.  Since they have no return value, their effect can only be the creation of new contracts, which are intended to contain unused valuables for later retrieval.  This is effectively a <code>catch</code> mechanism, which is otherwise forbidden in contract code because it is an impure action and contract (and escrow and transaction) code is intentionally pure, but transactions are run in an impure environment that is capable of catching exceptions.<br/>
+
+</body></html>

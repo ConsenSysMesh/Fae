@@ -1,0 +1,776 @@
+<!doctype html>
+<html><head><title>Tutorial 2: Escrows</title><meta charset="UTF-8"><link href="http://fonts.googleapis.com/css?family=Crimson+Text:400,400italic,700,700italic|Roboto:400,700,700italic,400italic" rel="stylesheet" type="text/css"><style>/*
+ * Copyright 2014 Quip
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+    font-size: 15px;
+    color: #333;
+    background: #fff;
+    padding: 60px 95px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern";
+    font-kerning: normal;
+    -moz-font-feature-settings: "kern";
+    -webkit-font-feature-settings: "kern";
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+th {
+    font-family: Roboto, sans-serif;
+    font-weight: 700;
+    margin: 0;
+    margin-top: 1.25em;
+    margin-bottom: 0.75em;
+}
+
+h1 {
+    font-size: 35px;
+    line-height: 42px;
+}
+
+h1:first-child {
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+h3 {
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Body text */
+body,
+p,
+ul,
+ol,
+td {
+    font-family: "Crimson Text", serif;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+blockquote,
+q {
+    display: block;
+    margin: 1em 0;
+    font-style: italic;
+}
+
+blockquote a,
+q a {
+    text-decoration: underline;
+}
+
+blockquote {
+    padding-left: 10px;
+    border-left: 4px solid #a6a6a6;
+}
+
+q {
+    color: #a6a6a6;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    quotes: none;
+}
+
+q a {
+    color: #a6a6a6;
+}
+
+code,
+pre {
+    font-family: Consolas, "Liberation Mono", Menlo, "Courier Prime Web",
+        Courier, monospace;
+    background: #f3f3f3;
+}
+
+code {
+    padding: 1px;
+    margin: 0 -1px;
+    border-radius: 3px;
+}
+
+pre {
+    display: block;
+    line-height: 20px;
+    text-shadow: 0 1px white;
+    padding: 5px 5px 5px 30px;
+    white-space: nowrap;
+    position: relative;
+    margin: 1em 0;
+}
+
+pre:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    border-left: solid 1px #dadada;
+}
+
+/* Lists */
+div[data-section-style="5"],
+div[data-section-style="6"],
+div[data-section-style="7"] {
+    margin: 12px 0;
+}
+
+ul {
+    padding: 0 0 0 40px;
+}
+
+ul li {
+    margin-bottom: 0.4em;
+}
+
+/* Bulleted list */
+div[data-section-style="5"] ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul {
+    list-style-type: square;
+}
+div[data-section-style="5"] ul ul ul ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul ul ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul ul ul ul {
+    list-style-type: square;
+}
+
+/* Numbered list */
+div[data-section-style="6"] ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul {
+    list-style-type: lower-roman;
+}
+div[data-section-style="6"] ul ul ul ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul ul ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul ul ul ul {
+    list-style-type: lower-roman;
+}
+
+/* Checklist */
+div[data-section-style="7"] ul {
+    list-style-type: none;
+}
+
+div[data-section-style="7"] ul li:before {
+    content: "\2610";
+    position: absolute;
+    display: inline;
+    margin-right: 1.2em;
+    margin-left: -1.2em;
+}
+
+div[data-section-style="7"] ul li.parent:before {
+    content: "";
+}
+
+div[data-section-style="7"] ul li.parent {
+    font-weight: bold;
+}
+
+div[data-section-style="7"] ul li.checked {
+    text-decoration: line-through;
+}
+
+div[data-section-style="7"] ul li.checked:before {
+    content: "\2611";
+    text-decoration: none;
+}
+
+/* Tables */
+div[data-section-style="8"] {
+    margin: 12px 0;
+}
+
+table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: solid 1px #bbb;
+    table-layout: fixed;
+    position: relative;
+}
+
+table th,
+table td {
+    padding: 2px 2px 0;
+    min-width: 1.5em;
+    word-wrap: break-word;
+}
+
+table th {
+    border-bottom: 1px solid #e1e1e1;
+    background: #f4f4f4;
+    font-weight: bold;
+    vertical-align: bottom;
+    color: #3a4449;
+    text-align: center;
+}
+
+table td {
+    padding-top: 0;
+    border-left: 1px solid #e1e1e1;
+    border-top: 1px solid #e1e1e1;
+    vertical-align: top;
+}
+
+table td.bold {
+    font-weight: bold;
+}
+
+table td.italic {
+    font-style: italic;
+}
+
+table td.underline {
+    text-decoration: underline;
+}
+
+table td.strikethrough {
+    text-decoration: line-through;
+}
+
+table td.underline.strikethrough {
+    text-decoration: underline line-through;
+}
+
+table td:first-child {
+    border-left: hidden;
+}
+
+table tr:first-child td {
+    border-top: hidden;
+}
+
+/* Images */
+div[data-section-style="11"] {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-section-style="11"][data-section-float="0"] {
+    clear: both;
+    text-align: center;
+}
+
+div[data-section-style="11"][data-section-float="1"] {
+    float: left;
+    clear: left;
+    margin-right: 20px;
+}
+
+div[data-section-style="11"][data-section-float="2"] {
+    float: right;
+    clear: right;
+    margin-left: 20px;
+}
+
+div[data-section-style="11"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: auto;
+}
+
+hr {
+    width: 70px;
+    margin: 20px auto;
+}
+
+/* Apps */
+div[data-section-style="19"].placeholder {
+    margin: 0.8em auto;
+    padding: 4px 0;
+    display: block;
+    color: #29b6f2;
+    text-align: center;
+    border: 1px solid rgba(41, 182, 242, 0.2);
+    border-radius: 3px;
+    background: #e9f8fe;
+    font-family: Roboto, sans-serif;
+}
+
+div[data-section-style="19"].first-party-element {
+    margin-bottom: 10px;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+div[data-section-style="19"] img {
+    margin: 0.5em;
+}
+
+div[data-section-style="19"] img.masked-image {
+    margin: 0;
+    transform-origin: top left;
+}
+
+div[data-section-style="19"] .image-mask {
+    position: relative;
+    overflow: hidden;
+}
+</style></head><body><h1 id='ZRIACAbGAS5'>Tutorial 2: Escrows</h1>
+
+In this second tutorial, we will introduce the remaining feature of Fae: <i>escrows</i>, which are the means by which you may create value and perform complex transactions.  As in the first tutorial, the sample code will use the conventions of the postTX utility and the sample command lines use the docker images, as described in the Project Information.  After following the instructions there, you should execute this first to have a local server running:<br/>
+
+<pre id='ZRIACAWE20H'>./faeServer.sh</pre>
+
+<h2 id='ZRIACARBFpI'>Creating escrows</h2>
+
+To present the concepts surrounding escrows accessibly, we will start with not a full transaction, but simply a contract that uses them.  To begin, we will revert to the ad-hoc style of defining a contract, and return to contract names when they are seen to be absolutely necessary.<br/>
+
+<h3 id='ZRIACABrgQl'>Contract source code</h3>
+
+<pre id='ZRIACATJefq'>c :: Contract String (EscrowID (Contract () String))<br>c name = newEscrow e where<br>  e :: Contract () String<br>  e _ = spend ("Property of: " ++ name)</pre>
+
+This is a contract that creates an escrow personalized according to the caller's request.<br/>
+
+<h3 id='ZRIACAyohxp'>Escrow creation</h3>
+
+The escrow creation function, <code>newEscrow</code>, has exactly the same argument as <code>newContract</code>, including the type <code>Contract argType valType</code>: escrows are the same as contracts but have a different role.  As we will see later, they can be called as well, with different restrictions; this involves the <i>escrow ID</i>, which is returned by <code>newEscrow</code>.  This particular escrow can be used once, returning a declaration of who created it, and is then deleted, just like contracts that end with <code>spend</code> are deleted when that line is executed.<br/>
+
+<h3 id='ZRIACA8vbVs'>Escrow ID</h3>
+
+An escrow is created with a unique identifier; if the escrow's name has type <code>name</code>, then the escrow ID has type <code>EscrowID name</code>; <code>EscrowID</code> is, like <code>ArgType</code> and <code>ValType</code>, a family of types.  The reason the name is specified is so that contracts that accept escrow IDs can guarantee that they get the right kind of escrow, and users of contracts that return escrow IDs can guarantee that <i>they</i> got the right kind of escrow.  As we will see, escrows can represent valuable quantities in Fae, so these guarantees amount to an assurance that the contracts deal in a particular kind of valuable (say, a specific currency).<br/>
+
+<h2 id='ZRIACAN8wVR'>Using escrows</h2>
+
+An escrow is of no use in isolation: it must be used, if only to verify it.  The transaction below will demonstrate calling it.  First, we should commit the contract above to Fae via a transaction. <br/>
+
+<br/>
+
+<b>Transaction source file: Escrow1.hs</b><br/>
+
+<pre id='ZRIACArGABv'>type EType = Contract () String<br><br>body :: FaeTX ()<br>body = newContract c where<br>  c :: Contract String (EscrowID EType)<br>  c name = do<br>    eID &lt;- newEscrow e<br>    spend eID<br>    <br>    where<br>      e :: EType<br>      e _ = spend ("Property of: " ++ name)</pre>
+
+<b>Transaction message: Escrow1</b><br/>
+
+<pre id='ZRIACAKf90F'>body = Escrow1</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='ZRIACAvtLB0'>./postTX.sh Escrow1</pre>
+
+<b>Transaction results</b><br/>
+
+<pre id='ZRIACAl9bCN'>Transaction 49c34b94bc40bf1012ec989bebecea10719c577c3f1c3f8d01ffd4457feba73c<br>  result: ()<br>  outputs:<br>    0: 49c34b94bc40bf1012ec989bebecea10719c577c3f1c3f8d01ffd4457feba73c<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420</pre>
+
+Like most of the examples in Tutorial 1, this transaction just creates a single new contract.  This example also demonstrates how additional code beyond the transaction executable can be included in a transaction source file.<br/>
+
+<h3 id='ZRIACAM8yen'>Type Synonyms</h3>
+
+The first line of the transaction above is a <i>type synonym definition</i>, much like the instantiations of <code>ArgType</code> and <code>ValType</code> we saw in Tutorial 1.  It declares an alias (in this case, a shorter one for convenience) for another type.  Not only would the long expression <code>Contract () String</code> otherwise occur twice in this transaction, but it would also appear in every other transaction, and we will see that we can reuse the same synonym in all of them.<br/>
+
+<h3 id='ZRIACAiuZNm'>Binding the Fae API</h3>
+
+This example has another of the <i>do block </i>for creating contract bodies longer than a single line.  This block allows more than simple imperative expressions like <code>newContract contractName</code>; it also allows <i>bindings</i> of values obtained from the Fae API.  Bindings in a <code>do</code>-block can assign any name (like <code>eID</code>) to any value that would otherwise appear on a line (like <code>newEscrow e</code>), “extracting” the content of the value from the monad at the present time and making it available for use on subsequent lines.<br/>
+
+<br/>
+
+<b>Transaction source file: CallEscrow1.hs</b><br/>
+
+<pre id='ZRIACARbI6J'>import Blockchain.Fae.Transactions.TX$txID<br><br>body :: EscrowID EType -&gt; FaeTX String<br>body eID = useEscrow [] eID ()</pre>
+
+<b>Transaction message: CallEscrow1</b><br/>
+
+<pre id='ZRIACA3HhDV'>body = CallEscrow1<br>inputs<br>  $txID/Body/0/Current = "Ryan Reich"</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='ZRIACA77PgQ'>./postTX.sh -e txID=&lt;transaction ID from Escrow1&gt; CallEscrow1</pre>
+
+<b>Transaction results</b><br/>
+
+<pre id='ZRIACA7HVRU'>Transaction 304142b3b74befb0eef7fa3204ede5be2dc4714ada6f66855251d7814eb91d1f<br>  result: "Property of: Ryan Reich"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: 49c3.../Body/0/Current (Deleted)</pre>
+
+The contract ID format <code>$txID/Body/0/Current</code> should be familiar from the first tutorial, signifying that the contract to be called was the first one created by transaction <code>$txID</code>.  This transaction calls the contract above, passing it my name as an argument, and then uses it with the ID for that new transaction.<br/>
+
+<h3 id='ZRIACAkHHsZ'>Import Statement</h3>
+
+The first line of <i>this</i> transaction is the <i>import statement</i>, which recalls the source-code module defined in the transaction <code>$txID</code>.  This environment variable is actually allowed to appear in the code, although it is invalid syntax, because <code>postTX</code> scans the import statements for exactly this and substitutes them before sending the transaction.  All transaction modules are placed under the hierarchical location <code>Blockchain.Fae.Transactions</code> with the specific name <code>TX&lt;the transaction ID&gt;</code>.  Other core Fae modules are placed under <code>Blockchain.Fae</code> as well.<br/>
+
+<br/>
+
+The effect of the import statement is that all of the definitions in <code>Escrow1.hs</code> become available by name to <code>CallEscrow1.hs</code>.  Thus, the name <code>EType</code> is available, and means the same thing.  This is important when using user-defined types, because simply repeating the definition in the second transaction will not create a type that the interpreter understands to be the same as the original, but rather, another type with the same name and (coincidentally) the same definition.<br/>
+
+<br/>
+
+Speaking of definitions with the same name, this import <i>also</i> exposes the <code>body</code> function of <code>Escrow1.hs</code>; however, since we explicitly define a function of this name in <code>Escrow2.hs</code>, the latter “shadows” the former, and is the one that the interpreter sees when running the transaction.<br/>
+
+<h3 id='ZRIACAlu1Y7'>Calling an escrow</h3>
+
+Escrows can be called like functions with <code>useEscrow</code>, which takes three arguments: an unexplained list, here the empty list <code>[]</code>; the escrow ID; and the argument to the escrow itself, here the empty argument <code>()</code>.  This returns a string, as indicated by the second type argument to <code>EscrowID () String</code>, which is returned from the transaction.  The transaction result is therefore <code>Property of: Ryan Reich</code>, as shown.<br/>
+
+<h3 id='ZRIACAUtia9'>Escrow ownership</h3>
+
+One subtle but extremely important point that comes out in this example is the <i>ownership</i> of this escrow.  Originally, it was owned by its creator, the contract created in <code>Escrow1</code>.  However, by returning the escrow ID from its call, that contract <i>transfers</i> ownership to the transaction that called it, which is <code>CallEscrow1</code>.  It is only because of this transfer that the <code>useEscrow</code> call is valid; if an escrow is called by a contract or transaction that does not own it, the call will fail with an error indicating that the escrow does not exist.  Escrows only exist for their owners.<br/>
+
+<h2 id='ZRIACALosNO'>Saving escrows</h2>
+
+The transaction above does not use escrows to their full potential, but merely as glorified functions.  In Fae, escrows are the only means of creating persistent value, and in order to persist, they must be held by a contract rather than expended by a transaction.  Before running this transaction, you need to re-execute <code>Escrow1</code>, because the contract it created was deleted in <code>CallEscrow1</code>.<br/>
+
+<br/>
+
+<b>Transaction source file: Escrow2.hs</b><br/>
+
+<pre id='ZRIACAehRhZ'>import Blockchain.Fae.Transactions.TX$txID<br><br>body :: EscrowID EType -&gt; FaeTX ()<br>body eID = newContract (Spend eID)<br><br>data Spend a = Spend a deriving (Generic)<br><br>instance (ContractVal a) =&gt; ContractName (Spend a) where<br>  type ArgType (Spend a) = ()<br>  type ValType (Spend a) = a<br>  theContract (Spend x) = \_ -&gt; spend x</pre>
+
+<b>Transaction message: Escrow2</b><br/>
+
+<pre id='ZRIACAGDqM3'>body = Escrow2<br>inputs<br>  $txID/Body/0/Current = "Ryan Reich"</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='ZRIACAXsuPm'>./postTX.sh -e txID=&lt;transaction ID from Escrow1&gt; Escrow2</pre>
+
+<b>Transaction results</b><br/>
+
+<pre id='ZRIACAHyFSG'>Transaction f75495105860cf227c3eef53049519b08e9e0f7c801f8a144b07503e909b12ce<br>  result: ()<br>  outputs:<br>    0: f75495105860cf227c3eef53049519b08e9e0f7c801f8a144b07503e909b12ce<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: af00.../Body/0/Current (Deleted)</pre>
+
+This transaction calls the contract from <code>Escrow1</code> (for me, the re-execution of this transaction had ID <code>af00...</code>, which isn't shown here but does appear in the input contract ID), obtaining an escrow, then creates a contract to hold the escrow rather than calling it.  This contract, in turn, will pass the escrow back to its next caller, then be deleted (leaving that caller in possession of the escrow).  We'll leave it as an optional exercise to formulate the transaction that does so.<br/>
+
+<h3 id='ZRIACAov8sU'>Polymorphism and Constraints</h3>
+
+In this transaction, we see for the first time a definition that applies to not one type but a family of types: a <i>polymorphic</i> definition. It begins with the <code>data Spend a</code> statement, which defines a type that depends on a variable <code>a</code>, an unspecified other type.  So, <code>Spend (EscrowID EType)</code> is a specific example of this family of types; this works much the same way as <code>ArgType</code> and <code>ValType</code>.  This dependence on a free type variable is called <i>polymorphism</i>.<br/>
+
+<br/>
+
+Matching this is the <code>instance ContractName (Spend a)</code> statement, which declares a uniform instance of the <code>ContractName</code> typeclass for all of the specific <code>Spend a</code> types.  That is, almost all: the instance declaration is actually decorated with a new piece of notation: <code>(ContractVal a) =&gt;</code>, which is a <i>constraint</i> limiting the particular types <code>a</code> that this instance can actually apply to.  (You want to read this as the “if” side of an “if...then” statement, as in, “If <code>a</code> is a <code>ContractVal</code>, then <code>Sp</code><code>end a</code> is a <code>ContractName</code>.")  The constraint contains one or possibly several properties that must hold of the free type variables mentioned elsewhere in the signature; here, a “property” is an interface (typeclass) that the type in the variable must have.<br/>
+
+<br/>
+
+It is important to mention here that the <code>body</code> function is <i>not</i> polymorphic, even though as mere code it could, apparently, have the signature <code>body :: (ContractVal a) =&gt; a -&gt; FaeTX ()</code>, because that is all we need to get the <code>ContractName</code> instance for the <code>Spend</code> value we use to create the new contract.  This will not fly with Fae, however, because <code>body</code> must be a <i>monomorphic</i> type (as opposed to polymorphic; it should have no free type variables at all) in order for the interpreter to know how to call it on the return values of the input contracts, whose types are effectively dynamic in order to accommodate, in a single framework, all the possible types of contract return values.  It relies on the specificity of the definition of <code>body</code> to cast those dynamic types to the correct static ones.  (Optional exercise: change the type signature so that it actually has the wrong type for its input, and see how Fae handles this.)<br/>
+
+<h3 id='ZRIACAJoD1j'>Contract Values</h3>
+
+The specific interface mentioned in the constraint above is <code>ContractVal</code>, an internally defined collection of constraints that ensure that types that have it are suitable for returning from a Fae contract or escrow.  These all, in practice, tend to be implied by the <code>Generic</code> property that your data types will derive, but there are some, more primitive, types that have this interface but not because they are <code>Generic</code>, so it is good form, when writing a polymorphic definition that needs to return a value from a contract, to use the least restrictive and most descriptive property, which is <code>ContractVal</code>.<br/>
+
+<h3 id='ZRIACA7f51E'>Bearers of value</h3>
+
+This transaction finally demonstrates the need to use data types, rather than inline functions, as contract names.  This need is simply that <i>ownership of the escrow <code>eID</code> needs to be transferred to the new contract.</i>  This transfer is performed automatically and invisibly simply by scanning the value provided as the contract name for escrow IDs, and in order to do this, Fae needs to be able to introspect into the type of that value.  This kind of introspection is provided for data types by the <code>Generic</code> property, and is impossible for function types.  The analogous contract definition to the above that uses an inline function would fail because the contract code would behave as the owner of an escrow that was never transferred to it.<br/>
+
+<br/>
+
+This general concept, of data values containing escrow IDs, is Fae's notion of a “valuable” <i>backed by</i> escrows that, through their contractual behavior, give it value.  Such a data value can of course be passed into functions or used in definitions, but Fae ensures that the ownership of its backing escrows is correctly maintained.  In this case, the creation of a contract, that is accomplished by introspecting into the type of the contract name, extracting all escrow IDs, and moving them from the creating code's escrow storage into the created contract's escrow storage.  This unifies the concept of <i>program value</i>, which is just data managed by the interpreter, with <i>Fae value</i>, which is data managed by the Fae internals.  In other words, just like an escrow ID can't be called except by the owner of the escrow itself, a bearer of value is invalid if its backing escrows are not owned by the contract that makes use of it.<br/>
+
+<br/>
+
+(As a slight aside, the <code>spend</code> and <code>release</code> functions are the other ways to transfer escrows, as indicated in the previous example; they both also introspect into their arguments.)<br/>
+
+<br/>
+
+The upshot is that the evaluation <code>theContract</code> function on a <code>Spend x</code> is definitively the owner of the value <code>x</code>, whatever it is (here, it's an <code>EscrowID name</code>) and can do what it wishes with it, including transferring it again via <code>spend</code>.<br/>
+
+<h2 id='ZRIACAXVpyD'>Restricted-access contracts</h2>
+
+The example above is highly flawed if the escrow is to be a bearer of value, since there are no access restrictions on the contract in which it is deposited.  Here we show how to rectify this (once again, you need to re-execute <code>Escrow1</code>).<br/>
+
+<br/>
+
+<b>Transaction source file: Escrow3.hs</b><br/>
+
+<pre id='ZRIACAeAp1x'>import Blockchain.Fae.Transactions.TX$txID<br>import Control.Monad (unless)<br><br>body :: EscrowID EType -&gt; FaeTX ()<br>body eID = do<br> us &lt;- signer "self"<br> newContract (Restricted us eID)<br><br>data Restricted a = Restricted PublicKey a deriving (Generic)<br><br>instance (ContractVal a) =&gt; ContractName (Restricted a) where<br>  type ArgType (Restricted a) = ()<br>  type ValType (Restricted a) = a<br>  theContract (Restricted us x) = \_ -&gt; do<br>    them &lt;- signer "self"<br>    unless (us == them) (error "Wrong sender")<br>    spend x</pre>
+
+<b>Transaction message: Escrow3</b><br/>
+
+<pre id='ZRIACA3V9Cn'>body = Escrow3<br>inputs<br>  $txID/Body/0/Current = "Ryan Reich"</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='ZRIACAr5ZBr'>./postTX.sh -e txID=cab24f... Escrow3</pre>
+
+<b>Transaction results</b><br/>
+
+<pre id='ZRIACAd7vqU'>Transaction e0543e9374b1cd1dab03402d3ec206b47734b6f91f1be95cf25b9a02fa1712a7<br>  result: ()<br>  outputs:<br>    0: b4f45d8bd1ba4571688ff0174395d380975f0306c12298d2ad64970a2d38d407<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: 3747.../Body/0/Current (Deleted)</pre>
+
+This transaction calls the contract of <code>Escrow1</code>, deleting it, and passes its return value, which is an escrow ID, to a newly created contract, as shown in the <code>outputs</code>.  The result is a contract that only returns the escrow ID to the same person (literally person, as in “someone who can send a transaction”) that first deposited it.  In order to see the restriction logic in action, we present a transaction to call this contract, similar to <code>CallEscrow1</code> except that it also sets the signers.<br/>
+
+<br/>
+
+<b>Transaction source file: CallEscrow3.hs</b><br/>
+
+<pre id='ZRIACAQOG8F'>import Blockchain.Fae.Transactions.TX$tx1ID<br><br>body :: EscrowID EType -&gt; FaeTX String<br>body eID = useEscrow [] eID ()</pre>
+
+<b>Transaction message: CallEscrow3</b><br/>
+
+<pre id='ZRIACAwSPhs'>body = CallEscrow3<br>inputs<br>  $txID/Body/0/Current = "Ryan Reich"<br>keys<br>  self = $self</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='ZRIACAM62wV'>./postTX.sh \<br>  -e tx1ID=&lt;transaction ID from Escrow1&gt; \<br>  -e txID=&lt;transaction ID from Escrow3&gt; \<br>  -e self=&lt;your choice&gt;</pre>
+
+<b>Transaction results (<code>self = other</code>)</b><br/>
+
+<pre id='ZRIACAgytNb'>Transaction 3cf8c74e88c29d00808c61595103f7f3019bdec3af791fc0d308ee5d3106e5a1<br>  result: &lt;exception&gt; Wrong sender<br>  signers:<br>    self: 412535810f40782eb779855a8cadbd5e0c5e7af1715d2f4d9c863c1fc8106987<br>  input #0: e054.../Body/0/Current (Failed)<br>    &lt;exception&gt; Wrong sender</pre>
+
+<b>Transaction results (<code>self = self</code>)</b><br/>
+
+<pre id='ZRIACAsNhCy'>Transaction 1ba58cd97f17f52ba530b582b9883792ce8e7fa94d53c3bec8bde779240d737d<br>  result: "Property of: Ryan Reich"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: e054.../Body/0/Current (Deleted)</pre>
+
+Note how <code>CallEscrow3.hs</code> imports the transaction module from <code>$tx1ID</code>, while the transaction message <code>CallEscrow3</code> uses <code>$txID</code> in the input call's contract ID.  This reflects their different needs: the source file needs the definition of <code>EType</code>, which is provided by <code>Escrow1</code>; the message file needs the ID of the contract to be called, which is the one created by <code>Escrow3</code>.  So long as both variables are set it does not matter that they are not even both used in the same files.<br/>
+
+<br/>
+
+The first transaction uses an identity for <code>self</code> that is different from the one used in <code>Escrow1</code> (which is the default key, also called <code>self</code>; see <a href="#ZRIACAoIEoz">below</a>), and receives an exception.  The second one uses the correct identity and receives the expected message as its <code>result</code>.<br/>
+
+<br/>
+
+This example is more complex than usual and introduces several new syntax features.<br/>
+
+<h3 id='ZRIACAhzJpv'>Public Keys</h3>
+
+Fae uses the type <code>PublicKey</code> as a cryptographic proof of identity: when the transaction message is received, the required signers are listed in it and their signatures are attached, and checked.  If and when this check passes, the signers have been proven to have the necessary identities (and the message to be unmodified) and can be referred to within the transaction simply by their public key, which (as far as is computationally reasonable) uniquely specifies them.  The actual nature of the cryptography involved is irrelevant; Fae happens, for now at least, to use the Ed25519 elliptic curve schema, but that does not need to be known, and cannot be used, in the transaction body.<br/>
+
+<h3 id='ZRIACAoIEoz'>Signers</h3>
+
+The <code>signer</code> API function is the interface to an associative array containing the public keys of the various parties that signed the transaction currently being processed when it is bound.  Multiple signatures are possible and this enables some intricate ownership schemes, as well as defending against the misuse of one's contracts.  Therefore, in <code>Escrow3.hs</code>, the binding <code>us &lt;- signer "self"</code> binds <code>us</code> to the public key of the signer named <code>self</code> of the transaction written in this code; however, the binding <code>them &lt;- signer "self"</code> that appears in the contract it creates binds the <code>self</code> signer of the transaction that <i>calls</i> the contract (which is <code>CallEscrow3</code>), since the line is not actually executed until that time.<br/>
+
+<br/>
+
+There are two other functions: <code>lookupSigner</code>, which returns a <code>Maybe PublicKey</code> instead of throwing an error for a missing signer like <code>signer</code> does, and <code>signers</code>, which returns a <code>Map</code> of all the signers.<br/>
+
+<br/>
+
+Fae often uses <code>self</code> as the default name for a transaction signer (<code>postTX</code> actually supplies it if it is not present in the message, with a private key also called <code>self</code>, but this is a demo behavior).  Signers can be declared in the transaction message similarly to inputs:<br/>
+
+<pre id='ZRIACA1i060'>keys<br>  self = ryan<br>  other = sarah</pre>
+
+The names on the right indicate named public keys to be used to sign the transaction; the private keys are stored without any attempt at security by <code>postTX</code> (again, this is demo behavior; despite this, it is feasible to use <code>postTX</code> unmodified in a live system, so long as the machines that run it are secured; this kind of activity has absolutely nothing in particular to do with Fae, so is not attempted by its tools).<br/>
+
+<h3 id='ZRIACATEQIH'>Decisions and exceptions</h3>
+
+The line <code>unless (us == them) (error "Wrong sender")</code> is quite novel for us, as it contains the first appearance of one of the staples of programming, the conditional.  The <code>unless</code> method (provided by <code>Control.Monad</code>) takes a boolean value and, if it is false, executes the second argument; if it is true, it does nothing.  Here, the boolean is <code>us == them</code>, which exploits the fact that <code>PublicKey</code> supports the <code>==</code> operator; in formal terms, it is an instance of the <code>Eq</code> interface (typeclass), like <code>Control.Monad</code> a part of the Haskell standard library package <code>base</code>.<code> </code><br/>
+
+<br/>
+
+The action <code>error "Wrong sender"</code> raises an <i>exception</i>, which causes the entire transaction to end and its return value to be replaced by this exception.  In addition, none of the transaction's actions are saved: new contracts are not created, though contract calls are still made normally.  An exception in a contract call will roll back just the one call, preventing its update or deletion.  Aside from the exceptional return value, it is as though the transaction (respectively, contract call) did not happen.  Exceptions may be thrown using <code>error</code> or <code>throw</code> (which takes a different kind of argument) but may not be caught, and so should not be used for control flow.  The appropriate time to throw an exception is when an error occurs that renders the contract meaningless.<br/>
+
+<br/>
+
+Exceptions are raised not only by explicit errors but also by errors of programming such as type mismatches, evaluating an undefined value (for example, <code>1/0</code>), calling a contract by an invalid contract ID or with a literal argument that doesn't parse correctly, or using an escrow that you do not own.<br/>
+
+<br/>
+
+The inability to catch exceptions has one exception in that it is possible to attach recovery routines to a transaction in case it does exit prematurely.  This feature will be discussed elsewhere.<br/>
+
+<h3 id='ZRIACA34c1p'>Library alternative</h3>
+
+This example is instructive but unnecessary, since Fae provides a contract library that includes a method to save a value in a contract owned by a particular public key.  Here is a shorter way of writing <code>Escrow3.hs</code>:<br/>
+
+<pre id='ZRIACAZB7Bc'>import Blockchain.Fae.Transactions.TX$txID<br>import Blockchain.Fae.Contracts<br><br>body :: EscrowID EType -&gt; FaeTX ()<br>body eID = deposit eID "self"</pre>
+
+The module <code>Blockchain.Fae.Contracts</code> contains a method <code>deposit</code> accepting a value-bearing argument and a name, and creates a contract that releases the value to the caller if that caller is the same as the one referred to by the name <i>in the original transasction</i>.  Its implementation is as shown above.<br/>
+
+<h2 id='ZRIACACDysu'>Restricted-access escrows</h2>
+
+This ongoing example still contains a serious issue: the escrow can easily be obtained without calling contract <code>&lt;Escrow1 transaction ID&gt;/Body/0/Current</code>.  Indeed, <i>anyone</i> is free to write the code in <a href="#ZRIACABrgQl">the contract definition</a> to create their own escrow that works the same way.  This means that the escrows issued by that contract have no value: the access control placed on the contract that saves them does not actually keep the escrow private.  Here, we at last present the method that makes escrows actually valuable.<br/>
+
+<h3 id='ZRIACAcNynv'>Module source code</h3>
+
+<pre id='ZRIACAaBq15'>module Nametag (Nametag, getNametag, checkNametag) where<br><br>import Blockchain.Fae<br>import Control.Monad (forever)<br><br>data NametagName = NametagName String deriving (Generic)<br>newtype Nametag = Nametag (EscrowID NametagName) deriving (Generic)<br><br>instance ContractName NametagName where<br>  type ArgType NametagName = ()<br>  type ValType NametagName = String<br>  theContract (NametagName name) = \_ -&gt; forever $ release $ "Property of: " ++ name<br>  <br>getNametag :: (MonadTX m) =&gt; String -&gt; m Nametag<br>getNametag name = Nametag &lt;$&gt; newEscrow (NametagName name)<br><br>checkNametag :: (MonadTX m) =&gt; Nametag -&gt; m String<br>checkNametag (Nametag eID) = useEscrow [] eID ()</pre>
+
+This code defines not a transaction or contract, but a new module like <code>Blockchain.Fae.Contracts</code>.  This module provides the interface to escrows like the ones previously created by contract <code>&lt;Escrow1 transaction ID&gt;/Body/0/Current</code>.<br/>
+
+<h3 id='ZRIACAPM9F6'>Module definitions</h3>
+
+A module is just a source file that can be imported by others, including transactions.  It <i>exports</i> some or all of the names defined in it, which are available to any other source file that imports it, whereas the ones that are not exported, are not available outside the module.  Modules occupy a place very similar to that of classes in languages like <code>C++</code>: indeed, you can make an easy analogy between the above module and the definition of a class called <code>Nametag</code> having a private type <code>NametagName</code> with a constructor of that same name, a public type <code>Nametag</code>, and two public functions <code>getNametag</code> and <code>checkNametag</code> defining its interface.  The analogy ends there, though, since one does not instantiate the <code>Nametag</code> type as a programmatic value <code>x</code> that has members such as <code>x.checkNametag</code>.<br/>
+
+<br/>
+
+The export list has a subtlety that we exploit: when exporting a type like <code>Nametag</code>, just placing that type name in the list only exports the type name itself, and <i>not</i> any of its constructors.  If you want the constructors you have to write <code>Nametag(the constructor name)</code>, or just <code>Nametag(..)</code> to get all of them (if there were more than one).<br/>
+
+<h3 id='ZRIACANOUri'>Module imports</h3>
+
+This module imports <code>Blockchain.Fae</code>, the main Fae module that contains the Fae API.  This module is provided implicitly to all transactions, but must be imported explicitly by modules (because, conceivably, a module could provide just a general source code library intended to be used in contracts but not actually using them itself).<br/>
+
+<h3 id='ZRIACA27fwR'>Newtypes</h3>
+
+In addition to the familiar <code>data NametagName = NametagName String</code> that defines a data-bearing type with a constructor having a single <code>String</code> field, we also see the similar but new <code>newtype Nametag = Nametag (EscrowID NametagName)</code>.  This defines a data type that only <i>looks</i> different from its single field; internally, it has exactly the same values.  This construct is typically used to build an abstraction over a more general type and enforcing the use of that abstraction rather than taking a shortcut through the original type.  We use it here in just this way, so as to hide the escrow ID from consumers of <code>Nametag</code>s.<br/>
+
+<br/>
+
+Although there are some efficiencies both in coding and also execution in using newtypes, for the most part you could replace <code>newtype</code> with <code>data</code> and nothing would change.  I chose to use it here because it signifies my intent to abstract away the fact that a nametag is just an escrow.<br/>
+
+<h3 id='ZRIACAaSLtd'>The MonadTX constraint</h3>
+
+The functions <code>getNametag</code> and <code>checkNametag</code> return into an unfamiliar context: rather than <code>Fae</code> or <code>FaeTX</code>, their return value is in some other monad <code>m</code>, constrained by the type signature to be a <code>MonadTX</code>, which is evidently some interface (typeclass) defined elsewhere.  In fact, it is defined in the Fae core, but it doesn't matter how, because you will only ever use it in type signatures as a constraint and never implement it for your own types.  It means “<code>m</code> is a monad that resembles <code>FaeTX</code> as far as the Fae API is concerned”.  So, we can use <code>newContract</code> and <code>newEscrow</code>, <code>useEscrow</code> and <code>signer</code>, but not <code>release</code> or <code>spend</code>, because those are not allowed in transactions.<br/>
+
+<br/>
+
+This typeclass exists so that the Fae monads can be extended to include more features, which we will demonstrate in a later tutorial.  It also serves a more immediate purpose: it simultaneously covers both <code>FaeTX</code> and <i>every</i> <code>Fae argType valType</code>, because this restricted form of the API is available in both.  This means that functions that return into a polymorphic <code>MonadTX</code> can be used in contracts, transactions, or escrows, a degree of generality that could not be achieved without the constraint.<br/>
+
+<br/>
+
+There is also a typeclass <code>MonadContract argType valType</code>, which generalizes <code>Fae argType valType</code> and <i>does</i> allow <code>spend</code> and <code>release</code> which, you should recall, require <code>argType</code> and <code>valType</code> for their type signatures.  Using this monad, you can implement reusable contract fragments.<br/>
+
+<h3 id='ZRIACAz8Ymk'>The dollar sign operator</h3>
+
+The code for <code>getNametag</code> has an odd syntax, separating functions from their arguments with a dollar sign <code>$</code>.  This useful operator allows us to avoid writing parentheses: it collects its entire right-hand side and provides it as a single value to its left-hand side.  So if <code>f</code> is a function, <code>f $ x = f (x)</code> for any expression <code>x</code>, which is visually cleaner particularly when there are nested parentheses.<br/>
+
+<br/>
+
+The similar operator <code>&lt;$&gt;</code> in <code>checkNametag</code> is actually used for something different.  It allows us to apply the <code>Nametag</code> constructor to the Fae value of type <code>EscrowID NametagName</code>, which latter type is the one that <code>Nametag</code> actually takes, rather than what we have as the result of <code>useEscrow</code>, which is a <code>FaeTX (EscrowID NametagName)</code>.  By using <code>&lt;$&gt;</code> we enter the monad and apply the constructor there.  It is exactly the same as writing<br/>
+
+<pre id='ZRIACAD8pyN'>f &lt;$&gt; xMonadic = do<br>  x &lt;- xMonadic<br>  return $ f x</pre>
+
+but, of course, much shorter and more to the point.<br/>
+
+<h3 id='ZRIACAxQJO2'>How it works</h3>
+
+There are no other new syntactical elements in this file, but its construction exploits the semantics of module exports and patterns in a new way.  Quite simply, it protects the escrow by making its contract name and its escrow ID private types, usable only within the <code>Nametag</code> module.  Since consumers of this module are unable to create their own <code>NametagName</code> values, they are also unable to create a valid escrow with that contract name type, and so cannot forge a <code>Nametag</code>.  In addition, if they are given a <code>Nametag</code>, they cannot use it to call the backing escrow directly, because only the <i>type</i> name <code>Nametag</code> was exported; its constructor called <code>Nametag</code> was not, and so the pattern match used by <code>checkNametag</code> cannot be written in any other code.  This means that a nametag is used <i>exactly</i> as specified by its interface, or else not used at all: it is a high-level abstraction that prevents the use of the lower-level primitives on which it is built.<br/>
+
+<br/>
+
+The <code>checkNametag</code> function has another purpose besides getting the name: validation.  Although no one can use the same function definition to create a nametag, it is still possible to write contract code like<br/>
+
+<pre id='ZRIACAr13Dp'>newNametag :: String -&gt; FaeTX Nametag<br>newNametag name = Nametag &lt;$&gt; newEscrow undefined</pre>
+
+where <code>undefined</code> is a value that throws an exception when evaluated, as it would be if for instance the escrow were actually called.  It can be of any type, so this definition is type-correct, but it can never be used.  But <code>checkNametag</code> <i>does</i> use it, so if one attempts to evaluate it on an attempted forgery as above, the undefined contract name has to be evaluated and this throws an exception.  Thus, the <i>success</i> of a <code>checkNametag</code> call indicates that the nametag is truly valid.  This is also why the nametag escrows have been redefined to <code>release</code> rather than <code>spend</code> their contents, so that they can be checked repeatedly without being deleted.<br/>
+
+<br/>
+
+(Lest you think that I am setting up <code>undefined</code> as a strawman, rest assured that the only kind of value that can masquerade as a private type is an erroneous value: one that, when evaluated, either throws an exception or fails to produce a result at all.)<br/>
+
+<h2 id='ZRIACAFErgw'>Rewards and payment</h2>
+
+Using the module concept, we can lock down access to a particular type of escrow to its public interface.  As written, the <code>Nametag</code> interface does not restrict the use of <code>getNametag</code>, so that although the value of nametags is protected by the module, it does not really exist at all because nametags are free.  The solution to this is, of course, to charge for them.  The only form of value built in to Fae is the reward, which may be awarded as a participation incentive.  To use it, we just alter <code>getNametag</code> slightly.<br/>
+
+<pre id='ZRIACAzYZsC'>getNametag :: (MonadTX m) =&gt; Reward -&gt; String -&gt; m Nametag<br>getNametag rwd name = do<br>  claimReward rwd<br>  newEscrow $ NametagName name</pre>
+
+Then, a special <i>reward transaction</i> can call this function, but no other kind of transaction.<br/>
+
+<br/>
+
+<b>Transaction source file: RewardNametag.hs</b><br/>
+
+<pre id='ZRIACAya8Ud'>import Blockchain.Fae.Contracts<br>import Nametag<br><br>body :: Reward -&gt; FaeTX ()<br>body rwd = do<br>  nt &lt;- getNametag rwd "Ryan Reich"<br>  deposit nt "self"</pre>
+
+<b>Transaction message: RewardNametag</b><br/>
+
+<pre id='ZRIACAJQBg9'>body = RewardNametag<br>others<br>  - Nametag<br>reward = True<br>keys<br>  self = ryan</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='ZRIACANFcW0'>./postTX.sh RewardNametag</pre>
+
+<b>Transaction results:</b><br/>
+
+<pre id='ZRIACAU51Vl'>Transaction 0e49d0a3b1ede73524354c3f7b343524ef6a284a67f5e55120bb1a427992ff24<br>  result: ()<br>  outputs:<br>    0: bd11897e5a2950f0311b932395834c29b00a1ed7ed5fd95a789927cc3faedee1<br>  signers:<br>    self: 738a79bc3b11c200ceb5190a14382cb5aa6514640d0f05adfc93d2bb23139091</pre>
+
+This cashes in the reward to get a nametag, then saves that nametag in a signature-protected contract.  We can see that it works as expected using the following transaction:<br/>
+
+<br/>
+
+<b>Transaction source file: CallRewardNametag.hs</b><br/>
+
+<pre id='ZRIACA4v8TF'>import Blockchain.Fae.Transactions.TX$txID.Nametag<br><br>body :: Nametag -&gt; FaeTX String<br>body = checkNametag</pre>
+
+<b>Transaction message: CallRewardNametag</b><br/>
+
+<pre id='ZRIACADwFZ9'>body = CallRewardNametag<br>inputs<br>  $txID/Body/0/Current = ()<br>keys<br>  self = $self</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='ZRIACA9EkhW'>./postTX.sh \<br>  -e txID=&lt;transaction ID from RewardNametag&gt; \<br>  -e self=&lt;your choice&gt;<br>  CallRewardNametag</pre>
+
+We call this first with <code>self = sarah</code> and then <code>self = ryan</code> to see the access restriction working:<br/>
+
+<br/>
+
+<b>Transaction “sarah” results:</b><br/>
+
+<pre id='ZRIACAvzXT8'>Transaction 83b487a511b20f9011abcf118beff8cbc81ffe2e7d75aca4ff519a702fc62c44<br>  result: &lt;exception&gt; Signer with public key 260cc5cf5cc36548b1ae701db9d3f3ff478fbd2e2bbeddb4bd5c96a4e477077a is not the owner of the requested value<br>  signers:<br>    self: 260cc5cf5cc36548b1ae701db9d3f3ff478fbd2e2bbeddb4bd5c96a4e477077a<br>  input #0: 0e49.../Body/0/Current (Failed)<br>    &lt;exception&gt; Signer with public key 260cc5cf5cc36548b1ae701db9d3f3ff478fbd2e2bbeddb4bd5c96a4e477077a is not the owner of the requested value</pre>
+
+<b>Transaction “ryan” results</b><br/>
+
+<pre id='ZRIACAaaUm8'>Transaction 7b784d4dbe4e783d9cfdf029cd711e20d74d16898357a00914b9cce8e5c8dbcb<br>  result: "Property of: Ryan Reich"<br>  signers:<br>    self: 738a79bc3b11c200ceb5190a14382cb5aa6514640d0f05adfc93d2bb23139091<br>  input #0: 0e49.../Body/0/Current (Deleted)</pre>
+
+<h3 id='ZRIACAV73U4'>Submodule imports</h3>
+
+The <code>import</code> line in <code>CallRewardNametag</code> specifies <code>Nametag</code> <i>beneath</i> the transaction module for <code>RewardNametag</code>; this is because the latter uploaded this module <i>as</i> <code>Nametag</code>, and so it is placed hierarchically inside its module namespace.   Though <code>RewardNametag</code> can use the module just as <code>Nametag</code>, any other transaction has to give the full path.<br/>
+
+<h3 id='ZRIACAcNsEM'>Multiple Argument functions</h3>
+
+The type of <code>getNametag</code> was changed to <code>(MonadTX m) =&gt; Reward -&gt; String -&gt; m Nametag</code>, which denotes a function that takes two arguments: first, a <code>Reward</code>, and second, a <code>String</code>.  This is one way, and the best one, to write a function taking several arguments.  This is not always an option; for instance, <code>theContract</code> must always define a function taking only one argument, so if you want to write a contract with more than one, you need to use the other option: <i>pairs</i>.<br/>
+
+<h3 id='ZRIACAUdhyh'>Pairs</h3>
+
+A pair is something of the form <code>(x,y)</code>.  This is the same concept you might see in, e.g. Python, and is definitely <i>not</i> the same concept as the function-call syntax you see in C-family languages.  A function taking a pair is, more or less, a function taking two arguments: the syntax <code>f (x,y)</code> actually means to call <code>f</code> on the single value that is a pair <code>(x,y)</code>, but can be understood to mean that <code>f</code> takes two arguments just like in the C family.<br/>
+
+<h3 id='ZRIACAah8hl'>Rewards and reward transactions</h3>
+
+Rewards in Fae have the type <code>Reward</code>, which is provided by the module <code>Blockchain.Fae</code> (and therefore available implicitly to any transaction).  This is a semi-private type like <code>Nametag</code> for nametags, available for type signatures but not construction or deconstruction.  Values of this type are only created in reward transactions, which in a more realistic deployment might be designated as such in blocks and may be issued, for instance, to miners (the <code>reward</code> field in the message indicates to <code>faeServer</code> to simulate this designation; obviously, in reality a transaction should not be able to declare itself a reward recipient).  A reward transaction gets an extra input value, before the the list of explicit contract calls, of type <code>Reward</code>.<br/>
+
+<h3 id='ZRIACAdLyRe'>Claiming rewards</h3>
+
+As we saw for nametags, the private type must be accompanied by a public interface that can validate an escrow of that type.  For rewards, that interface has only one function, <code>claimReward</code>, which accepts a valid <code>Reward</code> and deletes its backing escrow (i.e. the escrow is defined to <code>spend</code> after one call).  Therefore, rewards cannot be reused or accumulated (though they can be saved), so are not really a currency; they are just an entrypoint to self-contained Fae value.<br/>
+
+<br/>
+
+Because rewards are scarce and can be validated, they are one way to meaningfully limit access to the <code>Nametag</code> type.  Essentially, the <code>getNametag</code> function is a reward-to-nametag conversion engine, though this does not make nametags the same as rewards, because (for example) they cannot be used to pay <code>getNametag</code>.<br/>
+
+<h3 id='ZRIACAo1Cw0'>Falling off the end</h3>
+
+You'll notice that <code>callRewardNametag</code> terminated while still holding the <code>Nametag</code>, as it did not <code>deposit</code> it again.  This valuable is actually <i>destroyed</i> when the transaction terminates; Fae makes no attempt to preserve dangling escrows.<br/>
+
+<h2 id='ZRIACA8nnmL'>Summary</h2>
+
+This lengthy tutorial gradually developed the machinery of escrows, which are contracts-within-contracts that can be used to represent value in Fae.  We saw:<br/>
+
+<div data-section-style='5'><ul id='ZRIACAl2jBg'><li id='ZRIACAfdkcg' class='' value='1'>Escrows can be created like contracts and called like functions using their escrow ID, but only by their owner.
+
+<br/></li><li id='ZRIACAfInmp' class=''>Escrows can be transferred to new contracts or escrows, or returned by ID from contract or escrow calls.
+
+<br/></li><li id='ZRIACA4l8vF' class=''>To make an escrow type valuable, it should be encapsulated in a module defining a public interface to a private type.
+
+<br/></li></ul></div>We also learned about some more programming features:<br/>
+
+<div data-section-style='5'><ul id='ZRIACAGML29'><li id='ZRIACAbRGLi' class='' value='1'>Many, many new syntactic constructs (linked in the table of contents).
+
+<br/></li><li id='ZRIACAsCuOC' class=''>The <code>signer</code> API method.
+
+<br/></li><li id='ZRIACAjFGAW' class=''>The <code>Blockchain.Fae.Contracts</code> module and, in particular, <code>deposit</code> for saving things in a new contract.  
+
+<br/></li></ul></div></body></html>

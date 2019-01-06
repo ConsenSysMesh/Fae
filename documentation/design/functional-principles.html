@@ -1,0 +1,636 @@
+<!doctype html>
+<html><head><title>Functional principles of contract design</title><meta charset="UTF-8"><link href="http://fonts.googleapis.com/css?family=Crimson+Text:400,400italic,700,700italic|Roboto:400,700,700italic,400italic" rel="stylesheet" type="text/css"><style>/*
+ * Copyright 2014 Quip
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+    font-size: 15px;
+    color: #333;
+    background: #fff;
+    padding: 60px 95px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern";
+    font-kerning: normal;
+    -moz-font-feature-settings: "kern";
+    -webkit-font-feature-settings: "kern";
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+th {
+    font-family: Roboto, sans-serif;
+    font-weight: 700;
+    margin: 0;
+    margin-top: 1.25em;
+    margin-bottom: 0.75em;
+}
+
+h1 {
+    font-size: 35px;
+    line-height: 42px;
+}
+
+h1:first-child {
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+h3 {
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Body text */
+body,
+p,
+ul,
+ol,
+td {
+    font-family: "Crimson Text", serif;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+blockquote,
+q {
+    display: block;
+    margin: 1em 0;
+    font-style: italic;
+}
+
+blockquote a,
+q a {
+    text-decoration: underline;
+}
+
+blockquote {
+    padding-left: 10px;
+    border-left: 4px solid #a6a6a6;
+}
+
+q {
+    color: #a6a6a6;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    quotes: none;
+}
+
+q a {
+    color: #a6a6a6;
+}
+
+code,
+pre {
+    font-family: Consolas, "Liberation Mono", Menlo, "Courier Prime Web",
+        Courier, monospace;
+    background: #f3f3f3;
+}
+
+code {
+    padding: 1px;
+    margin: 0 -1px;
+    border-radius: 3px;
+}
+
+pre {
+    display: block;
+    line-height: 20px;
+    text-shadow: 0 1px white;
+    padding: 5px 5px 5px 30px;
+    white-space: nowrap;
+    position: relative;
+    margin: 1em 0;
+}
+
+pre:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    border-left: solid 1px #dadada;
+}
+
+/* Lists */
+div[data-section-style="5"],
+div[data-section-style="6"],
+div[data-section-style="7"] {
+    margin: 12px 0;
+}
+
+ul {
+    padding: 0 0 0 40px;
+}
+
+ul li {
+    margin-bottom: 0.4em;
+}
+
+/* Bulleted list */
+div[data-section-style="5"] ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul {
+    list-style-type: square;
+}
+div[data-section-style="5"] ul ul ul ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul ul ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul ul ul ul {
+    list-style-type: square;
+}
+
+/* Numbered list */
+div[data-section-style="6"] ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul {
+    list-style-type: lower-roman;
+}
+div[data-section-style="6"] ul ul ul ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul ul ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul ul ul ul {
+    list-style-type: lower-roman;
+}
+
+/* Checklist */
+div[data-section-style="7"] ul {
+    list-style-type: none;
+}
+
+div[data-section-style="7"] ul li:before {
+    content: "\2610";
+    position: absolute;
+    display: inline;
+    margin-right: 1.2em;
+    margin-left: -1.2em;
+}
+
+div[data-section-style="7"] ul li.parent:before {
+    content: "";
+}
+
+div[data-section-style="7"] ul li.parent {
+    font-weight: bold;
+}
+
+div[data-section-style="7"] ul li.checked {
+    text-decoration: line-through;
+}
+
+div[data-section-style="7"] ul li.checked:before {
+    content: "\2611";
+    text-decoration: none;
+}
+
+/* Tables */
+div[data-section-style="8"] {
+    margin: 12px 0;
+}
+
+table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: solid 1px #bbb;
+    table-layout: fixed;
+    position: relative;
+}
+
+table th,
+table td {
+    padding: 2px 2px 0;
+    min-width: 1.5em;
+    word-wrap: break-word;
+}
+
+table th {
+    border-bottom: 1px solid #e1e1e1;
+    background: #f4f4f4;
+    font-weight: bold;
+    vertical-align: bottom;
+    color: #3a4449;
+    text-align: center;
+}
+
+table td {
+    padding-top: 0;
+    border-left: 1px solid #e1e1e1;
+    border-top: 1px solid #e1e1e1;
+    vertical-align: top;
+}
+
+table td.bold {
+    font-weight: bold;
+}
+
+table td.italic {
+    font-style: italic;
+}
+
+table td.underline {
+    text-decoration: underline;
+}
+
+table td.strikethrough {
+    text-decoration: line-through;
+}
+
+table td.underline.strikethrough {
+    text-decoration: underline line-through;
+}
+
+table td:first-child {
+    border-left: hidden;
+}
+
+table tr:first-child td {
+    border-top: hidden;
+}
+
+/* Images */
+div[data-section-style="11"] {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-section-style="11"][data-section-float="0"] {
+    clear: both;
+    text-align: center;
+}
+
+div[data-section-style="11"][data-section-float="1"] {
+    float: left;
+    clear: left;
+    margin-right: 20px;
+}
+
+div[data-section-style="11"][data-section-float="2"] {
+    float: right;
+    clear: right;
+    margin-left: 20px;
+}
+
+div[data-section-style="11"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: auto;
+}
+
+hr {
+    width: 70px;
+    margin: 20px auto;
+}
+
+/* Apps */
+div[data-section-style="19"].placeholder {
+    margin: 0.8em auto;
+    padding: 4px 0;
+    display: block;
+    color: #29b6f2;
+    text-align: center;
+    border: 1px solid rgba(41, 182, 242, 0.2);
+    border-radius: 3px;
+    background: #e9f8fe;
+    font-family: Roboto, sans-serif;
+}
+
+div[data-section-style="19"].first-party-element {
+    margin-bottom: 10px;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+div[data-section-style="19"].first-party-element.kanban {
+    background-image: url("https://quip-cdn.com/nK0hSyhsb4jrLIL2s5Ma-g");
+    height: 166px;
+}
+
+div[data-section-style="19"].first-party-element.calendar {
+    background-image: url("https://quip-cdn.com/OYujqLny03RILxcLIiyERg");
+    height: 244px;
+}
+
+div[data-section-style="19"].first-party-element.poll {
+    background-image: url("https://quip-cdn.com/fbIiFrcKGv__4NB7CBfxoA");
+    height: 116px;
+}
+
+div[data-section-style="19"].first-party-element.countdown {
+    background-image: url("https://quip-cdn.com/3bPhykD2dBei9sSjCWteTQ");
+    height: 96px;
+}
+
+div[data-section-style="19"].first-party-element.process_bar {
+    background-image: url("https://quip-cdn.com/ybQlHnHEIIBLog5rZmYs_w");
+    height: 36px;
+}
+
+div[data-section-style="19"].first-party-element.project_tracker {
+    background-image: url("https://quip-cdn.com/OFQU087b4Mxzz1ZaHwtjXA");
+    height: 164px;
+}
+
+div[data-section-style="19"] img {
+    margin: 0.5em;
+}
+
+div[data-section-style="19"] img.masked-image {
+    margin: 0;
+    transform-origin: top left;
+}
+
+div[data-section-style="19"] .image-mask {
+    position: relative;
+    overflow: hidden;
+}
+</style></head><body><h1 id='aCKACAenc3S'>Functional principles of contract design</h1>
+
+With Ethereum, the blockchain concept at once entered a higher plane and a crisis mode.  As a computationally complete smart contract system, Ethereum made it possible for many adversarial parties to engage in trustworthy interactions via a decentralized network.  As an imperative programming language, the Ethereum VM is fundamentally designed so as almost optimally to frustrate efforts to exploit concurrency in contract execution.  Its ultra-low-level nature as a virtual assembly language provides no guarantees, making the theoretically impossible problem of formal verification a hotly-sought necessity.  The way forward must abandon these design decisions in favor of others with greater room for growth.  I argue that the principles of functional programming are naturally suited to smart contract systems.<br/>
+
+<h2 id='aCKACAkHWzE'>Contracts</h2>
+
+We should be concerned primarily with clearly identifying what a parallelizable smart contract system <i>is</i>, and only secondarily with the machine representation of contracts.  We begin with what a contract is.  <br/>
+
+<h3 id='aCKACArIhDT'>Legal contracts</h3>
+
+Contracts in the real world are of course dealt with extensively by lawyers and legal scholars, who have formulated a general characterization of them:<br/>
+
+<blockquote id='aCKACAVMPMD'>A <b>contract</b> is a voluntary arrangement between two or more parties that is enforceable by law as a binding legal agreement. Contract is a branch of the law of obligations in jurisdictions of the civil law tradition. Contract law concerns the rights and duties that arise from agreements.  — Ryan, Fergus (2006). <i>Round Hall nutshells Contract Law</i>. Thomson Round Hall. p. 1. (taken from Wikipedia, “Contract”)</blockquote>
+
+A contract therefore somehow connects <i>rights</i> and <i>duties</i> of the parties; the fulfillment of the contract consists of establishing these abstract rights and duties concretely.  As for how this comes about:<br/>
+
+<blockquote id='aCKACAJ79dM'>One of the most important questions asked in contract theory is why contracts are enforced. —Wikipedia, “Contract”</blockquote>
+
+Fortunately, in a smart contract system this question can be answered easily: a smart contract enforces itself.  That is, since the contract must be enforced, to really accept it is to accept the inexorability of fulfilling it, which is of course only possible if acceptance occurs only once the accepting party actually does their part.  We take this, in fact, to be the very definition of a smart contract.  This means that the actual fulfillment of the contract is part of the “offer and acceptance”:<br/>
+
+<blockquote id='aCKACAAJZ6e'>[An offer is] an expression of willingness to contract on certain terms, made with the intention that it shall become binding as soon as it is accepted by the person to whom it is addressed.  — Treitel, GH. <i>The Law of Contract</i> (10th ed.). p. 8. (taken from Wikipedia, “Offer and acceptance”)</blockquote>
+
+That is, a smart contract consists of an offer to connect rights and duties of various parties, which is accepted by the parties <i>as</i> the performance of these rights and duties, at which point the contract is simultaneously initiated and executed.  The question of the validity of a contract is connected with (though not entirely defined by) the concept of <i>consideration</i>: <br/>
+
+<blockquote id='aCKACAJcUT8'><b>Consideration</b> is the concept of value offered and accepted by people or organisations entering into contracts. Anything of value promised by one party to the other when making a contract can be treated as "consideration": for example, if A signs a contract to buy a car from B for $5,000, A's consideration is the $5,000, and B's consideration is the car.  —Wikipedia, “Consideration”</blockquote>
+
+<blockquote id='aCKACAe3DSB'>In common law it is a prerequisite that both parties offer consideration before a contract can be thought of as binding....If there is no element of consideration found, there is thus no contract formed.  —Wikipedia, “Consideration”</blockquote>
+
+<blockquote id='aCKACA5Ih91'>Generally, courts do not inquire whether the deal between two parties was monetarily fair—merely that each party passed some legal obligation or duty to the other party.  —Wikipedia, “Consideration”</blockquote>
+
+Therefore, in at least one major legal system in the world (and in particular, that of my own country), each party in the contract must offer something of value.  That a thing <i>has</i> value is determined, in this sense, as its being subject to legal obligation: a thing without limits is not valuable.<br/>
+
+<br/>
+
+In short, a contract is:<br/>
+
+<div data-section-style='5'><ul id='aCKACACnTGC'><li id='aCKACAW5hgv' class='' value='1'>A commitment for some parties to provide rights to others, once the latter have performed duties for them;
+
+<br/></li><li id='aCKACA0hxr8' class=''>Enforceable by law once the offer by the former parties is accepted by the latter;
+
+<br/></li><li id='aCKACAijkgu' class=''>Valid only if the rights and duties are valuable, in that they are constrained by law.
+
+<br/></li></ul></div>This is the concept that we will describe in the language of functions.<br/>
+
+<h3 id='aCKACA6icch'>Smart contracts</h3>
+
+As indicated above, a <i>smart contract</i> is an agreement whose context compels it to be honored once its duties are offered.  It is, therefore, a function from duties to rights.  Furthermore, these duties and rights may not be simple explicit values, but must be capable of <i>bearing value</i> that, in the same context as the contract, is subject to restriction.  This situation resembles the concept of an <i>escrow:</i><br/>
+
+<blockquote id='aCKACAhqO91'>[An escrow is] a contractual arrangement in which a third party receives and disburses money or documents for the primary transacting parties, with the disbursement dependent on conditions agreed to by the transacting parties  —Wikipedia, “Escrow”</blockquote>
+
+The parties in question here are: first, the one offering valuables; second, the one receiving them; and third, the context that holds and controls the actual value and its passing from one to the other.  We will say, therefore, that a smart contract is a function from escrow-backed duties to escrow-backed rights, where “escrow” here means a hidden quantity connected with the representative tokens actually offered, without which those tokens are without value.<br/>
+
+<h3 id='aCKACAEBryz'>Escrows</h3>
+
+The above legal characterization of an escrow suggests that an escrow-backed value is, itself, a contract: namely, a contract to provide some value in exchange for the duty of fulfilling its conditions.  The two differ in their intended usage, though:<br/>
+
+<div data-section-style='5'><ul id='aCKACADWegg'><li id='aCKACA3R8fe' class='' value='1'>A contract is offered by the seller, and its value as a fulfilled contract exists only for the buyer who accepts;
+
+<br/></li><li id='aCKACApf1yn' class=''>An escrow is held by a passive party, and the seller forfeits the right to the contained value when the escrow is created.  It may therefore <i>denote</i> that contained value, be exchanged between buyers, and otherwise function as a derived currency.
+
+<br/></li></ul></div>We will therefore separate the concepts by identifying escrows as those contracts that may be possessed by the (potential) buyer.<br/>
+
+<h3 id='aCKACAsED7a'>Transactions</h3>
+
+Legally, a transaction is an example of a contract; for instance:<br/>
+
+<blockquote id='aCKACAqf62d'>A <b>financial transaction</b> is an agreement, or communication, carried out between a buyer and a seller to exchange an asset for payment.  —Wikipedia, “Financial transaction”</blockquote>
+
+A transaction, though, is that which is “carried out”, as opposed to simply promised, as in a contract.  In executing a transaction, the buyer must demonstrate control of the payment as well as the seller demonstrating their offer to conduct such a transaction.  This may entail fulfilling several contracts to obtain escrow-backed values as payment, as well as <i>contracting with the buyer</i> to engage in a transaction.  This latter may seem redundant (a contract to create a contract?) but it reflects the reality that a seller may set different conditions for different buyers while still holding out a single offer to transact in general.  A transaction is therefore a contract containing the fulfillment of other contracts.<br/>
+
+<br/>
+
+We have therefore defined, in the end, just one concept, that of a smart contract, with several specializations that are important for giving it meaning legally and economically.<br/>
+
+<h2 id='aCKACAucbGR'>A functional smart contract system</h2>
+
+We now concern ourselves with the construction of what we called, above, the “context” for a contract, namely, the system that enforces it.<br/>
+
+<h3 id='aCKACAd336f'>Laziness</h3>
+
+We desire that our smart contract system support the following property: an individual who seeks to learn the outcome of a transaction need only process the fulfillment of all contracts that are transitively fulfilled by that transaction.  This means that contracts must remain <i>unevaluated</i> until their results are examined, a concept called <i>laziness</i>.  Rather than dwell on how this may be achieved by a programming language, we simply assume that it <i>has</i> been achieved and can be used.  This assumption is validated by the existence of, among others, the Haskell language.<br/>
+
+<h3 id='aCKACAUgvn2'>Statefulness</h3>
+
+Contracts must be capable of maintaining an internal state marking the progress of the contract towards fulfillment.  The format of the state is dependent on the contract, and so is the manner of progressing between states, except for the fact that this progression is sequential (rather than branching).  The simplest formalism that describes these properties is to extend the notion of a contract: it must be a <i>coroutine</i> from escrow-backed duties to escrow-backed rights.  A coroutine is simply a function that can be suspended, returning not only a value but also a continuation coroutine of the same type that may be resumed later.  This allows the contract author to use any internal format for state, simply embedding the result state of each partial contract evaluation in the continuation to be used later.  Progression of states is naturally sequential, as it is just a succession of function evaluations.<br/>
+
+<h3 id='aCKACAI3tuh'>Transparency</h3>
+
+The interaction of laziness and statefulness presents a difficulty, namely that a transaction depending on a contract also depends implicitly on every previous transaction that also depends on the same contract.  This is because each transaction causes a state update in that contract, and these updates must be sequential.  Therefore <i>every</i> transaction must be examined to determine the dependency graph of any one transaction.  If this examination necessarily entails <i>executing</i> the transactions, then laziness is lost; therefore, it cannot: the direct contract dependencies of any transaction must be identifiable without executing it, effectively being declared up front together with their input parameters.  To rephrase: a transaction consists of two parts: first, a list of contract calls; and second, a contract accepting as its inputs the return values of those calls.  The latter contract, now distinguished from a transaction by virtue of not possessing contract call declarations, may not call any other contracts.<br/>
+
+<br/>
+
+However, it is acceptable for the body of the transaction to <i>create</i> new contracts, because the transaction must be executed anyway in order to determine the contents of the new contract before it may be called, so a dependency relation exists between them.  So long as a contract's parent transaction can be determined from its identifier, that parent can be added to the dependency graph.  By the same token, it is acceptable for <i>any</i> contract to create new contracts, which can always be traced back to their parents.<br/>
+
+<h3 id='aCKACAq1f4s'>Lambda calculus</h3>
+
+As it stands, the smart contract system is unable to perform arbitrary transactions: forward instance, it is impossible to provide the output of one contract to another as input, precluding any kind of payment!  However, the problem itself contains its own solution, because payment is an exchange of escrow-backed values, and escrows are the mechanism by which we may achieve economics.  As described above, an escrow is simply a contract that may be possessed; the only entities in the system are contracts, and therefore each contract has as an implicit state a set of escrows that it owns.  Ownership entails that only one contract at a time may ever cause a state update in the escrow, so the laziness/statefulness conflict disappears and it is possible for any contract to evaluate any of its escrows as a function, anywhere within itself.  Recognizing this, we see that an economic transaction in the sense above, of <i>contracting with the buyer to transact</i>, should itself be an escrow-backed value that, as a function, conducts the transaction by accepting payment and depositing it with the seller.  Here is an example in pseudocode:<br/>
+
+<pre id='aCKACApSovG'>transaction:<br>  call contracts:<br>    p &lt;- call "pile of coins" with &lt;some cryptographic credential&gt;<br>    call "sell trinket" with () // Will sell to anyone, no credential required<br>  body:<br>    trinket &lt;- call "cashier" with p // See "sell trinket"<br>    deposit trinket for &lt;some cryptographic credential&gt;<br><br>// Where<br>contract "pile of coins":<br>  expects: a cryptographic credential<br>  body:<br>    if (given cred differs from desired cred)<br>    then throw &lt;error&gt;<br>    else return &lt;some coins&gt;<br>    <br>contract "sell trinket":<br>  expects: // Nothing<br>  body:<br>    return escrow "cashier":<br>      expects: some coins<br>      body:<br>        if (given coins equal desired price)<br>        then<br>          deposit &lt;given coins&gt; for &lt;some cryptographic credential&gt;<br>          return trinket<br>        else throw &lt;error&gt;</pre>
+
+In brief, the seller delegates the responsibility for collecting payment to an escrow that anyone can request.  If the prospective buyer calls that escrow with sufficient funds, they get the contents and can keep them, in which case the escrow “deposits” the payment into a new contract signed over to the seller.  This deposit contract would mirror the “pile of coins” contract from which the buyer took their own funds for the payment.<br/>
+
+<br/>
+
+This “cashier” pattern suffers from two related exploits in which the prospective buyer vandalizes the seller:<br/>
+
+<div data-section-style='6'><ul id='aCKACA53Ksc'><li id='aCKACA3QsOy' class='' value='1'>By requesting to transact, thus collecting the “cashier” escrow, but without paying.  If the buyer chooses to end the transaction then and there, the cashier is simply lost along with the trinket it contains.
+
+<br/></li><li id='aCKACAf4WME' class=''>As above, but depositing the “cashier” escrow into a contract keyed to the buyer, perhaps even innocently putting it aside “to pay later”.  The trinket is not strictly lost, but the buyer is still denied it.
+
+<br/></li></ul></div>The former exploit is a clear violation of the nature of a transaction and we will show in the next section how it can be prevented by expanding the exception mechanism.  The latter exploit is potentially valid, since one <i>should</i> be able to transfer escrow-backed values, but is a violation of the intentions of the seller in offering the “cashier”.  To remedy it, we introduce a variant on escrows, <i>transactional escrows</i>, that may be returned only by their originator but not transferred subsequently.  This forces a prospective buyer who might fall under exploit 2 to instead fall under exploit 1, hence the modifier “transactional”: the escrow contract must be fulfilled immediately.<br/>
+
+<br/>
+
+This example demonstrates how escrows play the role of lambdas among smart contracts, but it also illustrates the necessity of breaking the pure functional paradigm with exceptions.  <br/>
+
+<h3 id='aCKACAbmp7t'>Exceptions</h3>
+
+At any point during a contract's execution, the terms of the contract may be violated: a payment may be insufficient, or be offered in an unsupported currency, or, as described just above, not offered at all.  If this happens, the contract execution must be terminated and its partial fulfillment reversed, so as to return assets already withdrawn to their owners.  There should be at least the following two kinds of exceptions:<br/>
+
+<div data-section-style='5'><ul id='aCKACAn9sqA'><li id='aCKACAM6bj5' class='' value='1'>User-created exceptions, like “throw &lt;error&gt;” in the pseudocode.
+
+<br/></li><li id='aCKACAa4T0t' class=''>System exceptions (arithmetic errors, errors of type representations, etc.)
+
+<br/></li></ul></div>Though both may be thrown anywhere, they should not be caught within a contract, lest a malicious user call a contract that would throw an exception but instead catch that exception, preventing rollback within that contract and, once again, vandalizing any resources that were partially spent.  Any exception should render the entire current transaction void.<br/>
+
+<br/>
+
+Understanding this, we see that exploit 1 from the previous section can be fixed by requiring the system to throw an exception whenever a transaction completes with any open escrows, representing resources that would be lost otherwise.<br/>
+
+<h2 id='aCKACAiQqXo'>The Fae API</h2>
+
+After the above lengthy discussion, we should summarize the resulting system from the perspective of a contract author.  I like to call this API “Fae”, which might mean “functional alternative to Ethereum”, but also has the mythological connotation of a magical realm, deceptively similar to our own, but with its own rules, and which, once entered, is difficult if not impossible to leave.<br/>
+
+<br/>
+
+Fae provides the following set of functions:<br/>
+
+<div data-section-style='5'><ul id='aCKACA2Mjx1'><li id='aCKACAoAfxe' class='' value='1'><code>newContract</code>, <code>newEscrow</code>: these operate the same way, except that the former deposits function code as a new contract that may be called in a transaction, and the latter deposits function code as an escrow in the present contract, returning a unique identifier as the basic “escrow-backed value” corresponding to whatever sense of value resides in the new escrow.
+
+<br/></li><li id='aCKACATqZaQ' class=''><code>useEscrow</code>: this calls a given escrow ID (possibly transactional) as a function.
+
+<br/></li><li id='aCKACASUfvh' class=''><code>spend</code>: within a contract (including escrows), returns an escrow-backed value, possibly transactional, but does not provide a continuation, so that the contract is “spent” (or the escrow “closed”) and removed from storage.
+
+<br/></li><li id='aCKACAVrwGe' class=''><code>release</code>: as above, but <i>does </i>provide a continuation, namely, the code following the function call.  The return value of one of these functions is the argument provided to the continuation (i.e. to the contract, when it is next called).
+
+<br/></li></ul></div>Aside from these functions, contracts may contain any other logic written in the host language.<br/>
+
+<h2 id='aCKACAh9yk4'>Host language and safety</h2>
+
+The system as described has made no mention of the programming language it uses.  This is in contrast with Ethereum (and, to the extent that it is programmable, Bitcoin), which has a formally defined virtual machine with a corresponding assembly language.  In the case of Ethereum, this is necessary because only by strictly tracking individual operations is it possible to measure and thus limit the use of computational resources.  The system as described has also made no mention of this issue, which we address here.<br/>
+
+<h3 id='aCKACAVmePm'>Contract failure modes</h3>
+
+As a coroutine, a contract can fail in several ways: returning an incorrect value; constructing an incorrect continuation; throwing an exception; or failing to terminate.  If one of these modes is the fault of the author, this will be apparent in the contract's source code and other authors can know, by scrutinizing it, not to trust this contract (and thus, not to call it).  More insidiously, the contract may fail through a malicious call.   Since the only interface between the contract and the caller is its argument, the failure modes can be due to any of the following:<br/>
+
+<div data-section-style='5'><ul id='aCKACArArvk'><li id='aCKACAM7PJY' class='' value='1'><b>Partiality:</b> the contract as a function may not handle all possible values of its input type.  This is a source code error, however, and therefore detectable by others.
+
+<br/></li><li id='aCKACA8KLsM' class=''><b>Side effects:</b> if the argument has side effects, the contract may fail even if its overt value is handled correctly.  This is a language issue: the host language must provide for the control of side effects.
+
+<br/></li><li id='aCKACA5CjPq' class=''><b>Vulnerability:</b> the argument may itself be exceptional.  If it literally throws an exception, this is not problematic because it only harms the caller, whose transaction is therefore voided; the contract itself is not affected.  However, laziness affords a novel opportunity for sabotage: since the argument is only evaluated when it is used, it is entirely possible for it to represent a non-terminating computation that causes the contract call itself not to terminate.
+
+<br/></li></ul></div>The flaw of vulnerability has serious consequences for the system as a whole, because it interrupts the sequential execution of the contract.  Once a single contract call is nonterminating, the contract may <i>never</i> be called successfully afterwards because the faulty call must be resolved first.  A malicious party may therefore “shut down” a contract regardless of how well-written it is.<br/>
+
+<br/>
+
+The only recourse for this is to forbid transactions to call contracts with arguments that may lazily represent an untrusted computation.  In the previous discussion, we already indicated that transactions must be constrained to call contracts only in a block before any code is run; now we make the additional restriction that the arguments to these calls must be provided as <i>text literals</i> that are parsed into the actual input types by conversion functions supplied by the contract authors.<br/>
+
+<br/>
+
+Once this is done, a contract is exactly as good as its source code and no transaction can shut it down without the exploit being apparent in advance.<br/>
+
+<h3 id='aCKACAZIaqt'>Escrow failure modes</h3>
+
+Escrows, being contracts, are also subject to the same failure modes.  The consequences, however, are less serious: since escrows are owned by the calling contract, for the caller to pass a nonterminating argument to an escrow would do nothing but shut down the caller itself!  Therefore, it is acceptable for escrows to take any programmatically constructed arguments.  There is one additional failure mode that arises from the interaction between escrows and contracts:<br/>
+
+<div data-section-style='5'><ul id='aCKACA3cj9V'><li id='aCKACApzH6B' class='' value='1'><b>Injection: </b>the escrow itself represents outside code injected into the contract, if it was given to the contract by another.
+
+<br/></li></ul></div>The avenues for this injection are limited, however.  A contract may be given an escrow by its creator; if it is a transaction, then by the contracts it calls; or by another escrow that it calls within itself.  It is not possible for a malicious contract to donate an escrow to another contract directly.  All of these avenues are plainly visible to the contract author: in the first case, the author of the creator contract cannot, by definition, write code that is untrusted by the child contract, since they must write the code that generates that contract and are so its author as well.  In the second case, the transaction has explicit control over what contracts it calls and how, so the transaction author can scrutinize them for untrustworthy code.  And in the third case, the escrow that is called must have been given to the contract by its creator, if a transaction then by its called contracts, or by another escrow that it called.  This reduces the third case to the others, which are already shown to be solvable by source code scrutiny.<br/>
+
+<br/>
+
+We conclude that, despite escrows being outside code, they can always be ensured not to be <i>untrusted</i> code.<br/>
+
+<h3 id='aCKACA9PjhU'>Type safety</h3>
+
+Source control scrutiny being the solution to all the exploits discussed above, we must address the question of how this scrutiny is to be performed.  This entails at least a degree of <i>formal verification</i>, a problem that is, in general, unsolvable, but which can at least be made more tractable by appropriately structured code.  We have seen two kinds of scrutiny, each influenced as follows by a strong type system:<br/>
+
+<div data-section-style='5'><ul id='aCKACACDhiq'><li id='aCKACA41wN2' class='' value='1'><b>Explicit scrutiny:</b> the manual examination of source code by a human.  In the tradition of the Penrose theory of mind, this is supposed to be the panacea for all uncomputable ills (we consider this kind of scrutiny, jokingly, to constitute a <i>Penrose oracle</i> for programs).  However, the experience of weakly typed languages such as Javascript (with its total type fungibility) or, even, C (with its implicit conversions and limited types), suggests that correctly analyzing the behavior of an expression requires classifying its components into pieces whose values can be fully described.  In other words, it requires inserting a strong type system into the mental model of the language.  A language with an explicit type system can serve to communicate the intentions of the author in this matter to the reader.
+
+<br/></li><li id='aCKACAnpCVG' class=''><b>Implicit scrutiny:</b> the automatic examination of source code by a machine.  We reject runtime scrutiny of the code because, either, the code structure is lost at runtime and scrutiny can only take the form of automated testing, or the structure is not lost and the scrutiny is the same as at compile-time.  Compile-time scrutiny can provide, for instance, a guarantee that the literal arguments of a transaction's contract calls will be parsed into the correct input types, because those input types are known strongly and the correct parser chosen automatically.  It can also allow the author to guarantee that they are handling the expected kind of escrow-backed value by specifically naming the type of that value; this is strengthened by the possibility of the value's author utilizing <i>private types</i> that cannot be constructed by anyone else, proving that a correctly typed escrow value is actually their own.
+
+<br/></li></ul></div>A strong type system is not a full solution to formal verification, because it cannot access the particular values that are used (for instance, it cannot catch an off-by-one error).  A <i>stronger</i> type system, such as dependent typing (meaning types that can reflect runtime values) could do this, though still, provably, not enough to help completely.  We again point to Haskell as a language whose type system is strong enough to generate (somewhat exaggerated) claims among its adherents that “if it compiles, it works”.<br/>
+
+<h3 id='aCKACAV8Gjm'>High-level code</h3>
+
+Explicit scrutiny can be aided by two things in addition to merely strong typing:<br/>
+
+<div data-section-style='5'><ul id='aCKACAytWyz'><li id='aCKACA62RfV' class='' value='1'><b>Encapsulation:</b> as in object-oriented programming, methods or other “functional values” that represent specializations of more generic operations can make it easier to express the specific intentions of the author.  Rather than a generic loop with a boilerplate body whose function can only be discerned by pattern recognition, use a fold or a map.  Even merely specializing a generic function to constrained argument and value types can make it specific enough to rule out entire classes of unintentional errors.
+
+<br/></li><li id='aCKACAFmpoS' class=''><b>Sandboxing:</b> or, in other words, a virtual machine.  Ethereum recognizes the necessity of this but does not go far enough in equipping the machine.  Ideally, the host language should remove any mechanism by which code may access the machine directly, while at the same time making it possible to operate in a simulated machine with other capabilities.  This includes the control of side-effects, allowing the user of a particular value to know the limits of that value's behavior entirely from its declared type.  A contract can declare its own internal mutable state that is entirely managed by the coroutine mechanism, so that the system itself can know that it is correctly handling any kind of state the author desires.
+
+<br/></li></ul></div>Together with our advocacy of strong typing, these are of course merely arguments for the use of functional languages.  Nonetheless, in a system that requires a high level of control over the behavior of code for the safety of its mutually untrustworthy users, a language that affords arbitrary levels of abstraction is to be preferred over one that prioritizes arbitrary levels of machine control.  This is why we promote Haskell over the C language and its descendants; the jury remains out on high-level imperative languages like Python.<br/>
+
+<h3 id='aCKACACUZJA'>Computational resources</h3>
+
+Returning to the particular concerns of a smart contract system, we consider at last a major component of Ethereum: computational resource constraints.  Familiarly, Ethereum assigns a “gas” value to each of its assembly operations as well as some system-level operations like contract creation and transaction execution, and each transaction must declare in advance, as well as pay for, its gas usage.  This is bluntly effective at limiting the amount of computation that a single author, however malicious, can force the network to perform, though it is difficult (and as usual, impossible in theory) to know exactly how much gas is necessary.<br/>
+
+<br/>
+
+The principle of laziness changes the calculus entirely.  Since transactions are only executed when their results are required, <i>no one</i> is forced to execute <i>anything</i>.  In fact, a client of such a smart contract system might continuously absorb new transactions without ever executing any of them, because simply adding a new transaction does not qualify as using any other.  Use consists of a user of the specific machine operating the client executing a program that, in effect, <i>links</i> to the smart contract storage, extracts transaction results, and evaluates them, say to be printed to the screen or delivered via the internet.<br/>
+
+<br/>
+
+When such a use occurs, the burden is entirely on the user to determine whether the resulting cascade of transaction and contract evaluations is satisfactorily efficient.  They may, of course, simply kill such a program if it takes too long, without affecting the synchronicity of the network, because the actual contracts remain the same, and a more powerful computer or more patient user may successfully evaluate them, with the same results for anyone who completes the computation.  A malicious contract author can be safely ignored: a particular transaction may even fail to terminate at all and not lock up the entire system, since its evaluation is decoupled from the evaluation of other, independent transactions that are wise enough to ignore it.<br/>
+
+<br/>
+
+The conclusion is that in a lazy system, there is no need to limit computational resources.  Each client can choose independently how much load they wish to assume, without compromising the integrity of the network.<br/>
+
+<h3 id='aCKACAEMPV0'>Pull, not push</h3>
+
+The considerations above all center on the discretion of the contract author in choosing which other contracts to trust, while being free from the unilateral interference of other contracts.  We denote this principle by <i>pull, not push</i>, meaning that contractual operations should center on making resources available for autonomous users to collect at their leisure, and not on accepting deposits and instructions from users who wish to cause a certain effect.  This is also called “inversion of control”, another typical feature of functional languages over imperative languages.  Clearly, this affects the structure of contractual interactions.  For example, consider the following descriptive implementation of the “two-party swap”, or perhaps “ransom demand”, where two parties each put forward a valuable but neither can collect until both agree:<br/>
+
+<div data-section-style='5'><ul id='aCKACArrXIp'><li id='aCKACAgBRPy' class='' value='1'>anyone: create a "voting" contract accepting yes/no votes from parties A and B only and returns an opaque token with two values: A and B.  If either party votes “no”, both of them can collect their corresponding tokens.  If both vote “yes”, then they can collect the <i>other</i> party's token.
+
+<br/></li><li id='aCKACAxibXR' class=''>party A: create a contract accepting the opaque token A and returning valuable A.
+
+<br/></li><li id='aCKACAnurgy' class=''>party B: create a contract accepting the opaque token B and returning valuable B.
+
+<br/></li><li id='aCKACASmRLK' class=''>both parties: vote, then collect their tokens.
+
+<br/></li><li id='aCKACALD03N' class=''>If there was a “no” vote, then party A can take back valuable A and party B can take back valuable B; they lose nothing.  If both voted “yes”, then party A gets valuable B and party B gets valuable A; the swap is completed.
+
+<br/></li></ul></div>With this design, it is impossible for either party to cheat by withdrawing their valuable during the deal, or to steal the other's valuable without the other one being able to collect their own.  The valuables are <i>not</i> “deposited with” the voting contract because it is not possible to call a contract with a programmatic argument, and a value that is given by a literal is not valuable.  So the “push” model of each party giving their valuable to the neutral voting party, then voting and collecting their results, is impossible.  Instead, they create contracts with trustworthy, coordinated credentials independently and then collect them when they obtain those credentials from the vote.<br/>
+
+<h2 id='aCKACAzJEI3'>Native currency and rewards</h2>
+
+After the discussion of computational resources, it becomes clear that there is no inherent use for a currency.  Users may, of course, define their own currencies which, through economics, can acquire value, but these currencies need not be woven into the system.  No part of the execution of smart contracts requires payment.<br/>
+
+<br/>
+
+The external concern of managing a blockchain that synchronizes the contract network does, however, present a need for the system to provide some kind of valuable resource so that it may be awarded to block creators as an incentive to keep the network going.  Thus, the system <i>will</i> provide a minimal such resource: an abstract, non-numerical token that we call <code>Reward</code> that is made available in unit quantity to a “reward transaction” that the block author may insert via an escrow that is opened in that transaction.  This token, which is obviously scarce, has just one operation: <code>claim</code>, which accepts a <code>Reward</code> escrow ID, checks that it contains an actual value (and is not, say, a type-system trick like <code>undefined</code>), and then destroys it.  After this call, one can be sure that one had a valid reward token.  Anyone can use this mechanism to accept (but not to accumulate) <code>Reward</code>s in exchange for any other valuable they wish to offer in exchange; reward transactions can voluntarily benefit from any of these reward contracts to gain sums of various user-defined currencies, privileges in some user-defined community, and so on.<br/>
+
+<br/>
+
+There is indeed an incentive for creating blocks with such a reward system, so long as desirable award contracts are offered. The incentive for individuals to write reward contracts is simply that, by the same token, it incentivizes block creators to do their work, continuing the operation of the smart contract system within which their holdings have value. This symbiotic scheme amounts to a community-organized system of block rewards, letting the market determine the value of a new block and the corresponding inflation of its assets.<br/>
+
+<h2 id='aCKACARQmix'>Conclusion</h2>
+
+We have described here a complete re-imagining of the design of a computationally complete smart contract system organized around the principles of functional programming.  This system possesses numerous additional benefits over existing systems, allowing it to solve virtually all of the problems plaguing them while at the same time expanding their economic power.  Hopefully the community of blockchain enthusiasts and investors will realize the power of this redesign and adopt this or a similar system in the future, preventing this powerful technology from being hobbled by a reliance on increasingly obsolete computing models.<br/>
+
+</body></html>

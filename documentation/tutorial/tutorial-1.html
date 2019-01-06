@@ -1,0 +1,634 @@
+<!doctype html>
+<html><head><title>Tutorial 1: Transactions and contracts</title><meta charset="UTF-8"><link href="http://fonts.googleapis.com/css?family=Crimson+Text:400,400italic,700,700italic|Roboto:400,700,700italic,400italic" rel="stylesheet" type="text/css"><style>/*
+ * Copyright 2014 Quip
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+    font-size: 15px;
+    color: #333;
+    background: #fff;
+    padding: 60px 95px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern";
+    font-kerning: normal;
+    -moz-font-feature-settings: "kern";
+    -webkit-font-feature-settings: "kern";
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+th {
+    font-family: Roboto, sans-serif;
+    font-weight: 700;
+    margin: 0;
+    margin-top: 1.25em;
+    margin-bottom: 0.75em;
+}
+
+h1 {
+    font-size: 35px;
+    line-height: 42px;
+}
+
+h1:first-child {
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+h3 {
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Body text */
+body,
+p,
+ul,
+ol,
+td {
+    font-family: "Crimson Text", serif;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+blockquote,
+q {
+    display: block;
+    margin: 1em 0;
+    font-style: italic;
+}
+
+blockquote a,
+q a {
+    text-decoration: underline;
+}
+
+blockquote {
+    padding-left: 10px;
+    border-left: 4px solid #a6a6a6;
+}
+
+q {
+    color: #a6a6a6;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    quotes: none;
+}
+
+q a {
+    color: #a6a6a6;
+}
+
+code,
+pre {
+    font-family: Consolas, "Liberation Mono", Menlo, "Courier Prime Web",
+        Courier, monospace;
+    background: #f3f3f3;
+}
+
+code {
+    padding: 1px;
+    margin: 0 -1px;
+    border-radius: 3px;
+}
+
+pre {
+    display: block;
+    line-height: 20px;
+    text-shadow: 0 1px white;
+    padding: 5px 5px 5px 30px;
+    white-space: nowrap;
+    position: relative;
+    margin: 1em 0;
+}
+
+pre:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    border-left: solid 1px #dadada;
+}
+
+/* Lists */
+div[data-section-style="5"],
+div[data-section-style="6"],
+div[data-section-style="7"] {
+    margin: 12px 0;
+}
+
+ul {
+    padding: 0 0 0 40px;
+}
+
+ul li {
+    margin-bottom: 0.4em;
+}
+
+/* Bulleted list */
+div[data-section-style="5"] ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul {
+    list-style-type: square;
+}
+div[data-section-style="5"] ul ul ul ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul ul ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul ul ul ul {
+    list-style-type: square;
+}
+
+/* Numbered list */
+div[data-section-style="6"] ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul {
+    list-style-type: lower-roman;
+}
+div[data-section-style="6"] ul ul ul ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul ul ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul ul ul ul {
+    list-style-type: lower-roman;
+}
+
+/* Checklist */
+div[data-section-style="7"] ul {
+    list-style-type: none;
+}
+
+div[data-section-style="7"] ul li:before {
+    content: "\2610";
+    position: absolute;
+    display: inline;
+    margin-right: 1.2em;
+    margin-left: -1.2em;
+}
+
+div[data-section-style="7"] ul li.parent:before {
+    content: "";
+}
+
+div[data-section-style="7"] ul li.parent {
+    font-weight: bold;
+}
+
+div[data-section-style="7"] ul li.checked {
+    text-decoration: line-through;
+}
+
+div[data-section-style="7"] ul li.checked:before {
+    content: "\2611";
+    text-decoration: none;
+}
+
+/* Tables */
+div[data-section-style="8"] {
+    margin: 12px 0;
+}
+
+table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: solid 1px #bbb;
+    table-layout: fixed;
+    position: relative;
+}
+
+table th,
+table td {
+    padding: 2px 2px 0;
+    min-width: 1.5em;
+    word-wrap: break-word;
+}
+
+table th {
+    border-bottom: 1px solid #e1e1e1;
+    background: #f4f4f4;
+    font-weight: bold;
+    vertical-align: bottom;
+    color: #3a4449;
+    text-align: center;
+}
+
+table td {
+    padding-top: 0;
+    border-left: 1px solid #e1e1e1;
+    border-top: 1px solid #e1e1e1;
+    vertical-align: top;
+}
+
+table td.bold {
+    font-weight: bold;
+}
+
+table td.italic {
+    font-style: italic;
+}
+
+table td.underline {
+    text-decoration: underline;
+}
+
+table td.strikethrough {
+    text-decoration: line-through;
+}
+
+table td.underline.strikethrough {
+    text-decoration: underline line-through;
+}
+
+table td:first-child {
+    border-left: hidden;
+}
+
+table tr:first-child td {
+    border-top: hidden;
+}
+
+/* Images */
+div[data-section-style="11"] {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-section-style="11"][data-section-float="0"] {
+    clear: both;
+    text-align: center;
+}
+
+div[data-section-style="11"][data-section-float="1"] {
+    float: left;
+    clear: left;
+    margin-right: 20px;
+}
+
+div[data-section-style="11"][data-section-float="2"] {
+    float: right;
+    clear: right;
+    margin-left: 20px;
+}
+
+div[data-section-style="11"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: auto;
+}
+
+hr {
+    width: 70px;
+    margin: 20px auto;
+}
+
+/* Apps */
+div[data-section-style="19"].placeholder {
+    margin: 0.8em auto;
+    padding: 4px 0;
+    display: block;
+    color: #29b6f2;
+    text-align: center;
+    border: 1px solid rgba(41, 182, 242, 0.2);
+    border-radius: 3px;
+    background: #e9f8fe;
+    font-family: Roboto, sans-serif;
+}
+
+div[data-section-style="19"].first-party-element {
+    margin-bottom: 10px;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+div[data-section-style="19"] img {
+    margin: 0.5em;
+}
+
+div[data-section-style="19"] img.masked-image {
+    margin: 0;
+    transform-origin: top left;
+}
+
+div[data-section-style="19"] .image-mask {
+    position: relative;
+    overflow: hidden;
+}
+</style></head><body><h1 id='PfaACAoqdJ9'>Tutorial 1: Transactions and contracts</h1>
+
+This first tutorial will introduce the most basic concepts of Fae, namely transactions and contracts.  The sample code will use the conventions of the postTX utility and the sample command lines use the docker images, as described in the Project Information.  After following the instructions there, you should execute this first to have a local server running:<br/>
+
+<pre id='PfaACAHiSkB'>./faeServer.sh</pre>
+
+<h2 id='PfaACAu3QKh'>Hello, world!</h2>
+
+<b>Transaction source file: HelloWorld.hs</b><br/>
+
+<pre id='PfaACAVKHf8'>body :: FaeTX String<br>body = return "Hello, world!"</pre>
+
+<b>Transaction message: HelloWorld</b><br/>
+
+<pre id='PfaACASlZfG'>body = HelloWorld</pre>
+
+<b>Command line</b><br/>
+
+<pre id='PfaACAf8XXL'>./postTX.sh HelloWorld</pre>
+
+This transaction does only one thing: declare its “results” to be the string <code>Hello, world!</code>.  This result is saved within the Fae storage in association with the transaction's unique identifier (the hash of this source file plus some identity data), which can be examined by anyone running a Fae client by linking an executable to this storage and reading its contents.  <code>faeServer</code> and <code>postTX</code> together form such a client, and will print an informational message containing this result and other data.<br/>
+
+<br/>
+
+<b>Transaction results</b><br/>
+
+<pre id='PfaACADzjXZ'>Transaction e94750fde381b3fb523b173eb2341e778a693d88947ecb988de1dd1fe425aeea<br>  result: "Hello, world!"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420</pre>
+
+The lengthy hex strings are not reproducible, but the format is.  The return value, <code>“Hello, world!”</code>, is displayed as the <code>result</code>, while the list of transaction signers (a topic for the next tutorial) is given below.  The transaction ID, here, is the hex string at the top, <code>e947...</code>.<br/>
+
+<h3 id='PfaACAuhdpw'>Transaction type</h3>
+
+The transaction must declare its type, which is of the form <code>argType1 -&gt; argType2 -&gt; .. -&gt; FaeTX resultType</code>.  Here, there are no arguments; later, we will see how to supply them to a transaction.  The result type is <code>String</code> because the <code>return</code> value is a string.  The transaction body itself is always a function called <code>body</code>.<br/>
+
+<br/>
+
+The adjective <code>FaeTX</code> modifying <code>String</code> is an environment providing the Fae API for a transaction, none of which is actually used in this transaction.  (Formally, this environment is a <i>monad</i>, which is an intimidating word with an intimidating reputation and which is often poorly explained.  A monad is what is described here: an execution environment providing an API.) <br/>
+
+<h2 id='PfaACA3Bkgv'>Creating and calling a contract</h2>
+
+<b>Transaction source file: HelloWorld2.hs</b><br/>
+
+<pre id='PfaACAOsvW1'>body :: FaeTX ()<br>body = newContract c where<br>  c :: Contract () String<br>  -- The underscore here means "there is an argument, which is ignored"<br>  c _ = spend "Hello, world!"</pre>
+
+<b>Transaction message: HelloWorld2</b><br/>
+
+<pre id='PfaACAri6qU'>body = HelloWorld2</pre>
+
+<b>Command line</b><br/>
+
+<pre id='PfaACAQkxLk'>./postTX.sh HelloWorld2</pre>
+
+<b>Transaction results</b><br/>
+
+<pre id='PfaACAhGryQ'>Transaction 106d05538dfe7b25c0c91e43abb26a3a4697e6f018a934dd675f769e1af8e68f<br>  result: ()<br>  outputs:<br>    0: 106d05538dfe7b25c0c91e43abb26a3a4697e6f018a934dd675f769e1af8e68f<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420</pre>
+
+This transaction also does only one thing, which is entirely useless in isolation: it creates a new contract that, when called with the empty argument, “spends” the value <code>Hello, world!</code>; this “output contract” is shown under <code>outputs</code>, numbered <code>0</code> (if there were a second contract created, that would be <code>1</code>, and so on) and decorated with yet another hex string representing the “version” of this contract after creation (versions are a topic for a later tutorial). <br/>
+
+<br/>
+
+The contract is created but not actually called, nor does the <code>newContract</code> function return any value itself.  We must therefore provide a second transaction:<br/>
+
+<br/>
+
+<b>Transaction source file: CallHelloWorld2.hs</b><br/>
+
+<pre id='PfaACAKfijC'>body :: String -&gt; FaeTX String<br>body = return</pre>
+
+<b>Transaction message: CallHelloWorld2</b><br/>
+
+<pre id='PfaACAuWp6d'>body = CallHelloWorld2<br>inputs<br>  $txID/Body/0/Current = ()  </pre>
+
+<b>Command line</b><br/>
+
+<pre id='PfaACAMwqF9'>./postTX.sh -e txID=&lt;transaction ID from HelloWorld2&gt; CallHelloWorld2</pre>
+
+<b>Transaction results</b><br/>
+
+<pre id='PfaACAY6OxF'>Transaction cd9b7b039dc0add991e25fd105360d5e090d26212234b408c655cd7e9749ea2d<br>  result: "Hello, world!"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: 106d.../Body/0/Current (Deleted)</pre>
+
+This transaction <i>calls</i> the contract denoted by its ID with an argument given as a string literal. The return value of that  transaction is then provided to <code>body</code> as an argument, which it passes through to <code>return</code> (pass-through is denoted by assigning the <code>return</code> function directly to <code>body</code>, not even writing an argument), displaying it as the <code>result</code>, as previously.  <br/>
+
+<br/>
+
+The effects of the call are summarized in the <code>input #0</code> line; the number here indicates the order in the list of <code>inputs</code> in the transaction message.  After it is the contract ID, described <a href="#PfaACASIVxT">below</a> and with the hex string to which <code>$txID</code> expands shortened.  Note that, although the transaction ID will look different when you run these transactions, the one displayed after <code>Transaction</code> for <code>HelloWorld2</code> will still match the summarized one in the contract ID in <code>CallHelloWorld2</code>.  Finally, this contract is annotated as being <code>Deleted</code>, which agrees with the specification of <code>spend</code> given <a href="#PfaACAYEwGa">later</a>.<br/>
+
+<h3 id='PfaACAY5a28'>The <code>()</code> type</h3>
+
+The type <code>()</code> appears both in the new contract as an argument and the first transaction as a return value.  This type has only one value, which is also called <code>()</code>, and is used to denote a “value” that is actually absent.  Conceptually, the new contract takes no arguments, but it is required to take an argument, so we give it <code>()</code>.  Likewise, the <code>newContract</code> function returns no value, and therefore the transaction <code>body</code> also returns no value, so we call the return type <code>()</code>.<br/>
+
+<h3 id='PfaACArWBkW'>Contract creation</h3>
+
+A new contract is created with the first of the two API functions seen here: the <code>newContract</code> function, which takes one argument: here, a function whose type is of the form <code>Contract argType valType</code> that forms the body of the contract.  When called, the contract takes an argument of type <code>argType</code> and “spends” a value of type <code>valType</code>.  In the definition of <code>c</code>, we elide the (unused, empty) argument with a <code>_</code> argument and return a <code>String</code>.<br/>
+
+<h3 id='PfaACA1MylR'>Contract Type</h3>
+
+The type <code>Contract argType valType</code> is (nearly) a synonym for the function type <code>argType -&gt; Fae argType valType valType</code>, where the three-part “adjective” type <code>Fae argType valType</code> is an environment (monad) for a contract taking an <code>argType</code> and returning a <code>valType</code>.  It differs from <code>FaeTX</code> in two ways: first, by specifying the argument and return types; and second, by possessing a slightly larger set of API functions.  The function type therefore denotes a function taking an <code>argType</code> and returning a <code>valType</code> in the <code>Fae argType valType</code> monad; although the parameters to <code>Fae</code> seem redundant here, the <code>Fae</code> monad can contain any type, not just <code>valType</code>, and not all API functions deal with the <code>argType</code>, while some of them need to know the actual argument and return types declared for the contract, so the parameters are present.<br/>
+
+<h3 id='PfaACAYEwGa'>Spending values</h3>
+
+The other API function we see here is <code>spend</code>, which is much like <code>return</code>, and in fact in this context is no different, but in general deals with value-bearing return types appropriately.  We will see what this means in a later tutorial; suffice it to say, here, that a contract <i>must</i> end with <code>spend</code>.  This API function is one of two that are only available in <code>Fae</code> but not in <code>FaeTX</code>; it can only be used by contract code and not in a transaction.  After a contract spends a value, it is deleted from Fae storage and cannot be called again.<br/>
+
+<h3 id='PfaACASIVxT'>Input list</h3>
+
+The second transaction employs an <i>input list</i> to call the contract created in the first one.  Contract calls are denoted by a <i>contract ID</i> and an <i>argument</i>.  The contract ID in this case is <code>$txID/Body/0/Current</code> meaning the first (indexed-0) contract created by the body of the transaction with ID <code>$txID</code>.  The <code>Body</code> and <code>Current</code> components have variants: <code>Body</code> can also be <code>InputCall n</code>, which identifies the n'th contract called by transaction <code>$txID</code>; <code>Current</code> can also be <code>Version &lt;32-byte hex string&gt;</code>, which identifies a particular incarnation of the contract and will be discussed in a later tutorial.<br/>
+
+<br/>
+
+The <code>newContract</code> function does <i>not</i> return the contract ID because it is impossible to use it meaningfully within Fae code; the only way a contract ID can be used is in the list of transaction inputs, which is part of the transaction message, not the source code.<br/>
+
+<h3 id='PfaACAYaMx4'>Input arguments</h3>
+
+The input contract is called with a string-literal argument <code>()</code>.  All arguments to input contracts are string literals but are parsed behind the scenes into the expected argument type for the contract as it was created.  This scheme is the first instance of Fae's contract security guarantees: it ensures that the caller of a contract cannot provide it with a computationally expensive argument, thus performing a denial-of-service attack on that contract.  The parser is declared along with the contract's argument type (the type <code>()</code> has its parser declared in the language definition) and, therefore, is completely under the control of the contract's <i>author</i>, who can design it to handle input strings in a safe way or at least know to expect the possible negative consequences of parsing.<br/>
+
+<h2 id='PfaACAOn9zp'>Contract names</h2>
+
+In the previous example, the contract was created by passing the contract function directly to <code>newContract</code>, which was convenient for dashing off a simple contract; this is, however, a limited technique that is not viable for any contracts that need to hold valuables (a subject that is the topic of Tutorial 2).  In addition, it promotes verbose function definitions that must be decorated with lengthy <code>where</code> clauses or other inline function definition syntax (arguably, it is actually more verbose than this style, but the verbosity is decoupled from other code, so is cleaner).  Fae provides a more organized, more modular, and more descriptive method: <i>contract names</i>.  We can rewrite <code>HelloWorld2.hs</code> thus:<br/>
+
+<br/>
+
+<b>Transaction source file: HelloWorld2a.hs</b><br/>
+
+<pre id='PfaACABf1k5'>body :: FaeTX ()<br>body = newContract (Echo "Hello, world!")<br><br>data Echo = Echo String deriving (Generic)<br><br>instance ContractName Echo where<br>  type ArgType Echo = ()<br>  type ValType Echo = String<br>  theContract (Echo s) = \_ -&gt; spend s</pre>
+
+<b>Transaction message: HelloWorld2a</b><br/>
+
+<pre id='PfaACApDSqz'>body = HelloWorld2a</pre>
+
+<b>Command line</b><br/>
+
+<pre id='PfaACAi0GBR'>./postTX.sh HelloWorld2a</pre>
+
+The transaction results are exactly the same as for <a href="#PfaACAL7oXx">HelloWorld2</a>.<br/>
+
+<h3 id='PfaACAtEsXD'>Data definitions</h3>
+
+The contract name is a data type that we define, appropriately, with the keyword <code>data</code>.  It is called <code>Echo</code>, and its values are <i>also</i> called <code>Echo</code>, except they also contain the data, which is (according to the definition) a <code>String</code>.  You can see this in the <code>newContract</code> call, where the argument is <code>Echo "Hello, world!"</code>.  The <code>Echo</code> here is a <i>constructor</i> for this type, and is effectively a function taking the data fields as arguments.<br/>
+
+<h3 id='PfaACAM1pcR'>Deriving Generic</h3>
+
+The phrase <code>deriving (Generic)</code> at the end of the <code>Echo</code> definition is one of the only pieces of boilerplate that Fae requires.  <code>Generic</code> is a property that allows introspection into data types, and is used widely in Fae's internals, which reduce every other required property to just this one, so that the boilerplate is only two words on each data definition.  Every contract name should be <code>Generic</code>.<br/>
+
+<h3 id='PfaACAn8sNE'>Instances</h3>
+
+In order to use <code>Echo</code> as a contract name, it must be an <i>instance</i> of the interface <code>ContractName</code> (formally called a <i>typeclass</i>, as in a class (i.e. collection) of types, namely the ones with the designated interface), which is defined by Fae to have three members: the two types <code>ArgType</code> and <code>ValType</code>, and the method <code>theContract</code>.<br/>
+
+<br/>
+
+The type members, when declared, use those words as “adjectives” (like <code>FaeTX</code>, the environment for transactions) applied to, in this case, <code>Echo</code>; you can see the pattern that would hold for other contract names.  That is, <code>ArgType</code> and <code>ValType</code> are not types but <i>type families</i>, and we are instantiating them for <code>Echo</code>.  Since they are declared with <code>type</code> rather than <code>data</code>, they are not given constructors but simply set equal to other, existing types, in this case <code>()</code> and <code>String</code>.<code> </code><br/>
+
+<br/>
+
+The method <code>theContract</code> is the link between the data type <code>Echo</code> and its intended meaning as a contract.  Each value <code>Echo s</code>, for various strings <code>s</code>, is the “name” for a different contract, one that simply returns <code>s</code>.  The function here is the same one that would have gone in the <code>where</code> clause in the previous contract style; it takes an <code>ArgType Echo</code> and returns a <code>ValType Echo</code>.<br/>
+
+<h3 id='PfaACAITke5'>Pattern Matching</h3>
+
+Our definition of <code>theContract</code> uses the constructor to <i>deconstruct</i> a value of type <code>Echo</code>: we “match” the value with its constructor expression <code>Echo s</code>, and now we can use <code>s</code>, which is a <code>String</code>, in the function's code.<br/>
+
+<h3 id='PfaACAcli6V'>Lambdas</h3>
+
+We chose the style <code>theContract (Echo s) = \_ -&gt; spend s</code> because it emphasizes that <i>the contract</i> for an <code>Echo</code> is a particular function; the construct <code>\_ -&gt; &lt;code&gt;</code><i> </i>is <i>lambda syntax</i> for defining a function.  We already saw, previously, that the underscore <code>_</code> as an argument means “ignore this”; it plays the same role here, as the arguments to this anonymous function follow the <code>\</code>, which represents the letter lambda (λ).  It would also have been possible to write <code>theContract (Echo s) _ = spend s</code>, using the first argument of the function that was previously the value as an additional argument to the function that returned that value, but this seems (to me) to be a little unclear.<br/>
+
+<h3 id='PfaACAClNl7'>Unnamed contracts</h3>
+
+To connect this concept back to the old syntax where the contract function was given inline, we observe that by passing a function of type <code>Contract () String</code> to <code>newContract</code>, we are using that function as a contract name!   Indeed, every type <code>Contract argType valType</code> is an instance of <code>ContractName</code> implicitly, with the obvious <code>ArgType</code> and <code>ValType</code>, and where the <code>theContract</code> for a contract function is, of course, that function.  Therefore, the contract, when defined this way, has a name of type <code>Contract () String</code>, as opposed to <code>Echo</code>.  This is less descriptive and, as we will see in Tutorial 2, also less capable.  However, it is useful to remember that this is the case: contracts always have names.<br/>
+
+<h2 id='PfaACANc8bk'>Repeatable contracts</h2>
+
+<b>Transaction source file: HelloWorld3.hs</b><br/>
+
+<pre id='PfaACAvVxkJ'>body :: FaeTX ()<br>body = newContract (Echo2 "Hello, world!" "Goodbye!")<br><br>data Echo2 = Echo2 String String deriving (Generic)<br><br>instance ContractName Echo2 where<br>  type ArgType Echo2 = ()<br>  type ValType Echo2 = String<br>  theContract (Echo2 s1 s2) = \_ -&gt; do<br>    release s1<br>    spend s2</pre>
+
+<b>Transaction message: HelloWorld3</b><br/>
+
+<pre id='PfaACAFcJz9'>body = HelloWorld3</pre>
+
+<b>Command line</b><br/>
+
+<pre id='PfaACAou3TV'>./postTX.sh HelloWorld3</pre>
+
+The transaction results look the same as for <a href="#PfaACAL7oXx">HelloWorld2</a>.  To call this contract, the following transaction may be run repeatedly.<br/>
+
+<br/>
+
+<b>Transaction source file: CallHelloWorld3.hs</b><br/>
+
+<pre id='PfaACA9143p'>body :: String -&gt; FaeTX String<br>body = return</pre>
+
+<b>Transaction message: CallHelloWorld3</b><br/>
+
+<pre id='PfaACAepskz'>body = CallHelloWorld3<br>inputs<br>  $txID/Body/0/Current = ()</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='PfaACAz1igG'>./postTX.sh -e txID=&lt;transaction ID from HelloWorld3&gt; CallHelloWorld3</pre>
+
+The first transaction creates another new contract that does a little more than before; the second transaction calls it.  If we do so twice, we get the following results:<br><br/>
+
+<b>Transaction #1 results</b><br/>
+
+<pre id='PfaACAtZQoE'>Transaction 463657a4a9818c193fc232e6fa77cd0c03dbac6c287b2c5b7904c41653f8cf73<br>  result: "Hello, world!"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: a569.../Body/0/Current (Updated)<br>    version: a569ffeebcd79a3ebddcb2fcf0c4aaf9b06f47978db6aea12a2b682fc909c234</pre>
+
+<b>Transaction #2 results</b><br/>
+
+<pre id='PfaACANEPuE'>Transaction bab93c3f950e83d1bb10c252d69ff3d1c233d3026be68045ac901da5fd4925a8<br>  result: "Goodbye!"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: a569.../Body/0/Current (Deleted)</pre>
+
+As expected, the successive calls returned the two messages <code>“Hello, world!”</code> and “<code>Goodbye!"</code>.  Since for the first time we are using a contract that does not immediately <code>spend</code>, we see the annotation <code>Updated</code> in Transaction #1, as well as a new <code>version</code> line (which, again, will not be explained here).  In Transaction #2, the contract does call <code>spend</code>, and is therefore <code>Deleted</code> (since it no longer exists, it does not get a new version).<br/>
+
+<h3 id='PfaACAs1HZv'>Extended contract bodies</h3>
+
+The <code>theContract</code> here contains more than one line and, therefore, employs a syntactical construct called the <i>do block</i>.  A do block is simply an expression in an environment, here the <code>Fae () String</code> monad; each line is a separate action, which are all executed sequentially.<br/>
+
+<h3 id='PfaACA3ei8l'>Releasing values</h3>
+
+In this contract we encounter the <code>release</code> API function, which is similar to <code>spend</code> but with two important differences: first, it does not <i>terminate</i> the contract but merely <i>suspends</i> it, i.e. ends the current contract call but allows it to be called again; and second, it returns the argument of the subsequent call.  Here, the argument type is <code>()</code>, which can be ignored in a do block statement, so we do not reference it.  This API function is the other one that is available in <code>Fae</code> but not in <code>FaeTX</code>.<br/>
+
+<h3 id='PfaACAeBhPJ'>Calling a contract repeatedly</h3>
+
+This contract is called twice.  The first time, it will return <code>Hello, world!</code>, which is therefore the result of Transaction 2.  After this call, the contract is updated in storage to begin at the second line, so on the second call, it returns <code>Goodbye!</code>, the result of Transaction 3.  After <i>this</i> call, the contract is “spent” and removed from Fae storage, so a third call will fail with an error that the contract does not exist.<br/>
+
+<h2 id='PfaACA73epD'>Endless contracts</h2>
+
+<b>Transaction source code: HelloWorld4.hs</b><br/>
+
+<pre id='PfaACATA4Fh'>import Control.Monad (forever)<br><br>body :: FaeTX ()<br>body = newContract (EchoForever "Hello, world!")<br><br>data EchoForever = EchoForever String deriving (Generic)<br><br>instance ContractName EchoForever where<br>  type ArgType EchoForever = ()<br>  type ValType EchoForever = String<br>  theContract (EchoForever s) = \_ -&gt; forever (release s)</pre>
+
+<b>Transaction message: HelloWorld4</b><br/>
+
+<pre id='PfaACAnCHTA'>body = HelloWorld4</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='PfaACAlTymp'>./postTX.sh HelloWorld4</pre>
+
+The transaction results look the same as <a href="#PfaACAL7oXx">HelloWorld2</a>.  To call this new contract, run the following transaction repeatedly:<br/>
+
+<br/>
+
+<b>Transaction source code: CallHelloWorld4.hs</b><br/>
+
+<pre id='PfaACAnYnFU'>body :: String -&gt; FaeTX String<br>body = return</pre>
+
+<b>Transaction message: CallHelloWorld4</b><br/>
+
+<pre id='PfaACAQQJT1'>body = CallHelloWorld4<br>inputs<br>  $txID/Body/0/Current = ()</pre>
+
+<b>Command line:</b><br/>
+
+<pre id='PfaACACVDj5'>./postTX.sh -e txID=&lt;transaction ID from HelloWorld4&gt; CallHelloWorld4</pre>
+
+The first two calls produce results like:<br/>
+
+<br/>
+
+<b>Transaction #1 results</b><br/>
+
+<pre id='PfaACAvP9Zd'>Transaction 1535b638c0ddb0b97c82f730d7d4cdf9b7b89911e606e1b46c9bd572c6d08e61<br>  result: "Hello, world!"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: 46bf.../Body/0/Current (Updated)<br>    version: 46bfee243a90afd489c722839decd31b91eb86780f134f235bf0c0493770c616</pre>
+
+<b>Transaction #2 results</b><br/>
+
+<pre id='PfaACAK4Ygi'>Transaction ee91892aa49ca819204694f38a6bc63fc8c152ade35b726c8e335bd75a6acd19<br>  result: "Hello, world!"<br>  signers:<br>    self: 72c52f0acab0128d8ad56866e27bd2866aaa2c54ae754a917fafbb438e5c9420<br>  input #0: 46bf.../Body/0/Current (Updated)<br>    version: 706f5f3ec89d2c32b7ebb9ce639cdd4e158e6b459d672e72829f43c5a1b1834e</pre>
+
+Each time, the contract is <code>Updated</code>; you can see that the version changes, even though the contract ID and the status message are the same, so this does indicate the contract passing each time into a new state.<br/>
+
+<h3 id='PfaACAOKIZH'>Running forever</h3>
+
+The <code>forever</code> function is an infinite loop that performs its argument on each iteration; it has to be imported from the <code>Control.Monad</code> module (part of the Haskell standard library <code>base</code>).  By placing a <code>release</code> inside it, we construct a contract that can be called indefinitely, each time returning the same string <code>Hello, world!</code>.  This contract need not “end with <code>spend</code>" because it never ends.<br/>
+
+<h2 id='PfaACAOl2R9'>Summary</h2>
+
+This first tutorial demonstrated the basic features of Fae:<br/>
+
+<div data-section-style='5'><ul id='PfaACAXGS6w'><li id='PfaACA1y976' class='' value='1'>Transactions: input and body
+
+<br/></li><li id='PfaACABDcyT' class=''>Contracts: creation, spending, suspending, and calling as inputs
+
+<br/></li><li id='PfaACA1UHpj' class=''>Do blocks and the two Fae monads <code>FaeTX</code> and <code>Fae</code>.
+
+<br/></li></ul></div>Although this set of features is enough to employ the <i>language</i> of smart contracts, it is not enough to write contracts that have serious content.  In the next tutorial, we will explore the mechanism for denoting and handling value in contracts, which allows authors to create and use such essentials as currencies, identity tokens, and abstract deals.<br/>
+
+</body></html>

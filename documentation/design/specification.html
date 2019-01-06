@@ -1,0 +1,628 @@
+<!doctype html>
+<html><head><title>Specification</title><meta charset="UTF-8"><link href="http://fonts.googleapis.com/css?family=Crimson+Text:400,400italic,700,700italic|Roboto:400,700,700italic,400italic" rel="stylesheet" type="text/css"><style>/*
+ * Copyright 2014 Quip
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+    font-size: 15px;
+    color: #333;
+    background: #fff;
+    padding: 60px 95px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern";
+    font-kerning: normal;
+    -moz-font-feature-settings: "kern";
+    -webkit-font-feature-settings: "kern";
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+th {
+    font-family: Roboto, sans-serif;
+    font-weight: 700;
+    margin: 0;
+    margin-top: 1.25em;
+    margin-bottom: 0.75em;
+}
+
+h1 {
+    font-size: 35px;
+    line-height: 42px;
+}
+
+h1:first-child {
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+h3 {
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Body text */
+body,
+p,
+ul,
+ol,
+td {
+    font-family: "Crimson Text", serif;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+blockquote,
+q {
+    display: block;
+    margin: 1em 0;
+    font-style: italic;
+}
+
+blockquote a,
+q a {
+    text-decoration: underline;
+}
+
+blockquote {
+    padding-left: 10px;
+    border-left: 4px solid #a6a6a6;
+}
+
+q {
+    color: #a6a6a6;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    quotes: none;
+}
+
+q a {
+    color: #a6a6a6;
+}
+
+code,
+pre {
+    font-family: Consolas, "Liberation Mono", Menlo, "Courier Prime Web",
+        Courier, monospace;
+    background: #f3f3f3;
+}
+
+code {
+    padding: 1px;
+    margin: 0 -1px;
+    border-radius: 3px;
+}
+
+pre {
+    display: block;
+    line-height: 20px;
+    text-shadow: 0 1px white;
+    padding: 5px 5px 5px 30px;
+    white-space: nowrap;
+    position: relative;
+    margin: 1em 0;
+}
+
+pre:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    border-left: solid 1px #dadada;
+}
+
+/* Lists */
+div[data-section-style="5"],
+div[data-section-style="6"],
+div[data-section-style="7"] {
+    margin: 12px 0;
+}
+
+ul {
+    padding: 0 0 0 40px;
+}
+
+ul li {
+    margin-bottom: 0.4em;
+}
+
+/* Bulleted list */
+div[data-section-style="5"] ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul {
+    list-style-type: square;
+}
+div[data-section-style="5"] ul ul ul ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul ul ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul ul ul ul {
+    list-style-type: square;
+}
+
+/* Numbered list */
+div[data-section-style="6"] ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul {
+    list-style-type: lower-roman;
+}
+div[data-section-style="6"] ul ul ul ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul ul ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul ul ul ul {
+    list-style-type: lower-roman;
+}
+
+/* Checklist */
+div[data-section-style="7"] ul {
+    list-style-type: none;
+}
+
+div[data-section-style="7"] ul li:before {
+    content: "\2610";
+    position: absolute;
+    display: inline;
+    margin-right: 1.2em;
+    margin-left: -1.2em;
+}
+
+div[data-section-style="7"] ul li.parent:before {
+    content: "";
+}
+
+div[data-section-style="7"] ul li.parent {
+    font-weight: bold;
+}
+
+div[data-section-style="7"] ul li.checked {
+    text-decoration: line-through;
+}
+
+div[data-section-style="7"] ul li.checked:before {
+    content: "\2611";
+    text-decoration: none;
+}
+
+/* Tables */
+div[data-section-style="8"] {
+    margin: 12px 0;
+}
+
+table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: solid 1px #bbb;
+    table-layout: fixed;
+    position: relative;
+}
+
+table th,
+table td {
+    padding: 2px 2px 0;
+    min-width: 1.5em;
+    word-wrap: break-word;
+}
+
+table th {
+    border-bottom: 1px solid #e1e1e1;
+    background: #f4f4f4;
+    font-weight: bold;
+    vertical-align: bottom;
+    color: #3a4449;
+    text-align: center;
+}
+
+table td {
+    padding-top: 0;
+    border-left: 1px solid #e1e1e1;
+    border-top: 1px solid #e1e1e1;
+    vertical-align: top;
+}
+
+table td.bold {
+    font-weight: bold;
+}
+
+table td.italic {
+    font-style: italic;
+}
+
+table td.underline {
+    text-decoration: underline;
+}
+
+table td.strikethrough {
+    text-decoration: line-through;
+}
+
+table td.underline.strikethrough {
+    text-decoration: underline line-through;
+}
+
+table td:first-child {
+    border-left: hidden;
+}
+
+table tr:first-child td {
+    border-top: hidden;
+}
+
+/* Images */
+div[data-section-style="11"] {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-section-style="11"][data-section-float="0"] {
+    clear: both;
+    text-align: center;
+}
+
+div[data-section-style="11"][data-section-float="1"] {
+    float: left;
+    clear: left;
+    margin-right: 20px;
+}
+
+div[data-section-style="11"][data-section-float="2"] {
+    float: right;
+    clear: right;
+    margin-left: 20px;
+}
+
+div[data-section-style="11"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: auto;
+}
+
+hr {
+    width: 70px;
+    margin: 20px auto;
+}
+
+/* Apps */
+div[data-section-style="19"].placeholder {
+    margin: 0.8em auto;
+    padding: 4px 0;
+    display: block;
+    color: #29b6f2;
+    text-align: center;
+    border: 1px solid rgba(41, 182, 242, 0.2);
+    border-radius: 3px;
+    background: #e9f8fe;
+    font-family: Roboto, sans-serif;
+}
+
+div[data-section-style="19"].first-party-element {
+    margin-bottom: 10px;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+div[data-section-style="19"].first-party-element.kanban {
+    background-image: url("https://quip-cdn.com/nK0hSyhsb4jrLIL2s5Ma-g");
+    height: 166px;
+}
+
+div[data-section-style="19"].first-party-element.calendar {
+    background-image: url("https://quip-cdn.com/OYujqLny03RILxcLIiyERg");
+    height: 244px;
+}
+
+div[data-section-style="19"].first-party-element.poll {
+    background-image: url("https://quip-cdn.com/fbIiFrcKGv__4NB7CBfxoA");
+    height: 116px;
+}
+
+div[data-section-style="19"].first-party-element.countdown {
+    background-image: url("https://quip-cdn.com/3bPhykD2dBei9sSjCWteTQ");
+    height: 96px;
+}
+
+div[data-section-style="19"].first-party-element.process_bar {
+    background-image: url("https://quip-cdn.com/ybQlHnHEIIBLog5rZmYs_w");
+    height: 36px;
+}
+
+div[data-section-style="19"].first-party-element.project_tracker {
+    background-image: url("https://quip-cdn.com/OFQU087b4Mxzz1ZaHwtjXA");
+    height: 164px;
+}
+
+div[data-section-style="19"] img {
+    margin: 0.5em;
+}
+
+div[data-section-style="19"] img.masked-image {
+    margin: 0;
+    transform-origin: top left;
+}
+
+div[data-section-style="19"] .image-mask {
+    position: relative;
+    overflow: hidden;
+}
+</style></head><body><h1 id='UCSACAfLFO6'>Specification</h1>
+
+Fae is currently implemented only by myself, in Haskell; it is uncertain at this time whether it <i>can</i> be implemented in another language or even another Haskell compiler, as I use the specific capabilities of GHC Haskell extensively.  This document attempts to capture the abstract capabilities that characterize it.  In it, following the conventions of computer standards, <b>bold</b> imperatives are mandatory for a compliant implementation.  <br/>
+
+<br/>
+
+The nature of this specification is <i>inclusive</i> rather than <i>exclusive</i>: by and large, it demands a certain set of capabilities of any implementation, but does not demand (with a few exceptions) that the implementation be limited to these capabilities.  It is therefore possible to design a system that is “a Fae” like the various *nix operating systems are each “a Unix” (if so certified, anyway).  This stands in contrast with other smart contract systems that rigidly specify and strictly control every aspect of their operation.  I believe that adherence to the capabilities demanded by this standard is sufficient to ensure a system supporting trustless interactions among its users.<br/>
+
+<h2 id='UCSACA4bo1W'>Contracts, escrows, and transactions</h2>
+
+These three interdependent concepts together determine the functionality of Fae.  The ensuing discussion will include circular cross-references both to each of these contracts from each other, and to specific concepts within each one from each other.  To make sense of this, the reader should search for the <i>emphasized</i> form of an unfamiliar term, which may occur earlier or later than any given use of that term, and which serves to define it.<br/>
+
+<h3 id='UCSACAkVybN'>Contract code</h3>
+
+<i>Abstract</i>: Contract code is the language-plus-API in which contracts, transactions, and escrows are written.  The capabilities of the API are the only way that contract code may influence or be influenced by the internals of Fae.<br/>
+
+<br/>
+
+Each of contracts, escrows, and transactions is created by providing <i>contract code</i>, which <b>must</b> satisfy the following:<br/>
+
+<div data-section-style='5'><ul id='UCSACAAHU2v'><li id='UCSACAfy4Bb' class='' value='1'>Contract code <b>must</b> be valid source code in a general-purpose hosted programming language (e.g. Haskell, Java, Go, Python), subsequently referred to as the <i>source language</i>.
+
+<br/></li><li id='UCSACAhz63X' class='parent'>The source language <b>must</b> be strongly typed.  Its type system <b>must</b> be capable of at least the following constructions:
+
+<br/></li><ul><li id='UCSACApvZTL' class=''>The formation of “product types”, also known as “structs”: a named list of fields of various types.  
+
+<br/></li><li id='UCSACAqwtjL' class=''>It <b>must</b> be possible to make distinctly-typed structs with the same field types.
+
+<br/></li><li id='UCSACAGqHjz' class=''>Empty structs (that is, typed symbolic constants) <b>must</b> be possible.
+
+<br/></li><li id='UCSACAkhkPO' class=''>Data hiding: it <b>must</b> be possible to prevent type names, constructors, or associated functions from being available except to certain whitelisted code.
+
+<br/></li></ul><li id='UCSACARYdwH' class='parent'>The source language must have a subset of its builtin and library-enabled constructs that is <i>safe</i> in that:
+
+<br/></li><ul><li id='UCSACAYq0Mt' class=''>Safe code <b>may not</b> directly access the ambient computing environment, hardware and software included.
+
+<br/></li><li id='UCSACANNmvq' class=''>Safe code <b>may not</b> directly construct data or function types by manipulating the memory available to the process in which it runs.  Instances of a type in the source language <b>must</b> be created through source language mechanisms.
+
+<br/></li><li id='UCSACApKRAq' class=''>Safe code <b>may not</b> break type safety through unstructured “casts” that reinterpret the primitive representation of data.  However, it <b>may</b> use as an intermediary for such a (source-language-mediated) conversion a source-language defined type that corresponds to a primitive data representation.
+
+<br/></li><li id='UCSACAgoYQk' class=''>Definitions made within safe code <b>may not</b> shadow definitions available through the Fae implementation.
+
+<br/></li><li id='UCSACAw8yii' class=''>The use of safe code <b>must</b> be enforceable by the source language rather than by discipline on the part of programmers writing it.
+
+<br/></li></ul><li id='UCSACArJDt0' class=''>Contract code <b>must</b> be safe code.
+
+<br/></li><li id='UCSACAweAC3' class='parent'>In addition to the native capabilities of the source language, contract code <b>must</b> have available to it <i>mechanisms</i> implementing the following capabilities:
+
+<br/></li><ul><li id='UCSACAtZD7w' class=''>Contract creation
+
+<br/></li><li id='UCSACAc4D1G' class=''>Escrow creation
+
+<br/></li><li id='UCSACANMaR9' class=''>Escrow calling
+
+<br/></li><li id='UCSACAQmir4' class=''>Contract or escrow suspension, except in a transaction body
+
+<br/></li><li id='UCSACAFK4Jw' class=''>Contract or escrow finalization, except in a transaction body
+
+<br/></li><li id='UCSACAkBeSA' class=''>Signer public-key access.
+
+<br/></li></ul><li id='UCSACA5sfw2' class='parent'>During execution of contract code, the attribute of <i>context</i> <b>must</b> be defined, such that:
+
+<br/></li><ul><li id='UCSACAhdtKe' class=''>The context includes the executable form of the contract code.
+
+<br/></li><li id='UCSACAKgc8m' class=''>The context includes the escrows available to it, and these escrows <b>must not</b> be included in any other context, nor exchanged except as mediated by the escrow transfer mechanisms; the escrow storage <b>must not</b> be accessible to contract code except through the escrow creation and calling mechanisms.
+
+<br/></li><li id='UCSACACO3qZ' class=''>The context <b>must</b> include an ordered list of created contracts, which <b>must not</b> be accessible to contract code except through the contract creation mechanism.
+
+<br/></li><li id='UCSACAhRipf' class=''>The context <b>may</b> include <i>local variables</i> representing some sort of source-language-defined data or function instance storage.
+
+<br/></li><li id='UCSACAh7VRx' class=''>The data or function instances that are available to contract code <b>must</b> be limited to the local variables in its context.  Contract code <b>may not</b> affect local variables in another context.
+
+<br/></li></ul><li id='UCSACAaVwr5' class=''>All contract code executed during the execution of a single transaction <b>must</b> have read-only access to the names and corresponding public keys of all signers of the transaction.
+
+<br/></li><li id='UCSACAPShXl' class=''>Contract code <b>must</b> be capable of throwing exceptions.
+
+<br/></li></ul></div><h3 id='UCSACAY0mMC'>Contracts</h3>
+
+<i>Abstract</i>: Contracts in Fae are abstract functions maintaining, as required above, an execution context.  They function as “coroutines” in that they have the capability to suspend their execution, returning an intermediate value and a continuation function that resumes from after the point of suspension.  Contracts may be called as functions only within a transaction's input list, but this list may contain any number of contracts and may also be followed by transaction-specific contract code.<br/>
+
+<br/>
+
+The Fae implementation <b>must</b> maintain <i>contract storage</i> with the following properties:<br/>
+
+<div data-section-style='5'><ul id='UCSACARNM9X'><li id='UCSACAwy3pp' class='parent' value='1'>A contract in storage is retrieved by a transaction by specifying a <i>(long) contract ID </i>consisting of one of:
+
+<br/></li><ul><li id='UCSACAFmAUp' class=''>The transaction in whose body the contract was created, and its order among contracts created by that transaction body's (sole) execution;
+
+<br/></li><li id='UCSACAxZYYa' class=''>The transaction and short contract ID of its input contract creating the stored contract, and its order among contracts created by that input contract call.
+
+<br/></li><li id='UCSACAG6rj3' class=''>A contract ID of one of the above forms together with a nonnegative integer.  This matches the identified contract <b>if and only if </b>its nonce at the time the transaction is executed is equal to this integer.
+
+<br/></li></ul><li id='UCSACAFrZaO' class=''>The <i>short contract ID</i> is a digest (of fixed length but unspecified nature) of the long contract ID.  Contracts <b>may not</b> be retrieved by short contract ID, but only referenced as inputs to a transaction in the second form of the long contract ID.
+
+<br/></li><li id='UCSACA5pHzi' class=''>The implementation <b>must</b> not provide a mechanism for retrieving contracts from storage outside the transaction input list.
+
+<br/></li><li id='UCSACAXd3Hb' class=''>A contract is stored along with a <i>nonce</i>, a nonnegative integral value that <b>must</b> equal the number of times the contract has been updated.  As a corollary, contracts are created with nonce zero.
+
+<br/></li><li id='UCSACAVyqSd' class='parent'>When called as a transaction input, a stored contract is <i>updated</i> if it reaches suspension or finalization without raising an exception.  This update consists of:
+
+<br/></li><ul><li id='UCSACALObmZ' class=''>If execution terminated in contract suspension, the contract context in storage is replaced by the continuation following the suspension directive.
+
+<br/></li><li id='UCSACAXbs4d' class=''>If execution terminated in contract finalization, the contract is deleted from storage.  Further references to it by contract ID <b>must </b>be invalid, but short contract ID references to it from within a long contract ID given as a transaction input must continue to function normally.
+
+<br/></li><li id='UCSACAaAbCq' class=''>The contract nonce is incremented.
+
+<br/></li></ul><li id='UCSACAMEBUf' class=''>When a contract is updated, or when a transaction completes without raising an exception, the created contracts list is removed from its context and each entry placed in storage.
+
+<br/></li><li id='UCSACAJAFpx' class=''>A contract may not be referenced, executed, or retrieved from storage within contract code.  The only contract code that <b>may</b> affect contract storage is the contract creation mechanism. 
+
+<br/></li><li id='UCSACAVFlhZ' class='parent'>The retrieval or execution of any single contract by a transaction from storage <b>must not</b> force the retrieval or execution of any other contract or transaction, with the following exceptions:
+
+<br/></li><ul><li id='UCSACA96Um2' class=''>The contract or transaction execution that created the retrieved contract <b>may</b> be performed.
+
+<br/></li><li id='UCSACAUdNf8' class=''>Any appearance of the retrieved contract in the input list a transaction prior to the current one <b>may</b> be executed.
+
+<br/></li><li id='UCSACASo67K' class=''>If one input contract refers, via versions, to the return value of another (in the same transaction), then that other input may also be executed.
+
+<br/></li></ul><li id='UCSACA8qxK3' class=''>Contract calls are <i>immutable</i>: regardless of future updates to a contract, any contract call must always function using the contract as it existed in storage when the transaction in which it is called was entered.
+
+<br/></li></ul></div>Contracts are placed in storage via the <i>contract creation mechanism</i>:<br/>
+
+<div data-section-style='5'><ul id='UCSACApTWr6'><li id='UCSACA65yv3' class='' value='1'>The contract code is specified.  This code must define an abstract function with specific argument and return types.
+
+<br/></li><li id='UCSACA3aJvU' class=''>A set of escrows available within the context performing contract creation, called the <i>endowment</i>, is specified.
+
+<br/></li><li id='UCSACAmwN0n' class=''>A context is created for the new contract code, containing only the escrows given.  This context <b>may</b>, optionally, also contain copies of certain local variables in the creating context, according to the features of the source language.
+
+<br/></li><li id='UCSACA4jUOV' class=''>The new contract-as-context is placed into the <i>created contracts list </i>present in the creating context.
+
+<br/></li></ul></div>The argument type of the contract <b>must</b> have a method parsing it from a string literal.  Arguments to input contracts are passed to it via literals and converted to the correct type.<br/>
+
+<br/>
+
+A contract execution that raises an exception is terminated and its context discarded; the stored contract remains unchanged.<br/>
+
+<h3 id='UCSACA3VwdB'>Escrows</h3>
+
+<i>Abstract</i>: Escrows are contracts-within-contracts that implement the concept of “persistent value” within Fae.  Like a contract, an escrow is an abstract suspendable function, or coroutine, but the requirements and effects of calling it are different.  This difference allows escrows to represent scarce quantities.<br/>
+
+<br/>
+
+Each contract <b>must</b> maintain its context across successive calls, including the escrows available to the contract; a transaction body, during its sole execution, also maintains such a context.  These context-specific escrow storages have the following properties:<br/>
+
+<div data-section-style='5'><ul id='UCSACAogLa0'><li id='UCSACAlFnd9' class='' value='1'>Escrows within the context are identified by an <i>escrow ID</i>, which is unique among all escrow IDs in any context and which never changes throughout the lifetime of the escrow.
+
+<br/></li><li id='UCSACAbgmkJ' class=''>Any escrow present in a context may be <i>called</i> in that context via its escrow ID, by supplying an argument of the correct type; the call evaluates to a value of the correct return type.
+
+<br/></li><li id='UCSACAQeckG' class=''>The storage entry for an escrow includes its current version, and upon update, this version is also updated in a manner that preserves its distinction from every other version, including the versions of compound values.
+
+<br/></li><li id='UCSACAkw2QS' class=''>Like contracts, escrows are updated in their storage when a call returns without raising an exception.  This update process is the same as that for contracts, except that the nonce increment is replaced by the version update, and the created contracts list is not committed to contract storage but appended to the list in the calling context as it exists at the location of the call.
+
+<br/></li><li id='UCSACALGrpe' class='parent'>Escrows may be transferred between contexts only under the following conditions:
+
+<br/></li><ul><li id='UCSACAdzn4y' class=''>An escrow or contract call terminates without exception, returning a compound value.  All the backing escrows of the compound value are transferred to the calling context.
+
+<br/></li><li id='UCSACAX1Vet' class=''>During contract creation, when the endowment is passed to the new contract.
+
+<br/></li><li id='UCSACARtxMv' class=''>During escrow creation, when the endowment is passed to the new escrow.
+
+<br/></li></ul></ul></div>The <i>escrow creation mechanism</i> is identical to the contract creation mechanism with only the difference that the created escrow-as-context is immediately placed in escrow storage in the creating context.<br/>
+
+<br/>
+
+Escrows give rise to the concept of a <i>compound value</i>, which is a struct type containing either escrow IDs or other compound values.  The set of all escrow IDs that are ultimately referenced by descent through the fields of the struct is known as the set of <i>backing escrows</i> for the value.  It <b>must</b> be possible to obtain the set of backing escrows for any compound value; this capability <b>need not</b> be available within contract code but only to Fae internally.<br/>
+
+<br/>
+
+The type system of the source language <b>must</b> be sufficiently strong to construct <i>opaque values</i>: escrows of a type signature for which both the argument and return types are private, available only to designated functions of the author of these types.  These escrows, as well as less restrictive variants, serve as scarce quantities that can only be created through a specific interface, potentially only under specific circumstances.<br/>
+
+<h3 id='UCSACAtA4qa'>Transactions</h3>
+
+<i>Abstract</i>: A transaction is a one-time contract that is capable of calling and using the return values of stored contracts.  In addition to these contract calls, a transaction may subsequently execute contract code to perform further, custom actions.  In the event of an exception terminating the transaction, execution may continue through fallback transactions.<br/>
+
+<br/>
+
+Transactions consist of two parts: the <i>input list</i> and the <i>transaction body; </i>an optional third part is the list of <i>fallback transactions</i>, which are alternative transaction bodies (without input lists).  The transaction body is contract code that specifies an abstract function (possibly empty) of a particular signature; however, the contract suspension and finalization mechanisms <b>must</b> not be available in the transaction body or fallback transactions.  The transaction's signature and the input list have the following properties:<br/>
+
+<div data-section-style='5'><ul id='UCSACA6T44t'><li id='UCSACAEGNxt' class='' value='1'>The argument type of the transaction signature must possess a constructor from the ordered list of return types of the input contracts.  The return values of the inputs are passed to the transaction body via this constructor.
+
+<br/></li><li id='UCSACAyMjBs' class=''>The elements of the input list are pairs consisting of: a long contract ID, and a string literal that is parsed by the argument type of the referenced contract.
+
+<br/></li><li id='UCSACAG8esc' class=''>When the long contract ID is the form with a nonce, the return value of the contract call <b>must </b>be augmented by an implicit mapping of <i>versions</i> to values determined from the return value.  Versions <b>must not</b> be produced for calls via other contract IDs.  Versions <b>must</b> <b>not</b> be duplicated between distinct values.
+
+<br/></li><li id='UCSACAbrtRa' class=''>A value's version <b>must</b> faithfully reflect all data contained in the value (e.g. all its fields, as well as their data, and so on), the structure of the value type, and the versions of all backing escrow IDs.
+
+<br/></li><li id='UCSACAu2grG' class=''>Fae <b>must</b> provide a one-field type <code>Versioned</code> that controls the generation of versions. The versioned values derived from a top-level struct always include the top-level value itself, as well as the versioned values derived from each of its fields, except when the top-level struct is wrapped in a <code>Versioned</code> constructor.  For the purposes of versioning, the <code>Versioned</code> type itself is ignored and only the inner type is considered.
+
+<br/></li><li id='UCSACANjY6q' class=''>The parser method of the <code>Versioned</code> type <b>must</b> accept versions and construct the <code>Versioned</code> from the value with that version present in the same input list, if present.  An implementation <b>must</b> limit the allowable versions in a given input's argument to those appearing in the return values of previous inputs.
+
+<br/></li><li id='UCSACAGWu8j' class=''>The<b> </b>termination, successful or not, of a contract call appearing as a transaction input <b>must</b> be independent of the transaction body.
+
+<br/></li><li id='UCSACAHirce' class=''>The implementation <b>must not</b> provide any facility allowing transaction-specific code to be executed during the evaluation of the input list.
+
+<br/></li><li id='UCSACAgUTjE' class=''>Escrows transferred via the input contract return values <b>must</b> be placed into the context of the transaction.  The implementation <b>must </b>ensure that, if a <code>Versioned</code> contract argument is a compound value, then its backing escrows are present in the transaction context at the time that 
+
+<br/></li><li id='UCSACAiw4oy' class=''>If the transaction body raises an exception, it <b>must</b> be terminated immediately and the fallback transactions run.  The fallback transactions are alternate transaction body functions whose signature has the same argument type as the main one but which return nothing.  When run, each function is passed the same input value as the original transaction body.  If a fallback transaction raises an exception, it <b>must</b> terminate immediately and the next one, if any, <b>must</b> be run.
+
+<br/></li><li id='UCSACAlqG7m' class=''>The return value of a transaction (or the exception, if one was raised) <b>may</b> be stored in an implementation-defined manner for retrieval outside Fae.
+
+<br/></li></ul></div><h3 id='UCSACA9nFIY'>Summary</h3>
+
+The three concepts of contracts, escrows, and transactions interconnect deeply.  Only transactions may call contracts and only before their own code and with a restricted argument-passing convention, but all of contracts, escrows, and transactions can create other contracts.  They may also create and call escrows, which function like contracts but are “owned” by a single contract, escrow, or transaction and transferred by passing their immutable ID.  The contract calling conventions ensure that a contract call only executes known code, not that which is inserted by a transaction.  They also allow contract executions to be run concurrently or independently.  The transaction fallback mechanism allows users to plan for failure and appropriately save any valuables that are present in the transaction context.<br/>
+
+<h2 id='UCSACAAH2vc'>Blocks and transaction messages</h2>
+
+Some aspects of the mechanism of transaction distribution are relevant to Fae, though in general it concerns itself only with the execution of transactions that are already received and appropriately prepared.<br/>
+
+<h3 id='UCSACAx6gLP'>Transaction messages</h3>
+
+A transaction, as communicated from one client to another, is transmitted in a message that <b>must</b> contain at least the following elements:<br/>
+
+<div data-section-style='5'><ul id='UCSACAhIUwI'><li id='UCSACAJzs3t' class='' value='1'>A list of input contract calls; that is, a list of pairs of a long contract ID and a string literal.
+
+<br/></li><li id='UCSACAmv8iV' class=''>The source code of the transaction function and, if present, the fallback transactions.
+
+<br/></li><li id='UCSACACzpgi' class=''>Optionally, the contents of additional source modules (of whatever nature corresponds to the source language).  This <b>must</b> be possible if separate modules are necessary to implement data hiding.
+
+<br/></li><li id='UCSACABnIlO' class=''>A list of signers, consisting of pairs of a text string (the <i>signer name</i>) and a cryptographic signature of the modified transaction where each signature is replaced in this list by the corresponding public key.
+
+<br/></li></ul></div><h3 id='UCSACADCiTu'>negotiations among signers</h3>
+
+The presence of multiple signers in a transaction serves to give the “owner” of a contract the ability to protect it.  This protection has two parts:<br/>
+
+<div data-section-style='5'><ul id='UCSACAnsgQd'><li id='UCSACAt3sjQ' class='' value='1'>The contract itself is guarded by checks against the transaction signers to limit access to the owner(s).
+
+<br/></li><li id='UCSACADBlww' class=''>All parties to a transaction have the option of verifying its correctness, performance, security, and so on before signing it and allowing it to be committed to Fae.  This is intended to include executing the transaction in a sandbox.
+
+<br/></li></ul></div>This dynamic makes Fae a trustworthy <i>codification</i> engine, immutably recording a transaction that all parties agree to externally before it is entered.<br/>
+
+<h3 id='UCSACAruxBW'>Blocks and Block rewards</h3>
+
+According to the consensus protocol used, transactions will be grouped into blocks.  Fae imposes no necessary structure on blocks but <b>may</b> optionally provide a mechanism for instantiating a reward within Fae for supporting the continued operation of the protocol (e.g. for mining a block).  If this mechanism is present, it <b>must</b> take the following form:<br/>
+
+<div data-section-style='5'><ul id='UCSACAyiHtf'><li id='UCSACAkEcux' class='' value='1'>There <b>must</b> exist types <code>Reward</code> and <code>Token</code> whose only instances are symbolic constants, also denoted <code>Reward</code> and <code>Token</code>, both of which instances must be hidden from contract code.
+
+<br/></li><li id='UCSACAoW6zy' class=''>A <i>reward escrow</i> is the escrow whose function accepts a <code>Token</code> and simply finalizes, returning a <code>Reward</code>.
+
+<br/></li><li id='UCSACA5T0FQ' class=''>The <i>reward claim mechanism</i> is a function that accepts a reward escrow ID and calls the corresponding escrow, discarding the result.  This mechanism <b>must</b> exist within the implementation, and other means of manipulating reward escrows <b>must</b> not exist.
+
+<br/></li><li id='UCSACAUK7dV' class=''>A <i>reward transaction</i> is any transaction, designated in the manner defined by the implementation (e.g. added by the block miner), expecting, in addition to its explicit input list, an implicit “zeroth input return value” that is prepended to the list, whose type is a reward escrow ID.  The implementation <b>must</b> place a reward escrow into the reward transaction's context and pass its escrow ID in this value.
+
+<br/></li></ul></div>This mechanism can be elaborated on by users of Fae to build functions awarding more general kinds of value that are defined by the ongoing operations of Fae.  These functions may accept a reward escrow ID via the reward claim mechanism and return their corresponding specialized reward in return.  The incentive for doing so is the same as the incentive for participants to support the consensus protocol (e.g. by mining): it is only through the continued operation of Fae that their assets within it have any value at all.<br/>
+
+</body></html>
