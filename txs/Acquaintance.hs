@@ -11,4 +11,4 @@ data C = C PublicKey PublicKey deriving (Generic)
 instance ContractName C where
   type ArgType C = ()
   type ValType C = (PublicKey, PublicKey)
-  theContract (C key1 key2) = \() -> error "" -- forever $ release (key1, key2)
+  theContract (C key1 key2) = \() -> forever $ release (key1, key2)

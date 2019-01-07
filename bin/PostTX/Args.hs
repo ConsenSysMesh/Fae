@@ -45,7 +45,6 @@ data PostTXArgs =
     -- | Could be several things that affect the operational mode; see the
     -- usage.
     argDataM :: Maybe String,
-    -- | The server to connect to, defaulting to localhost:27182
     argHostM :: Maybe String,
     argFake :: Bool,
     argView :: Bool,
@@ -287,14 +286,11 @@ finalize PostTXArgs{argFaeth = argFaeth@FaethArgs{..}, ..}
     }
 
   where
-    -- | Establishes the default hostnames.  This may have system-dependent
-    -- issues: for instance, sometimes @localhost@ causes a lookup failure,
-    -- and sometimes (particularly with Faeth) @0.0.0.0@ is rejected for
-    -- safety reasons.
     justHost :: Maybe String -> String
-    justHost
-      | useFaeth && not argFake = fromMaybe "localhost:8546"
-      | otherwise = fromMaybe "0.0.0.0:27182"
+    justHost = fromMaybe $ "127.0.0.1:" ++ show port where
+      port 
+        | useFaeth && not argFake = 8546
+        | otherwise = 27182
 
 -- | Auxiliary function for @--show-keys@
 parseKeysArgs :: String -> Either (ParseError (Token String) Void) [String]

@@ -104,8 +104,8 @@ usage = do
   self <- getProgName
   putStrLn $ unlines
     [
-      "Usage: (standalone) " ++ self ++ " args",
-      "       (with stack) stack exec " ++ self ++ " -- args",
+      "Usage: (standalone) [-e envVar=val ..]" ++ self ++ " args",
+      "       (with stack) [envVar=val ..] stack exec " ++ self ++ " -- args",
       "", 
       "where args = data [host[:port]] [options]",
       "where the available options are:",
@@ -119,6 +119,8 @@ usage = do
       "  Regular Fae operation:",
       "    with data = (tx name)",
       "    --fake      Don't add the transaction to the history; only run it once",
+      "                CAUTION: if faeServer is in Faeth mode, --faeth must also",
+      "                         be passed to postTX",
       "    --lazy      Don't print transaction results; leave them unevaluated",
       "",
       "    with data = (Fae tx ID)",
@@ -131,6 +133,7 @@ usage = do
       "  Fae-in-Ethereum (Faeth) operation",
       "    --faeth     Enable Faeth (blockchain is Ethereum, via a Parity client)",
       "                With --fake, connects to faeServer rather than Parity",
+      "                CAUTION: faeServer will throw an error if not in Faeth mode.",
       "                Also implied by any of the following options",
       "",
       "    with data = (tx name)",

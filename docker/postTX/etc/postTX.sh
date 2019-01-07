@@ -24,6 +24,11 @@ while true; do
       let n+=2
       shift 2
       ;;
+    -*) 
+      echo >&2 "Got regular option: " $1
+      echo >&2 "Only environment variable assignments (-e var=val) allowed before the main argument"
+      exit 1
+      ;;
     *) break ;;
   esac
 done

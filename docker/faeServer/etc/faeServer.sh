@@ -13,5 +13,5 @@ FAE_GID=$(id -g)
 docker run -it --rm \
   --user $FAE_UID:$FAE_GID \
   --network host \
-  --mount type=bind,src=$faeDir,dst=/fae/ \
+  --mount type=bind,src=$faeDir,dst=/var/lib/fae/ \
   $imgName $@
