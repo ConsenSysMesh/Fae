@@ -1,0 +1,8 @@
+body = EnterLottery
+keys
+  self = $self
+inputs
+  $lotteryID/Body/0/Current : Enter
+    self = self
+    nametag = $nametagID/Body/0/Current : ()
+      self = self

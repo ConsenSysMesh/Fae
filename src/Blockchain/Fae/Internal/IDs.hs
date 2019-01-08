@@ -19,23 +19,21 @@ import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs.Types
 
-import Control.DeepSeq
+import Common.Lens
 
+import Control.Monad.State.Class
 import Control.Monad.Writer
 
-import Data.Char
-import Data.List
-import Data.String
-import Data.Traversable
-import Data.Type.Equality
-import Data.Void
+import Data.Map (Map)
+import qualified Data.Map as Map
+
+import Data.Maybe
+import Data.Typeable
 
 import GHC.Generics
 import GHC.TypeLits
 
 import Numeric.Natural
-
-import Type.Reflection
 
 -- * Types
 
@@ -48,17 +46,15 @@ data BearsValue = forall a. (HasEscrowIDs a) => BearsValue a
 
 -- | A map of escrow IDs that preserves input and output types, regardless
 -- of what they are.
-type EscrowIDMap f =
-  forall argType valType. 
-  (HasEscrowIDs argType, HasEscrowIDs valType) =>
-  EscrowID argType valType -> f (EscrowID argType valType)
+type EscrowIDMap f = 
+  forall name. (Typeable name) => EscrowID name -> f (EscrowID name)
 
 -- | The type of a traversal by an 'EscrowIDMap', used in 'HasEscrowIDs'.
 -- Note that because the kind of traversal map that is allowed is subject
 -- to some Fae-specific constraints, this is a little different from
 -- a @lens@ 'Traversal'.
 type EscrowIDTraversal a = 
-  forall f. (Monad f) => EscrowIDMap f -> a -> f a
+  forall m. (Monad m) => EscrowIDMap m -> a -> m a
 
 -- * Typeclasses
 
@@ -82,13 +78,13 @@ class GHasEscrowIDs f where
 
 {- Instances -}
 
--- | Escrow IDs, of course, contain themselves.  A tricky special case is
--- that the transactional variants contain escrows in their argument or
--- value as well.
-instance 
-  (HasEscrowIDs argType, HasEscrowIDs valType) =>
-  HasEscrowIDs (EscrowID argType valType) where
+-- | Even though 'BearsValue' hides the true type, it still has
+-- a 'HasEscrowIDs' constraint, so we can traverse the anonymous contents.
+instance HasEscrowIDs BearsValue where
+  traverseEscrowIDs f (BearsValue x) = BearsValue <$> traverseEscrowIDs f x
 
+-- | Escrow IDs, of course, contain themselves.
+instance (Typeable name) => HasEscrowIDs (EscrowID name) where
   -- Not point-free; we need to specialize the forall.
   traverseEscrowIDs f eID = f eID
 
@@ -116,6 +112,19 @@ instance HasEscrowIDs Natural where
 -- | -
 instance HasEscrowIDs PublicKey where
   traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | This is important because a value may have function types in it, and
+-- still hold escrows.  Functions are not 'Generic', so we have to bypass
+-- the generic instance here.
+instance (Typeable a, Typeable b) => HasEscrowIDs (a -> b) where
+  traverseEscrowIDs = defaultTraverseEscrowIDs
+-- | This covers a wide variety of types like 'Map' that are not 'Generic'
+-- but still function as containers that might have escrow IDs.
+instance 
+  (Typeable (t a), HasEscrowIDs a, Traversable t) => 
+  HasEscrowIDs (Container (t a)) where
+
+  traverseEscrowIDs f = 
+    fmap Container . traverse (traverseEscrowIDs f) . getContainer
 
 -- Boring Generic boilerplate
 
@@ -148,42 +157,53 @@ instance (GHasEscrowIDs f) => GHasEscrowIDs (M1 i m f) where
 
 -- * Functions
 
--- | Take the hash of a contract ID.
-shorten :: ContractID -> ShortContractID
-shorten = ShortContractID . digest . withoutNonce
-
 -- | Mark a value backed by escrows as such.
 bearer :: (HasEscrowIDs a) => a -> BearsValue
 bearer = BearsValue 
 
 -- | Like 'fromDynamic'.
-unBearer :: forall a. (HasEscrowIDs a) => BearsValue -> Maybe a
-unBearer (BearsValue x)
-  | Just HRefl <- typeOf x `eqTypeRep` (typeRep :: TypeRep a) = Just x
-  | otherwise = Nothing
+unBearer :: forall a. (Typeable a) => BearsValue -> Maybe a
+unBearer (BearsValue x) = cast x
 
 -- | Like 'fromDyn'.
-unBear :: forall a. (HasEscrowIDs a) => BearsValue -> a -> a
-unBear (BearsValue x) x0 
-  | Just HRefl <- typeOf x `eqTypeRep` typeOf x0 = x
-  | otherwise = x0
+unBear :: (Typeable a) => BearsValue -> a -> a
+unBear (BearsValue x) x0 = fromMaybe x0 $ cast x
 
 -- | Like 'dynTypeRep'.
-bearerType :: BearsValue -> SomeTypeRep
-bearerType (BearsValue x) = someTypeRep (Just x)
+bearerType :: BearsValue -> TypeRep
+bearerType (BearsValue x) = typeRep (Just x)
 
 -- | For making empty instances of 'HasEscrowIDs'
 defaultTraverseEscrowIDs :: EscrowIDTraversal a
 -- Not point-free to specialize forall
 defaultTraverseEscrowIDs _ x = return x
 
--- | Predicate for determining whether a required nonce was provided.
-hasNonce :: ContractID -> Bool
-hasNonce (_ :# n) = True
-hasNonce _ = False
+-- | Just accumulates all the entries in each of the objects as a map.
+-- Internally, this uses an imitation of the @lens@ function 'toList' for
+-- 'Traversal's, but since an 'EscrowIDTraversal' is not /exactly/
+-- a 'Traversal', we have to reproduce it.
+getEntIDMap :: 
+  forall a b m.
+  (HasEscrowIDs b, Monad m) => 
+  (forall name. (Typeable name) => EscrowID name -> m a) -> 
+  b -> m (Map EntryID a)
+getEntIDMap f = 
+  fmap Map.fromList . sequence . execWriter . traverseEscrowIDs tellEntry 
+  where 
+    tellEntry :: 
+      (Typeable name') => 
+      EscrowID name' -> Writer [m (EntryID, a)] (EscrowID name')
+    tellEntry eID@EscrowID{..} = tell [(entID,) <$> f eID] >> return eID
 
--- | Normalizes a contract ID for storing with transaction inputs 
-withoutNonce :: ContractID -> ContractID
-withoutNonce (cID :# n) = cID
-withoutNonce cID = cID
+-- | Finds an entry or throws an error.
+getEntry :: (MonadState (Map EntryID a) m) => EntryID -> m a
+getEntry entID = fromMaybe (throw idErr) <$> use (at entID) where
+  idErr = BadEscrowID entID
 
+-- | This function actually /takes/ the entries, not just copies them,
+-- because valuable things can't be copied.
+takeEntry :: (MonadState (Map EntryID a) m) => EntryID -> m a
+takeEntry entID = do
+  x <- getEntry entID
+  at entID .= Nothing
+  return x

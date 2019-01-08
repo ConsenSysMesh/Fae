@@ -10,11 +10,13 @@ This module extends the types of "Crypto.Hash" and "Crypto.PubKey.Ed25519" from 
 -}
 module Blockchain.Fae.Internal.Crypto 
   (
-    Serialize,
-    module Blockchain.Fae.Internal.Crypto
+    module Blockchain.Fae.Internal.Crypto,
+    -- * Re-exports
+    Serialize
   ) where
 
 import Control.DeepSeq
+import Control.Exception
 import Control.Monad
 
 import Crypto.Error
@@ -29,6 +31,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Char
 import Data.Dynamic
 import Data.List
+import Data.Maybe
 import Data.Ord
 import Data.Proxy
 import Data.Serialize (Serialize)
@@ -44,33 +47,34 @@ import Numeric.Natural
 
 import System.IO.Unsafe
 
--- * Types
+import Text.Read
 
--- These are only here to avoid an UndecidableInstance in the Serialize
--- instance.
+-- * Types
+-- We don't implement our own crypto because we aren't crazy; these are
+-- taken from 'cryptonite'.  
 
 -- | Newtyped 'Ed.PublicKey' for defining my own instances of things.
-newtype EdPublicKey = EdPublicKey Ed.PublicKey deriving (Eq, NFData)
+newtype PublicKey = PublicKey Ed.PublicKey deriving (Eq, NFData)
+
 -- | Newtyped 'Ed.SecretKey' for defining my own instances of things.
 newtype EdSecretKey = EdSecretKey Ed.SecretKey deriving (Eq, NFData)
--- | Newtyped 'Ed.Signature' for defining my own instances of things.
-newtype EdSignature = EdSignature Ed.Signature deriving (Eq, NFData)
--- | Newtyped 'Hash.Digest' 'Hash.SHA3_256' for defining my own instances
--- of things.
-newtype Digest = HashDigest (Hash.Digest Hash.SHA3_256) deriving (Eq, Ord, NFData)
-
--- | It's what it looks like.  We don't implement our own crypto because we
--- aren't crazy; this is taken from 'cryptonite'.
-type PublicKey = EdPublicKey
 -- | We include both the public and private keys here because the Ed25519
 -- signing function needs both of them, and that's just semantically silly.
-data PrivateKey = PrivateKey EdPublicKey EdSecretKey deriving (Generic)
--- | We include the public key along with the signature because there
--- appears to be no public-key recovery function from Ed25519 signatures.
-data Signature = Signature EdPublicKey EdSignature deriving (Generic, Eq)
+data PrivateKey = PrivateKey PublicKey EdSecretKey deriving (Generic)
+
+-- | Newtyped 'Ed.Signature' for defining my own instances of things.
+newtype Signature = Signature Ed.Signature deriving (Eq, NFData)
+-- | Newtyped 'Hash.Digest' 'Hash.SHA3_256' for defining my own instances
+-- of things.
+--
+newtype Digest = HashDigest (Hash.Digest Hash.SHA3_256) deriving (Eq, Ord, NFData)
 
 -- | A useful abstraction, again allowing semantic improvements in 'sign'.
-data Signed a = Signed {body :: a, sig :: Signature} deriving (Generic)
+data Signed a = Signed {unSigned :: a, sig :: Signature} deriving (Generic)
+
+-- | Possible errors in applying the cryptographic functions
+data CryptoException =
+  CryptoParseException String String
 
 -- * Type classes
 -- | This is probably a duplicate of some @Hashable@ class, but I want
@@ -109,6 +113,13 @@ class (PassFail (PassFailM a)) => PartialSerialize a where
   partialDecode :: BS.ByteString -> PassFailM a a
 
 {- Instances -}
+
+-- | -
+instance Show CryptoException where
+  show (CryptoParseException label text) = label ++ " read failed for: " ++ text
+
+-- | -
+instance Exception CryptoException 
 
 -- | Decoding a hash returns a 'Maybe' value.  This is of course the
 -- motivating type for the 'PassFail' class.
@@ -149,19 +160,19 @@ instance PartialSerialize Ed.SecretKey where
   decodeSize _ = Ed.secretKeySize
   partialDecode = Ed.secretKey
 
--- 'signatureSize' comes from @cryptonite-0.24@.
 -- | 'partialDecode' is 'signature', which is very finicky and should
 -- probably just be a 'Serialize' instance for 'Ed.Signature'.
 instance PartialSerialize Ed.Signature where
   type PassFailM Ed.Signature = CryptoFailable
   encode = BA.convert
+  -- | 'signatureSize' comes from @cryptonite-0.24@.
   decodeSize _ = Ed.signatureSize
   partialDecode = Ed.signature
 
 -- | Uniform serialization via 'PartialSerialize'
-instance Serialize EdPublicKey where
-  put (EdPublicKey x) = putPartialSerialize x
-  get = EdPublicKey <$> getPartialSerialize
+instance Serialize PublicKey where
+  put (PublicKey x) = putPartialSerialize x
+  get = PublicKey <$> getPartialSerialize
 
 -- | Uniform serialization via 'PartialSerialize'
 instance Serialize EdSecretKey where
@@ -169,30 +180,26 @@ instance Serialize EdSecretKey where
   get = EdSecretKey <$> getPartialSerialize
 
 -- | Uniform serialization via 'PartialSerialize'
-instance Serialize EdSignature where
-  put (EdSignature x) = putPartialSerialize x
-  get = EdSignature <$> getPartialSerialize
+instance Serialize Signature where
+  put (Signature x) = putPartialSerialize x
+  get = Signature <$> getPartialSerialize
 
 -- | Uniform serialization via 'PartialSerialize'
 instance Serialize Digest where
   put (HashDigest x) = putPartialSerialize x
   get = HashDigest <$> getPartialSerialize
 
--- instance Serialize PublicKey
--- instance Serialize Digest
 -- | -
 instance Serialize PrivateKey
 -- | -
-instance Serialize Signature
--- | -
 instance (Serialize a) => Serialize (Signed a)
 
--- | -
-instance Digestible EdPublicKey
+-- | - 
+instance Digestible PublicKey
+-- | - 
+instance Digestible Signature
 -- | -
 instance Digestible EdSecretKey
--- | -
-instance Digestible EdSignature
 -- | -
 instance Digestible Digest
 
@@ -230,11 +237,11 @@ instance Read Digest where
   readsPrec = readsPrecSer
 
 -- | Uniform instance from 'Serialize'
-instance Read EdPublicKey where
+instance Read PublicKey where
   readsPrec = readsPrecSer
 
 -- | Uniform instance from 'Serialize'
-instance Ord EdPublicKey where
+instance Ord PublicKey where
   compare = compareSerialize
 
 -- | Uniform instance from 'Serialize'
@@ -242,23 +249,23 @@ instance Ord EdSecretKey where
   compare = compareSerialize
 
 -- | Uniform instance from 'Serialize'
-instance Ord EdSignature where
+instance Ord Signature where
   compare = compareSerialize
 
 -- | We want an 'IsString' instance for the convenience of transaction
 -- authors, who have to provide a contract ID that is, ultimately,
 -- a 'Digest'.
 instance IsString Digest where
-  fromString = read
+  fromString = readCrypto "Digest"
 
 -- | Contracts may need to contain public keys that come from outside Fae,
 -- and it should be easy to enter them.
-instance IsString EdPublicKey where
-  fromString = read
+instance IsString PublicKey where
+  fromString = readCrypto "PublicKey"
 
 -- | Public keys 'show' as hex strings.
-instance Show EdPublicKey where
-  show = C8.unpack . B16.encode . Ser.encode
+instance Show PublicKey where
+  show = printHex
 
 -- | Digests 'show' as hex strings.
 instance Show Digest where
@@ -293,31 +300,29 @@ readsPrecSer _ s =
     Right x -> [(x, C8.unpack rest)]
   where (bs, rest) = B16.decode $ C8.pack $ dropWhile isSpace s
 
+-- | Same as 'read', except with a better error message for this module.
+readCrypto :: (Read a) => String -> String -> a
+readCrypto l s = fromMaybe (throw $ CryptoParseException l s) $ readMaybe s
+
 -- | This function replaces 'Ed.sign' to use our semantically-nice types.
 --
 -- prop> forall x. (Digestible x) => unsign . sign x = public
 sign :: (Digestible a) => a -> PrivateKey -> Signed a
-sign x (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey)) = 
+sign x (PrivateKey pubKey@(PublicKey edPublicKey) (EdSecretKey secKey)) = 
   Signed
   {
-    sig = Signature pubKey $ EdSignature $ Ed.sign secKey edPublicKey dig,
-    body = x
+    sig = Signature $ Ed.sign secKey edPublicKey dig,
+    unSigned = x
   }
   where HashDigest dig = digest x
 
--- | The public-key signature recovery function.  Doubles as a way to
--- verify a signature.  Satisfies the law
+-- | Thin wrapper for 'Ed.verify', to validate a signature against
+-- a message and public key.
 --
--- prop> forall x. (Digestible x) => unsign . sign x = public
-unsign :: (Digestible a) => Signed a -> Maybe PublicKey
-unsign Signed{sig = Signature pubKey@(EdPublicKey edPublicKey) (EdSignature sig), body = msg}
-  | Ed.verify edPublicKey dig sig = Just pubKey
-  | otherwise = Nothing
-  where HashDigest dig = digest msg
-
--- | When we need the public key without validating the signature
-getSigner :: Signature -> PublicKey
-getSigner (Signature pubKey _) = pubKey
+-- prop> forall x. (Digestible x) => verify (public key) (sign x key) = True
+verify :: (Digestible a) => PublicKey -> Signed a -> Bool
+verify (PublicKey pk) Signed{sig = Signature sig, unSigned = msg} = 
+  Ed.verify pk dig sig where HashDigest dig = digest msg
 
 -- | Randomly creates a new private key using 'generateSecretKey', which
 -- itself relies on 'MonadRandom'.  Fortunately @cryptonite@ handles the
@@ -326,7 +331,7 @@ newPrivateKey :: (MonadRandom m) => m PrivateKey
 newPrivateKey = do
   secKey <- Ed.generateSecretKey
   let pubKey = Ed.toPublic secKey
-  return $ PrivateKey (EdPublicKey pubKey) (EdSecretKey secKey)
+  return $ PrivateKey (PublicKey pubKey) (EdSecretKey secKey)
 
 {-# NOINLINE unsafeNewPrivateKey #-}
 -- | This very evil function should only be used if you want a single
@@ -340,7 +345,20 @@ unsafeNewPrivateKey = unsafePerformIO newPrivateKey
 --
 -- prop> unsign . sign = public
 public :: PrivateKey -> Maybe PublicKey
-public (PrivateKey pubKey@(EdPublicKey edPublicKey) (EdSecretKey secKey))
+public (PrivateKey pubKey@(PublicKey edPublicKey) (EdSecretKey secKey))
   | Ed.toPublic secKey == edPublicKey = Just pubKey
   | otherwise = Nothing
+
+-- | Useful function inexplicably missing from every library
+printHex :: (Serialize a) => a -> String
+printHex = C8.unpack . B16.encode . Ser.encode
+
+-- | Our hex strings are 64 bytes long; for merely informational purposes,
+-- it is enough to show just a few, say 4.
+printShortHex :: (Serialize a) => a -> String
+printShortHex = (++ "...") . C8.unpack . C8.take 4 . B16.encode . Ser.encode
+
+-- | The default for various things
+nullDigest :: Digest
+nullDigest = digest ()
 

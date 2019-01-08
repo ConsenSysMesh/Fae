@@ -1,0 +1,10 @@
+body = PayMaterial2
+inputs
+  $paymentID/Body/0/Current : ()
+materials
+  payment = $paymentID/Body/1/Current : ()
+    eID = $paymentID/Body/1/Current : ()
+      eID = $paymentID/Body/1/Current : ()
+        eID = $paymentID/Body/0/Current : ()
+  payment' = $paymentID/Body/1/Current : ()
+    eID = $paymentID/Body/0/Current : ()

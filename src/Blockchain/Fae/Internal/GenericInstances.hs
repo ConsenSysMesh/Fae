@@ -9,15 +9,18 @@ Stability: experimental
 -}
 module Blockchain.Fae.Internal.GenericInstances where
 
+import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
-import Blockchain.Fae.Internal.GetInputValues
-import Blockchain.Fae.Internal.Versions
+import Blockchain.Fae.Internal.Serialization
 
 import Control.Monad.State
 
 import Data.Maybe
 import Data.Typeable
+
+import Data.Serialize (Serialize, GSerializePut, GSerializeGet)
+import qualified Data.Serialize as S
 
 import GHC.Generics
 
@@ -29,18 +32,18 @@ instance {-# OVERLAPPABLE #-}
 
 -- | /So/ undecidable
 instance {-# OVERLAPPABLE #-}
-  (Typeable a, Generic a, GHasEscrowIDs (Rep a), GGetInputValues (Rep a)) => 
-  GetInputValues a where
+  (Typeable a, EGeneric a, Serialize (ERep a)) => Exportable a where
 
-  getInputValues l = check $ fromMaybe 
-    (defaultGetInputValues l) 
-    (runStateT (to <$> gGetInputValues) l)
-    where check ~(x, unused) = if null unused then x else throw TooManyInputs
+  exportValue = fmap S.encode . eFrom
+  importValue = either (const $ return Nothing) (fmap Just . eTo) . S.decode
 
 -- | /So/ undecidable
 instance {-# OVERLAPPABLE #-}
-  (HasEscrowIDs a, Typeable a, Generic a, GVersionable (Rep a)) => 
-  Versionable a where
+  (Generic a, EGeneric1 (Rep a), ERep a ~ SERep1 (Rep a)) => EGeneric a where
 
-  mapVersions vMap = to . gMapVersions vMap . from 
-  versions f = gVersions f . from
+  eFrom = fmap SERep1 . eFrom1 @_ @_ @() . from 
+  eTo (SERep1 x) = to <$> eTo1 @_ @_ @() x
+
+-- | /So/ undecidable
+instance {-# OVERLAPPABLE #-} (Serialize (ERep a)) => ESerialize a
+

@@ -5,7 +5,7 @@ name:                fae
 --   *.*.c.* -> *.*.(c + 1).0 : Bugfixes that may change the (incorrect) behavior of existing code
 --                              or minor, compatible new features
 --   *.*.*.d -> *.*.*.(d + 1) : Adding omitted exports, GHC extensions, cosmetic stuff, demos ...
-version:             1.1.0.0
+version:             2.0.0.0
 -- synopsis:
 -- description:
 homepage:            https://github.com/Consensys/Fae
@@ -28,22 +28,21 @@ library
     Blockchain.Fae.Contracts
     Blockchain.Fae.Currency
   other-modules:
-    Blockchain.Fae.Internal.Block
     Blockchain.Fae.Internal.Contract
     Blockchain.Fae.Internal.Crypto
     Blockchain.Fae.Internal.Exceptions
     Blockchain.Fae.Internal.GenericInstances
-    Blockchain.Fae.Internal.GetInputValues
     Blockchain.Fae.Internal.IDs
     Blockchain.Fae.Internal.IDs.Types
     Blockchain.Fae.Internal.Messages,
-    Blockchain.Fae.Internal.PrettyFae
+    Blockchain.Fae.Internal.Monitors,
+    Blockchain.Fae.Internal.TXSummary
     Blockchain.Fae.Internal.Reward
+    Blockchain.Fae.Internal.Serialization
     Blockchain.Fae.Internal.Storage
     Blockchain.Fae.Internal.Suspend
     Blockchain.Fae.Internal.Transaction
     Blockchain.Fae.Internal.TX
-    Blockchain.Fae.Internal.Versions
     Common.Lens
   build-depends:       
     base >= 4.10 && < 5,
@@ -62,7 +61,9 @@ library
     pretty,
     template-haskell,
     text,
-    transformers
+    transformers,
+    unix,
+    vector
   default-language:    Haskell2010
   default-extensions:
     BangPatterns
@@ -87,6 +88,7 @@ library
     TupleSections
     TypeApplications
     TypeFamilies
+    TypeFamilyDependencies
     TypeOperators
 
 executable faeServer
@@ -95,9 +97,11 @@ executable faeServer
   main-is:             FaeServer.hs
   ghc-options:         -dynamic -threaded -rtsopts -with-rtsopts=-N
   other-modules:
+    Common.JSON
     Common.Lens
     Common.ProtocolT
     FaeServer.App
+    FaeServer.Args
     FaeServer.Concurrency
     FaeServer.Fae
     FaeServer.Faeth
@@ -119,6 +123,7 @@ executable faeServer
     lens,
     lifted-base,
     mtl,
+    pretty,
     process,
     stm,
     template-haskell,
@@ -128,7 +133,8 @@ executable faeServer
     wai,
     wai-extra,
     warp,
-    websockets
+    websockets,
+    zlib
   default-language:    Haskell2010
   default-extensions:
     DeriveGeneric
@@ -142,6 +148,7 @@ executable faeServer
     RankNTypes
     RecordWildCards
     ScopedTypeVariables
+    TupleSections
     TypeApplications
 
 executable postTX
@@ -149,13 +156,15 @@ executable postTX
   hs-source-dirs: bin, common
   main-is: PostTX.hs
   other-modules:
+    Common.JSON
     Common.Lens
     Common.ProtocolT
     PostTX.Args
-    PostTX.EnvVars
     PostTX.Faeth
+    PostTX.ImportExport
+    PostTX.Keys
     PostTX.Network
-    PostTX.SpecParser
+    PostTX.Parser
     PostTX.Submit
     PostTX.TXSpec
     PostTX.View
@@ -166,18 +175,22 @@ executable postTX
     bytestring,
     cereal,
     containers,
+    deepseq,
     directory,
     fae,
     filepath,
     haskeline,
     http-client,
     lens,
+    megaparsec,
     mtl,
+    pretty,
     process,
     template-haskell,
     text,
     time,
-    websockets
+    websockets,
+    zlib
   default-language: Haskell2010
   default-extensions:
     DeriveGeneric
@@ -189,7 +202,9 @@ executable postTX
     MultiParamTypeClasses
     NamedFieldPuns
     OverloadedStrings
+    ScopedTypeVariables
     TupleSections
+    TypeApplications
 
 executable collectPackage
   buildable: True
@@ -219,4 +234,3 @@ executable collectPackage
     NamedFieldPuns
     RankNTypes
     RecordWildCards
-

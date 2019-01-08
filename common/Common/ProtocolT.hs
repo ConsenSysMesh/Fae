@@ -11,7 +11,10 @@ the server (@faeServer@) and the client (@postTX@) when communicating with
 an Ethereum client via JSON-RPC.  Primary among these is the
 request/response/error framework of 'SendRequest', 'ReceiveResponse', and
 'Error', together with 'sendProtocolT', 'receiveProtocolT',
-'receiveRequest', and 'sendReceiveProtocolT'.  The communication abstraction of the 'ProtocolT' monad is also defined with its initializer 'runProtocolT'.  Finally, the basic Faeth transaction types are defined here. 
+'receiveRequest', and 'sendReceiveProtocolT'.  The communication
+abstraction of the 'ProtocolT' monad is also defined with its initializer
+'runProtocolT'.  Finally, the basic Faeth transaction types are defined
+here. 
 
 -}
 {-# LANGUAGE TemplateHaskell #-}
@@ -19,11 +22,12 @@ module Common.ProtocolT where
 
 import Blockchain.Fae.FrontEnd
 
+import Codec.Compression.Zlib
+
 import Common.Lens hiding ((.=))
 
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans
 import Control.Monad.Writer
 
 import Data.Aeson (FromJSON(..), ToJSON(..), (.:), (.:?), (.=))
@@ -33,16 +37,15 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.List as L
+import qualified Data.ByteString.Lazy as LBS
 import Data.Maybe
-import Data.Monoid
 import Data.Serialize (Serialize)
 import qualified Data.Serialize as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
 
-import GHC.Generics
+import GHC.Generics as G
 
 import qualified Network.WebSockets as WS
 
@@ -50,10 +53,6 @@ import Numeric
 
 import qualified Text.Read as R
 import qualified Text.ParserCombinators.ReadP as RP
-import qualified Text.ParserCombinators.ReadPrec as R
-
-import System.Directory
-import System.FilePath
 
 import Text.Read hiding (lift, get)
 
@@ -65,9 +64,7 @@ import Text.Read hiding (lift, get)
 data FaethTXData =
   FaethTXData
   {
-    faeTX :: TXMessage,
-    mainModule :: Module,
-    otherModules :: ModuleMap,
+    faeTX :: EthArgFaeTX,
     senderEthAccount :: EthAccount,
     faethEthAddress :: EthAddress,
     faethEthValue :: Maybe HexInteger
@@ -79,10 +76,13 @@ data FaethTXData =
 data FaeTX = 
   FaeTX 
   {
-    faeTXMessage :: TXMessage,
+    faeTXMessage :: TXMessage Salt, -- ^ Needs to be the first field
     faeMainModule :: Module,
     faeOtherModules :: ModuleMap
   } deriving (Generic)
+
+-- | For defining variant encodings
+newtype EthArgFaeTX = EthArgFaeTX { getEthArgFaeTX :: FaeTX }
 
 -- | Faeth's particular format for the Fae "extra data field" @salt@.  In
 -- addition to the Ethereum value and recipient demanded, it also
@@ -91,9 +91,10 @@ data FaeTX =
 data Salt = 
   Salt
   {
-    faeSalt :: String,
+    ethArgument :: ByteString, -- ^ Needs to be the first field
     ethFee :: Maybe HexInteger,
-    ethRecipient :: Maybe EthAddress
+    ethRecipient :: Maybe EthAddress,
+    faeSalt :: String
   }
   deriving (Generic)
 
@@ -206,18 +207,58 @@ type EthBlockID = Hex
 type EthTXID = Hex
 
 makeLenses ''FaethTXData
+makeLenses ''FaeTX
+makeLenses ''Salt
+makeLenses ''EthArgFaeTX
 
--- | -
+-- | Generic instance
 instance Serialize EthAccount
--- | -
+-- | Generic instance
 instance Serialize FaeTX
+
+-- | Differs from the default encoding of FaeTX in that the length of the
+-- Ethereum argument is shifted from the beginning to the end, exposing the
+-- argument itself.  This allows an Ethereum contract to use the encoding
+-- as its argument, so long as it follows the Ethereum Contract ABI, in
+-- which the actual argument is well-typed and (for ambiguously sized
+-- types) length-prefixed.  The length suffix can be re-relocated for
+-- decoding.
+--
+-- This code depends strongly on the assumption that the Generic encoding
+-- of a product type is just the concatenation of the encodings of its
+-- fields, and that a ByteString's encoding is length-prefixed by an 'Int'.
+instance Serialize EthArgFaeTX where
+  put (EthArgFaeTX faeTX) = 
+    let encoding = S.encode faeTX
+        ethArg = faeTX ^. _faeTXMessage . _salt . _ethArgument
+        dataBS = S.encode ethArg
+        compressStrict = LBS.toStrict . compress . LBS.fromStrict
+        compressed = maybe (error "FaeTX doesn't start with ethArgument!") 
+          compressStrict $ BS.stripPrefix dataBS encoding
+        ethArgPrefix = fromMaybe (error "ethArgument doesn't end with the data!") $
+          BS.stripSuffix ethArg dataBS
+    in S.putByteString $ ethArg <> compressed <> ethArgPrefix
+
+  get = do
+    encoding <- S.remaining >>= S.getBytes
+    let intLength = BS.length (S.encode (0 :: Int)) -- ^ Kind of a hack
+        encLength = BS.length encoding
+        (rest, argLengthBS) = BS.splitAt (encLength - intLength) encoding
+        argLength = either error id $ S.decode argLengthBS
+        (dataBS, compressed) = BS.splitAt argLength rest
+        decompressStrict = LBS.toStrict . decompress . LBS.fromStrict
+        decompressed = decompressStrict compressed
+    faeTX <- either fail return $ S.decode $ argLengthBS <> dataBS <> decompressed
+    return $ EthArgFaeTX faeTX
 
 -- | -
 instance Serialize Salt
 
 -- | -
 instance Show Error where
-  show Error{..} = errMessage ++ maybe "" (\d -> "\n" ++ show d) errData
+  show Error{..} = 
+    "Error in JSON-RPC response: " ++
+    errMessage ++ maybe "" (\d -> "\n" ++ show d) errData
 
 -- | -
 instance Exception Error
@@ -272,7 +313,7 @@ instance ToJSON FaethTXData where
         [
           "from" .= address,
           "to" .= faethEthAddress,
-          "data" .= FaeTX faeTX mainModule otherModules
+          "data" .= faeTX
         ], 
       toJSON passphrase
     ]
@@ -280,7 +321,7 @@ instance ToJSON FaethTXData where
 -- | -
 instance FromJSON FaethTXData where
   parseJSON = A.withObject "FaethTXData" $ \obj -> do
-    FaeTX{..} <- obj .: "input"
+    faeTX <- obj .: "input"
     faethEthAddress <- obj .: "to"
     faethEthValue <- obj .: "value"
     address <- obj .: "from"
@@ -290,21 +331,17 @@ instance FromJSON FaethTXData where
     return
       FaethTXData
       {
-        faeTX = faeTXMessage,
-        mainModule = faeMainModule,
-        otherModules = faeOtherModules,
         senderEthAccount = EthAccount{..},
         ..
       }
 
 -- | -
-instance ToJSON FaeTX where
+instance ToJSON EthArgFaeTX where
   toJSON = toJSON . Hex . S.encode
 
 -- | -
-instance FromJSON FaeTX where
-  parseJSON x = 
-    either error id . S.decode . getHex <$> parseJSON x
+instance FromJSON EthArgFaeTX where
+  parseJSON x = either error id . S.decode . getHex <$> parseJSON x
 
 -- | -
 instance (ToJSON a) => ToJSON (SendRequest a) where
@@ -394,11 +431,11 @@ liftWS f = liftProtocolT ask >>= liftIO . f
 
 -- | Opens a websocket connection with whatever handshake that protocol
 -- uses (handled by @websockets@, not by us) and initializes the ID counter
--- to 0.  The host is currently hard-coded.
+-- to 0.
 runProtocolT :: 
   (MonadIO m, Commutes IO (Reader WS.Connection) m) => 
-  ProtocolT m () -> m ()
-runProtocolT x = do
+  String -> Int -> ProtocolT m () -> m ()
+runProtocolT host port x = do
   liftIO $ putStrLn $
     "Connecting to Ethereum client (" ++ host ++ ":" ++ show port ++ ")\n"
   xWS <- 
@@ -408,10 +445,6 @@ runProtocolT x = do
     flip evalStateT 0 $
     getProtocolT x
   liftIO $ WS.runClient host port "" $ runReader xWS
-
-  where
-    host = "localhost"
-    port = 8546
 
 -- | Sends a JSON-RPC message over a websocket.
 sendProtocolT :: (ToJSON a, ToRequest a, MonadProtocol m) => a -> m Int
@@ -425,7 +458,9 @@ sendProtocolT sendReqParams = do
 -- | Receives a JSON-RPC response over a websocket.
 receiveProtocolT :: (FromJSON a, MonadProtocol m) => Int -> m a
 receiveProtocolT reqID = do
-  Response{..} <- either error id . A.eitherDecode <$> liftWS WS.receiveData
+  Response{..} <- 
+    either (\e -> error $ "Couldn't decode JSON-RPC response: " ++ show e) id . 
+    A.eitherDecode <$> liftWS WS.receiveData
   return $
     if respReqID == reqID
     then either throw id respData
@@ -453,7 +488,3 @@ sendReceiveProtocolT x = handleAll err $ do
   receiveProtocolT reqID
   where err e = error $ "Ethereum client returned an error: " ++ show e
 
--- | Extracts the salt from a message, converting it from an unformatted
--- byte string.
-faethSalt :: TXMessage -> Salt
-faethSalt = either error id . S.decode . salt 

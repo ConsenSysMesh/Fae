@@ -18,6 +18,7 @@ indispensable:
   - FlexibleInstances
   - FunctionalDependencies
   - GeneralizedNewtypeDeriving
+  - LambdaCase
   - MultiParamTypeClasses
   - MultiWayIf
   - NamedFieldPuns
@@ -27,9 +28,11 @@ indispensable:
   - StandaloneDeriving
   - TupleSections
   - TypeApplications
+  - TypeFamilies
 -}
 module Blockchain.Fae.Internal.TX where
 
+import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
 import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.IDs
@@ -38,14 +41,18 @@ import Blockchain.Fae.Internal.Transaction
 
 import Control.DeepSeq
 
-import Control.Monad 
 import Control.Monad.State
-import Control.Monad.Trans
 
+import Data.ByteString (ByteString)
 import Data.Functor.Identity
 import Data.List
+
 import Data.Map (Map)
 import qualified Data.Map as Map
+
+import Data.Maybe
+import Data.Proxy
+import Data.Typeable
 
 import GHC.Generics
 
@@ -63,8 +70,10 @@ import System.FilePath
 data TX =
   TX
   {
+    isReward :: Bool,
     txID :: TransactionID,
-    inputs :: Inputs,
+    txMaterials :: InputMaterials,
+    inputs :: [Input],
     pubKeys :: Signers,
     fallback :: [String]
   }
@@ -72,6 +81,10 @@ data TX =
 
 -- | Helpful for printing strings without the surrounding quotes.
 newtype UnquotedString = UnquotedString String
+-- | Helpful for eliminating a 'Data.ByteString' dependency in the
+-- 'interpretImportedValue' interpreter.
+newtype WrappedByteString = 
+  WrappedByteString { getWrappedByteString :: ByteString }
 
 -- | Monad for interpreting Fae transactions
 type FaeInterpretT m = InterpreterT (FaeStorageT m)
@@ -93,96 +106,163 @@ instance Show UnquotedString where
 instance (Monad m) => MonadState Storage (FaeInterpretT m) where
   state = lift . state
   put = lift . put
-  get = lift get
+  get = lift  get
 
 -- * Functions
 
--- | The transaction ID of the "genesis transaction"
-nullID :: TransactionID
-nullID = ShortContractID $ digest ()
-
 -- | Interprets a transaction, looking it up as a module named after its
--- transaction ID; the first argument is whether or not the transaction
--- gets a reward.  We set up the module search path carefully so that this
+-- transaction ID.  We set up the module search path carefully so that this
 -- transaction can effectively import both its own other modules, and those
 -- of other transactions.  Now that we dynamically link @faeServer@, the
 -- load-up time for the first transaction is pretty short; subsequent
 -- transactions are faster still.
-interpretTX :: (MonadMask m, MonadIO m) => Bool -> TX -> FaeInterpretT m ()
-interpretTX isReward TX{..} = handle fixGHCErrors $ do
-  Int.set [searchPath := thisTXPath]
-  loadModules [txSrc]
-  setImportsQ [(txSrc, Just txSrc), ("Blockchain.Fae.Internal", Nothing)]
-  run <- interpret runString infer
-  liftFaeStorage $ run inputs txID pubKeys isReward 
+interpretTX :: 
+  (Typeable m, MonadMask m, MonadIO m) => 
+  TX -> FaeInterpretT m ()
+interpretTX TX{..} = do
+  faeInterpret [txModule] expr $ \f -> f txMaterials inputs txID pubKeys isReward
   where
-    liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
-    runString = unwords
+    txModule = mkTXModuleName txID
+    -- Contrary to comments in the @hint@ documentation, the directory
+    -- @"."@ is /not/ always included in the search path.
+    expr = unwords
       [
         "runTransaction",
-        qualified "body", 
-        show $ map (UnquotedString . qualified) fallback
+        "body", 
+        show $ UnquotedString <$> fallback
       ]
-    fixGHCErrors (WontCompile []) = error "Compilation error"
-    fixGHCErrors (WontCompile (ghcE : _)) = error $ errMsg ghcE
-    fixGHCErrors (UnknownError e) = error e
-    fixGHCErrors (NotAllowed e) = error e
-    fixGHCErrors (GhcException e) = error e
-    txModName = "TX" ++ show txID
-    txSrc = "Blockchain.Fae.Transactions." ++ txModName
-    thisTXPath = 
+
+-- | This has to be interpreted because, even though all the information is
+-- known /to the sender/ of the value to be imported, it can only be
+-- transmitted textually, and therefore has to be re-parsed into a valid
+-- type.  The modules necessary for expressing this type are carried in
+-- 'neededModules'; they must be present for the recipient, but the
+-- corresponding transactions, if any, need not have been fully evaluated.
+interpretImportedValue :: 
+  (Typeable m, MonadMask m, MonadIO m) => ExportData -> FaeInterpretT m ()
+interpretImportedValue ExportData{..} = 
+  faeInterpret neededModules runString $ 
+    \f -> f (WrappedByteString exportedValue) exportedCID exportStatus
+  where
+    runString = unwords
       [
+        "addImportedValue",
         ".",
-        "Blockchain" </> "Fae" </> "Transactions" </> txModName </> "private"
+        "importValueThrow @(" ++ exportValType ++ ")"
       ]
-    qualified varName = txSrc ++ "." ++ varName
+
+-- | A top-level function (so that it can be in scope in the interpreter of
+-- 'interpretImportedValue') to handle failed imports.
+importValueThrow :: 
+  forall a m.
+  (Exportable a, MonadState Escrows m) => WrappedByteString -> m a
+importValueThrow (WrappedByteString bs) = 
+  fromMaybe (throw $ CantImport bs rep) <$> liftEscrowState (importValue bs)
+  where rep = typeRep $ Proxy @a
+
+-- | The inner interpretation function that appropriately loads modules,
+-- sets imports, and uses the result both for 'interpretTX' and
+-- 'interpretImportedValue'.
+faeInterpret :: 
+  (Typeable m, MonadMask m, MonadIO m, Typeable a) => 
+  [String] -> 
+  String ->
+  (a -> FaeStorage b) ->
+  FaeInterpretT m b
+faeInterpret moduleNames runString apply = handle fixGHCErrors $ do
+  -- We don't have to, and in fact must not, call `loadModules` on
+  -- a package module that isn't to be interpreted.
+  loadModules $ filter isTXModule moduleNames 
+  setImports imports
+  act <- interpret runString infer
+  liftFaeStorage $ apply act
+  where
+    imports =
+      "Blockchain.Fae.Internal" :
+      "Prelude" :
+      filter (not . isInternalModule) moduleNames
+    isTXModule = isPrefixOf "Blockchain.Fae.Transactions.TX"
+    isInternalModule = isPrefixOf "Blockchain.Fae.Internal"
+
+    fixGHCErrors (WontCompile []) = throw $ InterpretException "Compilation error"
+    fixGHCErrors (WontCompile (ghcE : _)) = 
+      throw $ InterpretException $ errMsg ghcE
+    fixGHCErrors (UnknownError e) = throw $ InterpretException e
+    fixGHCErrors (NotAllowed e) = throw $ InterpretException e
+    fixGHCErrors (GhcException e) = throw $ InterpretException e
+
+    liftFaeStorage = lift . mapStateT (return . runIdentity) . getFaeStorage
 
 -- | Runs the interpreter.
 runFaeInterpret :: (MonadMask m, MonadIO m) => FaeInterpretT m a -> m a
 runFaeInterpret x = do
   ghcLibdirM <- liftIO $ lookupEnv "GHC_LIBDIR"
-  fmap (either throw id) $
-    flip evalStateT (Storage Map.empty) $ 
-      case ghcLibdirM of
-        Nothing -> unsafeRunInterpreterWithArgs args x
-        Just libdir -> unsafeRunInterpreterWithArgsLibdir args libdir x
+  fmap (either throw id) . runStorageT . run ghcLibdirM args $ Int.set opts >> x
   
   where
+    run = maybe 
+      unsafeRunInterpreterWithArgs 
+      (flip unsafeRunInterpreterWithArgsLibdir)
     args = 
-      map ("-X" ++) languageExts ++
+      -- We error on orphan instances because the import/export
+      -- capability relies on the 'ContractName' instance being in scope
+      -- whenever the name itself is.
+      "-Werror=orphans" :
       -- For some reason, this makes the interpreter hang.  Unfortunate, as it
       -- rather weakens the trust situation not to have it.
       --      "-distrust-all" :
       "-fpackage-trust" : map ("-trust " ++) trustedPackages
-    languageExts = map show
+    opts = 
       [
-        BangPatterns,
-        DeriveDataTypeable,
-        DeriveGeneric,
-        FlexibleContexts,
-        FlexibleInstances,
-        FunctionalDependencies,
-        MultiParamTypeClasses,
-        MultiWayIf,
-        NamedFieldPuns,
-        OverloadedStrings,
-        PatternGuards,
-        RecordWildCards,
-        Safe,
-        StandaloneDeriving,
-        TupleSections,
-        TypeApplications
+        installedModulesInScope := False, 
+        languageExtensions := 
+          [
+            BangPatterns,
+            DeriveDataTypeable,
+            DeriveGeneric,
+            FlexibleContexts,
+            FlexibleInstances,
+            FunctionalDependencies,
+            LambdaCase,
+            MultiParamTypeClasses,
+            MultiWayIf,
+            NamedFieldPuns,
+            OverloadedStrings,
+            PatternGuards,
+            RecordWildCards,
+            Safe,
+            StandaloneDeriving,
+            TupleSections,
+            TypeApplications,
+            TypeFamilies
+          ]
       ]
     trustedPackages =
       [
         "array",
-        "base",
-        -- not binary,
+        "base", 
+        -- "binary", 
         "bytestring",
+        -- "cereal",
         "containers",
         "fae",
         "filepath",
         "transformers",
         "pretty"
       ]
+
+-- | Identifierizes a transaction ID.  On the off chance that an identifier
+-- (in some context) cannot begin with a number, we add an alphabetic
+-- prefix.
+mkTXIDName :: TransactionID -> String
+mkTXIDName = ("TX" ++) . show
+
+-- | Defines the Fae runtime module hierarchy.
+mkTXPathParts :: TransactionID -> [String]
+mkTXPathParts txID = ["Blockchain", "Fae", "Transactions", mkTXIDName txID]
+
+-- | Collapses the transaction path parts into a dot-separated hierarchical
+-- module name.
+mkTXModuleName :: TransactionID -> String
+mkTXModuleName = intercalate "." . mkTXPathParts
 

@@ -1,0 +1,824 @@
+<!doctype html>
+<html><head><title>Tutorial 3: Payments, tokens, and other credentials</title><meta charset="UTF-8"><link href="http://fonts.googleapis.com/css?family=Crimson+Text:400,400italic,700,700italic|Roboto:400,700,700italic,400italic" rel="stylesheet" type="text/css"><style>/*
+ * Copyright 2014 Quip
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+    font-size: 15px;
+    color: #333;
+    background: #fff;
+    padding: 60px 95px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern";
+    font-kerning: normal;
+    -moz-font-feature-settings: "kern";
+    -webkit-font-feature-settings: "kern";
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+th {
+    font-family: Roboto, sans-serif;
+    font-weight: 700;
+    margin: 0;
+    margin-top: 1.25em;
+    margin-bottom: 0.75em;
+}
+
+h1 {
+    font-size: 35px;
+    line-height: 42px;
+}
+
+h1:first-child {
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+h3 {
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Body text */
+body,
+p,
+ul,
+ol,
+td {
+    font-family: "Crimson Text", serif;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+blockquote,
+q {
+    display: block;
+    margin: 1em 0;
+    font-style: italic;
+}
+
+blockquote a,
+q a {
+    text-decoration: underline;
+}
+
+blockquote {
+    padding-left: 10px;
+    border-left: 4px solid #a6a6a6;
+}
+
+q {
+    color: #a6a6a6;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    quotes: none;
+}
+
+q a {
+    color: #a6a6a6;
+}
+
+code,
+pre {
+    font-family: Consolas, "Liberation Mono", Menlo, "Courier Prime Web",
+        Courier, monospace;
+    background: #f3f3f3;
+}
+
+code {
+    padding: 1px;
+    margin: 0 -1px;
+    border-radius: 3px;
+}
+
+pre {
+    display: block;
+    line-height: 20px;
+    text-shadow: 0 1px white;
+    padding: 5px 5px 5px 30px;
+    white-space: nowrap;
+    position: relative;
+    margin: 1em 0;
+}
+
+pre:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    border-left: solid 1px #dadada;
+}
+
+/* Lists */
+div[data-section-style="5"],
+div[data-section-style="6"],
+div[data-section-style="7"] {
+    margin: 12px 0;
+}
+
+ul {
+    padding: 0 0 0 40px;
+}
+
+ul li {
+    margin-bottom: 0.4em;
+}
+
+/* Bulleted list */
+div[data-section-style="5"] ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul {
+    list-style-type: square;
+}
+div[data-section-style="5"] ul ul ul ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul ul ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul ul ul ul {
+    list-style-type: square;
+}
+
+/* Numbered list */
+div[data-section-style="6"] ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul {
+    list-style-type: lower-roman;
+}
+div[data-section-style="6"] ul ul ul ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul ul ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul ul ul ul {
+    list-style-type: lower-roman;
+}
+
+/* Checklist */
+div[data-section-style="7"] ul {
+    list-style-type: none;
+}
+
+div[data-section-style="7"] ul li:before {
+    content: "\2610";
+    position: absolute;
+    display: inline;
+    margin-right: 1.2em;
+    margin-left: -1.2em;
+}
+
+div[data-section-style="7"] ul li.parent:before {
+    content: "";
+}
+
+div[data-section-style="7"] ul li.parent {
+    font-weight: bold;
+}
+
+div[data-section-style="7"] ul li.checked {
+    text-decoration: line-through;
+}
+
+div[data-section-style="7"] ul li.checked:before {
+    content: "\2611";
+    text-decoration: none;
+}
+
+/* Tables */
+div[data-section-style="8"] {
+    margin: 12px 0;
+}
+
+table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: solid 1px #bbb;
+    table-layout: fixed;
+    position: relative;
+}
+
+table th,
+table td {
+    padding: 2px 2px 0;
+    min-width: 1.5em;
+    word-wrap: break-word;
+}
+
+table th {
+    border-bottom: 1px solid #e1e1e1;
+    background: #f4f4f4;
+    font-weight: bold;
+    vertical-align: bottom;
+    color: #3a4449;
+    text-align: center;
+}
+
+table td {
+    padding-top: 0;
+    border-left: 1px solid #e1e1e1;
+    border-top: 1px solid #e1e1e1;
+    vertical-align: top;
+}
+
+table td.bold {
+    font-weight: bold;
+}
+
+table td.italic {
+    font-style: italic;
+}
+
+table td.underline {
+    text-decoration: underline;
+}
+
+table td.strikethrough {
+    text-decoration: line-through;
+}
+
+table td.underline.strikethrough {
+    text-decoration: underline line-through;
+}
+
+table td:first-child {
+    border-left: hidden;
+}
+
+table tr:first-child td {
+    border-top: hidden;
+}
+
+/* Images */
+div[data-section-style="11"] {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-section-style="11"][data-section-float="0"] {
+    clear: both;
+    text-align: center;
+}
+
+div[data-section-style="11"][data-section-float="1"] {
+    float: left;
+    clear: left;
+    margin-right: 20px;
+}
+
+div[data-section-style="11"][data-section-float="2"] {
+    float: right;
+    clear: right;
+    margin-left: 20px;
+}
+
+div[data-section-style="11"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: auto;
+}
+
+hr {
+    width: 70px;
+    margin: 20px auto;
+}
+
+/* Apps */
+div[data-section-style="19"].placeholder {
+    margin: 0.8em auto;
+    padding: 4px 0;
+    display: block;
+    color: #29b6f2;
+    text-align: center;
+    border: 1px solid rgba(41, 182, 242, 0.2);
+    border-radius: 3px;
+    background: #e9f8fe;
+    font-family: Roboto, sans-serif;
+}
+
+div[data-section-style="19"].first-party-element {
+    margin-bottom: 10px;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+div[data-section-style="19"] img {
+    margin: 0.5em;
+}
+
+div[data-section-style="19"] img.masked-image {
+    margin: 0;
+    transform-origin: top left;
+}
+
+div[data-section-style="19"] .image-mask {
+    position: relative;
+    overflow: hidden;
+}
+</style></head><body><h1 id='CWNACAqyPDg'>Tutorial 3: Payments, tokens, and other credentials</h1>
+
+With the first two tutorials complete, all the basic elements of Fae necessary to construct an economy have been presented.  However, as we saw at the end of Tutorial 2, assembling them into a secure interface that protects value requires the application of idioms that transcend their coding elements.  There, we saw the idiom for encapsulating a valuable as a controlled interface to a module containing its implementation, similar to the object-oriented pattern of coding.  Values defined in this way are secure “credentials”, in that possession of them is special, and in this tutorial, we will illustrate how they can be used in simple and complex contract logic to differentiate the experiences of various Fae users.<br/>
+
+<br/>
+
+This tutorial will walk through constructing a kind of lottery based on <code>Nametag</code>s.  This simple “valuable” we created in the last tutorial does not have a lot of features but can still serve as an identifier in a game where names are “drawn from a hat”.  This toy example serves as a proxy for (aspects of) any number of serious applications, such as membership-based clubs, actual lotteries, voting, opinion polls, and so on.  Unlike most of our previous examples, it is not transaction-focused: the main activity is to define a contract that runs the lottery, while any transactions will consist almost entirely of calling this contract and others.  Their activities with the results are uninteresting.<br/>
+
+<br/>
+
+ As in previous tutorials, the sample code and the sample command lines use the conventions of the Project Information.  After following the instructions there, you should execute this first to have a local server running:<br/>
+
+<pre id='CWNACA8r4f3'>./faeServer.sh</pre>
+
+<h2 id='CWNACA7tpZ0'>Lottery state</h2>
+
+The first way that this contract differs from all previous ones is that it maintains a nontrivial <i>state</i>.  The closest we have yet come was in Tutorial 1 ("Repeatable contracts") where the contract's first call first called <code>release</code> and its second call called <code>spend</code>; this variable activity depending on the contract's history is a kind of state, but no user-generated data was stored.  For the lottery, we will want to store the details of which names are in the hat, how many more will be accepted, and, when the lottery has ended, who won.<br/>
+
+<br/>
+
+To keep the rules simple, we will say that the lottery is nonrandom, accepts a specific number of names, and splits the award among all the users (identified by their public key identities) who submitted the maximum number of names.  The state type we will use is:<br/>
+
+<br/>
+
+<b>Snippet: Lottery state type</b><br/>
+
+<pre id='CWNACA4lLtq'>data LotteryState = <br>  RunningState<br>  {<br>    nametags :: Entries,<br>    count :: Natural,<br>    winningCount :: Natural<br>  } |<br>  FinishedState<br>  {<br>    winners :: Entries,<br>    totalWinners :: Natural,<br>    nonWinners :: Entries<br>  }</pre>
+
+The obviously important <code>Entries</code> type is supposed to hold the various submissions.  We will track submissions by the public key of the user who made them, and store all the nametags that they have submitted to be returned later.  The appropriate type for this is:<br/>
+
+<pre id='CWNACAY6WEO'>type Entries = Map PublicKey (Seq Nametag)</pre>
+
+In words, a mapping that, for each public key, gives the sequence of nametags that key has entered.<br/>
+
+<h3 id='CWNACAnfqRc'>Sum Types</h3>
+
+Unlike the other types we have defined previously, <code>LotteryState</code> has multiple constructors (single constructors were introduced in Tutorial 1 ("Contract names")).  In other words, there are two kinds of states, whose natures are described by the constructor names <code>RunningState</code> and <code>FinishedState</code>.  Each kind of state has its own data, completely independent of the others.<br/>
+
+<h3 id='CWNACAJ6UNF'>Map and Seq</h3>
+
+The two containers present in <code>Entries</code> are new to us.  These are defined in the standard libraries, respectively, <code>Data.Map.Strict</code> and <code>Data.Seq</code>.  There is actually a <code>Data.Map.Lazy</code> as well, the only difference in which is that it defers evaluation of the map keys (the various <code>PublicKeys</code>) until they are specifically examined; we use the strict version because it helps us ensure that runtime errors happen when they are caused, not simply when they are noticed.<br/>
+
+<br/>
+
+A <code>Map</code> is a two-parameter polymorphic type (we saw one-parameter polymorphism in Tutorial 2 ("Polymorphism and constraints")), <code>Map keyType valType</code>, where the parameters describe exactly the types that index the map and that reside in it.  In order to use any of its API functions, we require the constraint <code>(Ord keyType)</code> (constraints were discussed alongside polymorphism), where <code>Ord</code> is the typeclass (interface) that describes types that support the comparison operators <code>&lt;</code> and <code>&gt;</code> (as well as the equality operator <code>==</code> from the <code>Eq</code> typeclass mentioned in Tutorial 2 ("Decisions and exceptions"); <code>Ord</code> extends <code>Eq</code>), because the map is actually a balanced search tree internally.<br/>
+
+<br/>
+
+A <code>Seq</code> is a one-parameter polymorphic type, <code>Seq valType</code>, similar to the list type <code>[valType]</code> except more like an array.  We use it because it has a constant-time <code>length</code> function, which lists do not.<br/>
+
+<h3 id='CWNACAQ2CZF'>Natural</h3>
+
+The <code>Natural</code> type is an unbounded positive integer type.  Using it is something of a conceit here, since the actual entries cannot occupy an unbounded amount of memory, but it reflects the fact that the bit-size bounds on built-in integer types have no relation to the other details of the lottery; likewise, the signedness of <code>Integer</code> is unnecessary.  Using <code>Natural</code> allows the interpreter to catch errors arising from the inappropriate use of these numbers, should we make any.<br/>
+
+<h3 id='CWNACAPBWaW'>How it works</h3>
+
+This declaration does not “do” anything, but it does describe our intentions for the lottery.<br/>
+
+<br/>
+
+The <code>RunningState</code> variant has its definition because:<br/>
+
+<div data-section-style='5'><ul id='CWNACAAIugT'><li id='CWNACAymeg5' class='' value='1'>It records the nametags that have been entered, sorted by entrant.
+
+<br/></li><li id='CWNACASS8eZ' class=''>It also records the total number of entries, so that we can easily compare it to the lottery limit.  (We don't technically need this, as it is implicit in <code>nametags</code>, but to extract it requires traversing the entire map and summing all the lengths of the various sequences, every time a new entry is made, which is pointless.)
+
+<br/></li><li id='CWNACA6GMW4' class=''>It also records the <i>winning</i> number of entries, which will always be the maximum number for any entrant and may occur multiple times.  This, likewise, is a minor optimization that replaces a traversal of the map to find the longest sequence.
+
+<br/></li></ul></div>The <code>FinishedState</code> variant has its definition because:<br/>
+
+<div data-section-style='5'><ul id='CWNACAjpItb'><li id='CWNACAkYN8C' class='' value='1'>It records the winning and non-winning participants separately.  This determination can only be made after the last entry has been made, since the winners are constantly evolving until then.  Of course, winners and losers get a different response from the lottery contract, so they need to be distinguished.  This is, again, an optimization replacing the repeated sorting of the <code>nametags</code> mapping each time a response is made.
+
+<br/></li><li id='CWNACAtsJLT' class=''>It also records the <i>total number</i> of winners.  This information is actually useless to the lottery contract itself but may be useful to the participants (say, to justify splitting a big monetary award) and cannot be derived from any other information they would receive.
+
+<br/></li></ul></div>All of the optimizations mentioned here are more oriented towards eliminating excessive and complex code than saving time or space during execution.<br/>
+
+<h2 id='CWNACAAHUgW'>Lottery contract name</h2>
+
+As a contract, the lottery needs a contract name, first described in Tutorial 1 ("Contract names").  This name reflects the parameters of the lottery and is also associated with the argument and value types of the contract function.<br/>
+
+<br/>
+
+<b>Snippet: Contract name, argument, and value types</b><br/>
+
+<pre id='CWNACAzvVZ0'>data Lottery = <br>  Lottery <br>  {<br>    limit :: Natural,<br>    owner :: PublicKey<br>  }<br>  deriving (Generic)<br><br>data LotteryAction = Enter | Exit deriving (Generic, Read)<br><br>data LotteryResult =<br>  EnterResult <br>  { <br>    enterCount :: !Natural,<br>    message :: !String<br>  } |<br>  ExitResult <br>  {<br>    lotteryLimit :: Natural,<br>    returned :: !Nametags<br>  } |<br>  WinResult<br>  {<br>    winnersCount :: Natural,<br>    returned :: !Nametags<br>  }<br>  deriving (Generic)<br><br>type Nametags = Container (Seq Nametag)</pre>
+
+<h3 id='CWNACAvyZff'>Lottery name</h3>
+
+The contract name for the lottery will be, of course, the <code>Lottery</code> type, which actually only tracks a single <code>Natural</code> number, the maximum number of entries before the lottery closes.<br/>
+
+<h3 id='CWNACAIvUG4'>Modal arguments</h3>
+
+The <code>LotteryAction</code> (which will be the <code>ArgType Lottery</code>) is <i>modal</i>, meaning that it contains no parameters (both constructors are <i>nullary</i>) and simply flags a particular mode of operation.  The reason for this pattern will be explained when we get into the contract code.<br/>
+
+<h3 id='CWNACAax1n6'>The Read constraint</h3>
+
+<code>LotteryAction</code> derives a typeclass <code>Read</code>, which is necessary for the argument types of contracts (but not escrows) because their arguments are specified as text literals in the transaction message and need to be parsed into their correct representations when the contract call occurs.  This can be derived for any type that consists of “values” (i.e. not functions), but occasionally, it is useful to take the reins and write your own instance.  Either way, the translation of literal arguments into abstract types is entirely under the control of the contract author.<br/>
+
+<h3 id='CWNACAhMPrQ'>Bang patterns</h3>
+
+The <code>!</code> annotation on most of the fields of <code>LotteryResult</code> serve the purpose of marking “things which changed” during the course of a single call to the lottery contract, and therefore, which need to be “forced”, i.e. evaluated now rather than deferred until some later time when they are forced.  This is important for isolating the effects of a contract call to that call, rather than allowing errors to sneak out and only be reported in the transaction body or (even worse) later calls to the contract.<br/>
+
+<h3 id='CWNACAXrhHj'>The Container type</h3>
+
+The definition of <code>Nametags</code> includes a type constructor we have not yet seen, <code>Container</code>.  This tags the <code>Seq Nametag</code> as being a <i>container of value-bearing objects</i>, and indicates to Fae to introspect into that container (see Tutorial 2 ("Bearers of value")).  This facility is, as mentioned in that discussion, automatic for types deriving <code>Generic</code>, but not all types have a meaningful generic structure; for instance, as mentioned above, the <code>Map</code> type is actually a balanced tree internally, and its implementation involves hidden fields that may also not cooperate with Fae.  However, the common feature of containers is that their values can be <i>traversed</i>, and most of the library-provided containers do have an instance of the typeclass <code>Traversable</code> that describes this, and which Fae uses to get the escrows backing each object in the container.  <br/>
+
+<br/>
+
+(The <code>Set</code> type is the exception to this rule, because it requires its value types to be <code>Ord</code> instances, which for not-necessarily-good technical reasons precludes an instance of <code>Traversable</code>).<br/>
+
+<br/>
+
+In short, any type that functions as a container should be tagged with <code>Container</code> wherever it will be transferred between contracts, such as in the return value type here.<br/>
+
+<h3 id='CWNACAfOE49'>How it works</h3>
+
+The <code>LotteryAction</code> is self-explanatory, except that the <code>Enter</code> variant mysteriously contains no information about a <code>Nametag</code> to be entered.  This will be handled by a feature to be described in the code.<br/>
+
+<br/>
+
+The <code>LotteryResult</code> has <i>three</i> constructors, one of which is to be returned in response to <code>Enter</code> and the other two of which, in response to <code>Exit</code>.  Their rationales are:<br/>
+
+<div data-section-style='5'><ul id='CWNACAmnLe0'><li id='CWNACA0Ic9l' class='' value='1'><code>EnterResult</code> returns the running count of submissions for the entrant who made the call, and the message produced by the nametag they submitted.  Neither one of these is truly unobtainable otherwise, but the former is informative and the latter is a convenient excuse to force the evaluation (and hence verification) of the nametag.
+
+<br/></li><li id='CWNACA6mYue' class=''><code>ExitResult</code> returns the entrant's nametags along with the information of the lottery limit, with the interpretation “you submitted these entries out of so many allowed”.
+
+<br/></li><li id='CWNACA3x01h' class=''><code>WinResult</code> is delivered to winners after the lottery ends, and contains in addition to their nametags the number of winners (at least 1, but possibly any number).
+
+<br/></li></ul></div><h2 id='CWNACAJ2tdW'>Exceptions</h2>
+
+Deviating slightly from the thread of the lottery's implementation, we take a moment to define an exception type for errors that may occur in the contract.<br/>
+
+<br/>
+
+<b>Snippet: Lottery exception type</b><br/>
+
+<pre id='CWNACACcadG'>data LotteryError = NotAuthorized | Finished | NotFound | BothMaps<br><br>instance Show LotteryError where<br>  show NotAuthorized = "This action was not authorized by the lottery owner"<br>  show Finished = "The lottery is finished; no new entries accepted"<br>  show NotFound = "Not an entrant or already exited"<br>  show BothMaps = "Internal error; entrant is in both maps"<br><br>instance Exception LotteryError</pre>
+
+<h3 id='CWNACA1V8jh'>Error messages</h3>
+
+There are four kinds of error conditions in the lottery, whose functions are mostly adequately described by the error text in their <code>Show</code> instances:<br/>
+
+<div data-section-style='5'><ul id='CWNACAUwYG9'><li id='CWNACAe8BoV' class='' value='1'><code>NotAuthorized</code>, meaning that the owner of the lottery has not “signed off” on the submission.  This is crucial because the contract deals in unsafe values, namely, <code>Nametag</code>s of unknown origin that may be invalid or even nonterminating values.  The lottery must validate the submissions, but in the latter case, to do so would cause the present call to hang, and therefore, shut down the contract for all future calls.  It is the lottery owner's responsibility to curate the contract to prevent this (by, for instance, simulating the call in a sandbox).  Other parties, of course, may not do so.
+
+<br/></li><li id='CWNACA4lOZs' class=''><code>Finished</code>, meaning that an action (submitting a new entry) was requested that can only be done when the lottery is ongoing, but it is actually no longer ongoing.
+
+<br/></li><li id='CWNACArFzRE' class=''><code>NotFound</code>, meaning that someone tried to reclaim their entry (if it lost) or their winnings, and there is no record of them, for one of the two reasons given.
+
+<br/></li><li id='CWNACAU6xKh' class=''><code>BothMaps</code>.  This error only exists because it is implied by a particular branch of the control flow that, if the contract is well-written, should not happen, but of course, may anyway.  It is a failure of the handling of state.
+
+<br/></li></ul></div><h3 id='CWNACAJfitL'>Exception</h3>
+
+The <code>LotteryError</code> type is made an instance of the <code>Exception</code> class so that it can be <code>throw</code>n when errors arise.  This simple declaration requires only that it already be an instance of <code>Show</code>, making a generic <code>Exception</code> no more than a well-typed string, though they can in fact have data not reflected in the string that may be interesting when the exception is received by <code>catch</code>, a function that Fae disables; exceptions in a contract call will be reflected in the transaction's return value and can be caught by the observer that evaluates this.<br/>
+
+<h2 id='CWNACAog44v'>Lottery contract function</h2>
+
+Having introduced all the types that enter into the lottery, we can now begin to implement it by giving a <code>ContractName</code> instance to <code>Lottery</code>:<br/>
+
+<br/>
+
+<b>Snippet: Lottery's instance of ContractName</b><br/>
+
+<pre id='CWNACArZOjf'>instance ContractName Lottery where<br>  type ArgType Lottery = LotteryAction<br>  type ValType Lottery = LotteryResult<br>  theContract Lottery{..} = usingState startingState $ feedback $ \case<br>    Enter -&gt; newEntry limit owner<br>    Exit -&gt; getEntry limit<br><br>startingState :: LotteryState<br>startingState = RunningState Map.empty 0 0</pre>
+
+As promised earlier, the lottery function will accept a <code>LotteryAction</code> and return a <code>LotteryResult</code>.<br/>
+
+<h3 id='CWNACAKNEWE'>Record wildcards</h3>
+
+The <code>theContract</code> function (see again Tutorial 1 ("Contract names")) accepts a <code>Lottery</code> value that directs the actions of the lottery.  The pattern syntax <code>Lottery{..}</code> is a <i>record wildcard</i> that simply binds each of the field names of a <code>Lottery</code> (namely, <code>limit</code> and <code>owner</code>) to their corresponding values in the scope of the function.<br/>
+
+<h3 id='CWNACA83J4Q'>Lambda case</h3>
+
+The <code>\case</code> syntax is a <i>lambda case</i> expression, a shorthand for the common but verbose idiom<br/>
+
+<pre id='CWNACAimDEM'>\x -&gt; case x of ...</pre>
+
+where the cases appear below, namely, the <code>Enter</code> and <code>Exit</code> patterns exhausting a <code>LotteryAction</code>'s possible values.<br/>
+
+<h3 id='CWNACAkohzK'>usingstate</h3>
+
+The <code>usingState</code> function is not precisely an API function but rather a helper for defining contracts with state.  Its first argument is an initial value for the state, which here is of type <code>LotteryState</code> and contains a lot of nothing in the context of a lottery that has not finished.  Its second argument is a function with signature <br/>
+
+<pre id='CWNACAYMyxN'>LotteryAction -&gt; StateT LotteryState (Fae LotteryAction LotteryResult) a</pre>
+
+(for some <code>a</code>) that resides in a <i>monad stack</i> atop the base <code>Fae</code> monad.  The <code>StateT</code> <i>monad transformer</i>, defined in <code>Control.Monad.Trans.State</code>, adds to its base monad a small API that allows getting and setting a <code>LotteryState</code> that is passed along through its execution.  The purpose of <code>usingState</code> is to initialize this passed-along value and bring the function down to the correct signature <code>LotteryAction -&gt; Fae LotteryAction LotteryResult a</code> required by <code>theContract</code>.<br/>
+
+<h3 id='CWNACAH92ZP'>feedback</h3>
+
+The <code>feedback</code> function is a particularly abstract helper that substantially changes the coding style required for contracts that, like a <code>Lottery</code>, are essentially infinite loops.  At a high level, what it does is to take a function that handles the argument and returns a value (representing a single iteration of the loop, i.e. a single contract call) and to turn it into a function that has (nearly, see Tutorial 1 ("Contract type")) the same signature but that <code>release</code>s that return value and feeds the result, the next call's argument, back to the original function. <br/>
+
+<br/>
+
+A short example is the function<br/>
+
+<pre id='CWNACANho8y'>feedback $ \case<br>  True -&gt; return 42<br>  False -&gt; halt 57</pre>
+
+where the <code>\case</code> is a non-iterative function that simply returns one of two <code>Integer</code>s in response to a boolean argument, but with <code>feedback</code>, becomes a looping contract equivalent to<br/>
+
+<pre id='CWNACArVTWi'>f = \case<br>  True -&gt; do<br>    next &lt;- release 42<br>    f next<br>  False -&gt; spend 57</pre>
+
+I, at least, believe that it is much more understandable with <code>feedback</code> than “naturally”.  A comparison of the two reveals that the <code>halt</code> function that was snuck in has the purpose of breaking the loop and terminating the contract, like <code>spend</code>.<br/>
+
+<br/>
+
+The lambda case trails off with calls in each alternative of its argument to other functions, which will be discussed individually below.<br/>
+
+<h2 id='CWNACAIe8F8'>New entries</h2>
+
+When a lottery is ongoing, it may accept new submissions via the function:<br/>
+
+<br/>
+
+<b>Snippet: type signature of <code>newEntry</code></b><br/>
+
+<pre id='CWNACAKRlvo'>newEntry :: <br>  Natural -&gt; PublicKey -&gt;<br>  StateT LotteryState (Fae LotteryAction LotteryResult) LotteryResult</pre>
+
+Its arguments (as can be seen by comparison with the <code>theContract</code> definition above) are the lottery limit for entries and the identity of the lottery owner, and as promised, it operates in a state monad placed atop <code>Fae</code> (because of <code>usingState</code>) and returns a plain <code>LotteryResult</code> (because of <code>feedback</code>); this represents the action taken on a <i>single</i> new submission, without acknowledging the contract's need for iteration, which is handled by <code>feedback</code>.<br/>
+
+<br/>
+
+The definition begins with a permissions check:<br/>
+
+<br/>
+
+<b>Snippet: checking the owner's signature</b><br/>
+
+<pre id='CWNACAJWKeV'>newEntry limit owner = do<br>  signedBy &lt;- signer "owner"<br>  unless (signedBy == owner) $ throw NotAuthorized</pre>
+
+<a href="#CWNACAe8BoV">As mentioned</a> in the discussion of errors, the contract must be signed by the owner, and this enforces that requirement.  This idiom has already been discussed in Tutorial 2 ("Restricted-access contracts").  Note the use of <code>throw</code>, where previously we issued errors with a call to <code>error</code>.<br/>
+
+<br/>
+
+Next, the function fetches the state and makes a decision based on it:<br/>
+
+<br/>
+
+<b>Snippet: taking action based on the state</b><br/>
+
+<pre id='CWNACAWpvjr'>  lotteryState &lt;- get<br>  case lotteryState of<br>    FinishedState{} -&gt; throw Finished <br>    RunningState{..} -&gt; do</pre>
+
+<h3 id='CWNACAu1aTs'>get</h3>
+
+The <code>get</code> function is one of the two that are part of the <code>StateT</code> API, and returns the <code>LotteryState</code> that is currently present as the ongoing state.  <br/>
+
+<br/>
+
+In this case, it is an error if the lottery is in a finished state, while if not, it proceeds to the main action:<br/>
+
+<br/>
+
+<b>Snippet: processing the entry</b><br/>
+
+<pre id='CWNACAc6Cm4'>      nametag &lt;- material "nametag"<br>      message &lt;- checkNametag nametag<br>      entrant &lt;- signer "self"<br>      let (enterCount, nametags') = addEntry nametag entrant nametags<br>          count' = count + 1<br>          winningCount'<br>            | enterCount &gt; winningCount = enterCount<br>            | otherwise = winningCount</pre>
+
+<h3 id='CWNACAP3cO4'>material</h3>
+
+We see a new Fae API function here, <code>material</code>.  Syntactically, this functions much like <code>signer</code> and fetches a value by name; these values are passed in the transaction message, as we will see later.  Unlike <code>signer</code>, the value may have any type and if there is a type mismatch with its usage then Fae throws an error.  This mechanism is the only way to pass an escrow, or a value containing escrows, into a contract, since the actual arguments are pure values parsed from text.  There are two other functions (as for signers, see Tutorial 2 ("Signers")) called <code>lookupMaterial</code> (which returns a <code>Maybe</code> rather than throwing an error) and <code>materials</code>, which gets a <code>Map</code> of all materials with the desired type.<br/>
+
+<br/>
+
+After obtaining the material (the nametag that was entered), we call its <code>checkNametag</code> to prove that it is real, as in Tutorial 2 ("How it works").  This value won't be used until we return.<br/>
+
+<br/>
+
+Then we obtain the identity of the caller and make three definitions:<br/>
+
+<div data-section-style='5'><ul id='CWNACAgvsuM'><li id='CWNACA8TUam' class='' value='1'><code>addEntry</code> is a function that is part of an informal API for the <code>Entries</code> type, described below.  It returns the number of submissions for the present caller and the new map of entries.
+
+<br/></li><li id='CWNACAtAMgk' class=''><code>count'</code> and <code>winningCount'</code> are both updates to the corresponding fields of <code>LotteryState</code>; the logic is self-evident.
+
+<br/></li></ul></div>Having created the necessary updated values, we construct and insert the new state:<br/>
+
+<br/>
+
+<b>Snippet: updating the state</b><br/>
+
+<pre id='CWNACAJqa3R'>      put $ <br>        if count' == limit<br>        then let (winners, nonWinners) = splitEntries winningCount' nametags' in<br>             FinishedState{totalWinners = fromIntegral $ Map.size winners, ..}<br>        else RunningState<br>             {<br>               nametags = nametags', <br>               count = count', <br>               winningCount = winningCount'<br>             }</pre>
+
+<h3 id='CWNACAHgnuC'>put</h3>
+
+Like <code>get</code>, <code>put</code> is part of the <code>StateT</code> API and overwrites the old state with a new one.<br/>
+
+<br/>
+
+The value we choose to overwrite it with depends on where in the lottery we are.  If the limit has not yet been reached, then we just replace all the fields of <code>RunningState</code> (the one we had when we started <code>newEntry</code>) with their primed equivalents.  If it has, though, we have to create a new kind of state, which means we need the individual maps of winning entrants and...other...entrants.  This is achieved by <code>splitEntries</code>, another part of the <code>Entries</code> “API”.<br/>
+
+<h3 id='CWNACAF1pF5'>fromIntetgral</h3>
+
+The <code>totalWinners</code> value is essentially the size of the <code>winners</code> map, but it has to be cast (in C-language parlance) to the correct numeric type, as <code>Map.size</code> is an <code>Int</code> while <code>totalWinners</code> is a <code>Natural</code>.  Fortunately, an <code>Int</code> is an instance of the class <code>Integral</code>, which defines <code>fromIntegral</code> to convert from it to any other numeric type.<br/>
+
+<br/>
+
+Having update the state, we can now return:<br/>
+
+<br/>
+
+<b>Snippet: returning</b><br/>
+
+<pre id='CWNACAszhtr'>      return $! EnterResult{..}</pre>
+
+<h3 id='CWNACAd12K9'>More record wildcards</h3>
+
+The record wildcard syntax has a matching assignment syntax that <i>takes</i> values named after the fields of, in this case, an <code>EnterResult</code>, and assigns them to those fields.  Obviously they must be in scope, which is why we carefully chose the names <code>enterCount</code> and <code>message</code> earlier.<br/>
+
+<h3 id='CWNACAsXdsV'>Strict function application</h3>
+
+The <code>$!</code> operator is the <i>strict application</i> operator, like <code>$</code> but with the additional property that it forces the right-hand side.  This, in turn, causes all the <code>!</code>-marked fields of <code>EnterResult</code> to be forced as well, and this flushes out all the errors that may have arisen in the course of constructing them: a bad nametag (producing an error in <code>message</code>) or any of the runtime errors in the code above, all of which must be resolved before <code>enterCount</code> can be calculated.<br/>
+
+<h2 id='CWNACAHm7pn'>The <code>Entries</code> API</h2>
+
+Before turning to the <code>getEntry</code> function, we stop to describe a small interface for the <code>Entries</code> type.  Although this is just a combination of several library types, it has a higher-level purpose that must be served by well-named, atomic methods that cut through all the algorithmic noise.  In this way, we are effectively defining an object-oriented class, though one whose members are all immutable.<br/>
+
+<br/>
+
+<b>Snippet: <code>takeEntry</code></b><br/>
+
+<pre id='CWNACA5xvCk'>takeEntry :: PublicKey -&gt; Entries -&gt; (Maybe Nametags, Entries)<br>takeEntry = Map.alterF $ (,Nothing) . fmap Container</pre>
+
+This removes the entry (a <code>Seq Nametag</code>) from the <code>Map</code> that is an <code>Entries</code>, if it is there, and returns it along with the new <code>Map</code>.  All the work is done by <code>Map.alterF</code>, a function from <code><a href="https://downloads.haskell.org/~ghc/latest/docs/html/libraries/containers-0.6.0.1/Data-Map-Lazy.html#v:alterF">Data.Map</a></code> that is so high-level that it is difficult even to understand how it works from its type signature. Here is a conversational walk-through of its explanation.<br/>
+
+<div data-section-style='5'><ul id='CWNACASRxNm'><li id='CWNACAMMzF3' class='' value='1'>Each entry in a <code>Map</code> may, or may not, be there, depending on whether its key is present.  So a <code>Map a</code> is a lot of <code>Maybe a</code> values.
+
+<br/></li><li id='CWNACADg9G2' class=''>A function that alters a <code>Map</code> at a single entry, therefore, will employ a function of the form <code>Maybe a -&gt; Maybe a</code> that does something with an entry (that may not be there) to produce another one (or delete it).  One such function is the one that always returns <code>Nothing</code>, meaning that no matter what the entry is, it will be deleted.
+
+<br/></li><li id='CWNACA0iBFN' class=''>In addition to modifying the <code>Map</code>, we also want to return the entry that was there, if it was there, as a <code>Nametags</code>, which is a <code>Container (Seq Nametag)</code>.  If it was there, we are holding a <code>Just nts</code>, and we want to return <code>Just (Container nts)</code>; if it wasn't, we are holding and want to return a <code>Nothing</code>.  The idiom for this is <code>fmap Container</code>.
+
+<br/></li></ul></div>The actual function that is passed to <code>Map.alterF</code> is a composition, so operates by: first, applying the <code>Container</code> to the maybe-entry; and second, adding the boilerplate <code>Nothing</code> that instructs <code>alterF</code> what to do with the <code>Map</code>.<br/>
+
+<h3 id='CWNACAsctin'>sections</h3>
+
+The odd syntax <code>(,Nothing)</code> resembles an incomplete pair, and therefore represents a function that takes what would be the missing first item and filling it in.  This is called a <i>tuple section</i>, as in, a section (a bit cut out of) a tuple.  More generally, there are <i>operator sections</i> that allow us to write “half an operator” as a function that fills in the other half: for instance, <code>(1 +)</code> is the “add one” function, as is <code>(+ 1)</code>.  The parentheses are necessary.<br/>
+
+<h3 id='CWNACANC2Vb'>fmap</h3>
+
+As mentioned, <code>fmap</code> is an operation that takes a function <code>a -&gt; b</code> and applies it to the <code>Just</code> branch of a <code>Maybe a</code>, yielding a <code>Maybe b</code>.  This applies to other polymorphic types besides <code>Maybe a</code>, so long as they are types that, notionally, are at least capable of producing a value of type <code>a</code> that can be modified.  (These types are technically called <code>Functor</code>s, which is the typeclass to which they belong.)<br/>
+
+<br/>
+
+<b>Snippet: <code>addEntry</code></b><br/>
+
+<pre id='CWNACArb1Na'>addEntry :: Nametag -&gt; PublicKey -&gt; Entries -&gt; (Natural, Entries)<br>addEntry tag = Map.alterF $ finish . maybe (Seq.singleton tag) (tag Seq.&lt;|)<br>  where finish set = (fromIntegral $ Seq.length set, Just set)</pre>
+
+This inserts a new nametag under a possibly-existing identity, returning the number of nametags then present for that identity, as well as the modified <code>Entries</code>.  It also uses <code>Map.alterF</code>, in a rather more complicated way.  The altering function, given in the snippet as a composition of two functions, has the overall signature<br/>
+
+<pre id='CWNACAfBb6l'> <code>Maybe (Seq Nametag) -&gt; (Natural, Maybe (Seq Nametag))</code></pre>
+
+and so as it begins, it considers a <code>Maybe (Seq Nametag)</code>, which it handles by supplying an action for each of the two branches (<code>Nothing</code> or <code>Just nts</code>) and bundling them with <code>maybe</code>, described below.  This gives a <code>Seq Nametag</code> regardless of which branch was originally present (because even if nothing was there, we have now inserted a new nametag).  It then applies <code>finish</code> to do what the name says: extract the size of that set of nametags (the length of the sequence) and bundle the actual nametags into a <code>Just</code> to indicate that we are leaving the <code>Map</code> with an updated entry.<br/>
+
+<h3 id='CWNACAYqhnv'>maybe function</h3>
+
+The <code>maybe</code> function is a self-contained <i>if</i>-statement: the <i>then</i> branch, the second one, says what to do with <code>nts</code> if we get a <code>Just nts</code>; and the <i>else</i> branch, the first one, says what to do with a <code>Nothing</code>.  Hence, the <i>then</i> branch is a function of the form <code>Seq Nametag -&gt; Seq Nametag</code> that, we see, is another “section” of the operator <code>Seq.&lt;|</code>, which, unqualified as <code>&lt;|</code>, is intended to represent an arrow indicating which end of the existing sequence <code>nts</code> we stick the new nametag onto.  Correspondingly, the <i>else</i> branch is a single <code>Seq Nametag</code> value, which can only be the sequence with one element, the new tag.  This construct enforces the requirement implict in a <code>Maybe</code> that we must consider both possibilities.<br><br/>
+
+<b>Snippet: <code>splitEntries</code></b><br/>
+
+<pre id='CWNACAqGj4E'>splitEntries :: Natural -&gt; Entries -&gt; (Entries, Entries)<br>splitEntries n = Map.partition ((== n) . fromIntegral . Seq.length)</pre>
+
+Here we use a different one of <code>Map</code>'s methods, <code>Map.partition</code>, which does what it says: given a predicate on entries of the map, creates two values, each containing the entries that do and do not satisfy the predicate.  Here, the predicate is “equality with <code>n</code> of the length of the <code>Seq</code> that is the entry”.<br/>
+
+<h2 id='CWNACAkskHU'>Getting entries</h2>
+
+In this lottery, entrants are entitled to get their entries back.  This can occur either when the lottery is ongoing, in which case they simply withdraw from it, or when it is finished, in which case they withdraw, unless they are a winner, which produces a different response.  It is crucial that the contract allow withdrawals while it is ongoing, because the lottery may stall with no new entries before it is finished, and the owner may not be trustworthy, so participants need to be able to “call it” when they decide it's not worth waiting anymore.<br/>
+
+<br/>
+
+<b>Snippet: starting <code>getEntry</code></b><br/>
+
+<pre id='CWNACAB13xp'>getEntry :: <br>  Natural -&gt; StateT LotteryState (Fae LotteryAction LotteryResult) LotteryResult<br>getEntry lotteryLimit = do<br>  entrant &lt;- signer "self"<br>  lotteryState &lt;- get<br>(result, newState) &lt;- case lotteryState of</pre>
+
+This code just sets up the rest of the function.  Note that the return value is exactly the same as that of <code>newEntry</code>, as it must be, though in this case, the contract owner's permission is not necessary because no new nametag is going to be validated.<br/>
+
+<br/>
+
+<b>Snippet: withdrawing from a running lottery</b><br/>
+
+<pre id='CWNACA4nUnB'>    RunningState{..} -&gt; do<br>      let (returnedM, nametags') = takeEntry entrant nametags<br>          returned = fromMaybe (throw NotFound) returnedM<br>          result = ExitResult{..}<br>          count' = count - 1<br>          winningCount' <br>            | count &lt; winningCount = winningCount<br>            | otherwise = fromIntegral $ maximum $ fmap Seq.length nametags'<br>          newState = <br>            RunningState<br>            {<br>              nametags = nametags',<br>              count = count',<br>              winningCount = winningCount'<br>            }<br>      return (result, newState)</pre>
+
+When the lottery is ongoing, a entrant can withdraw, but it entails a significant amount of recalculation.  Everything except <code>winningCount'</code> is either self-explanatory or analogous to constructs we have seen before, but that one entails a new library function.<br/>
+
+<h3 id='CWNACAiws7C'>maximum</h3>
+
+The <code>maximum</code> function applies to any container-like type (specifically, any instance of the class <code>Foldable</code>, meaning, any type whose values can be “summed up”, and so in some sense, contain things), and does what the name says: computes the maximum value from among all those in the container, if they are an <code>Ord</code>ered type.<br/>
+
+<br/>
+
+We need to use <code>maximum</code> to find the new <code>winningCount</code> because, unlike in the <code>addEntry</code> case, there is no guarantee how much the length of the largest entry will change if an entry with that length is removed.  It could not move at all, if there are other winners; or it could drop by any amount if we have removed the unique winner, depending on how many nametags the other entries have, and this amount cannot be determined just from knowing <code>winningCount</code>.  Therefore, we have to scan the entire <code>Map</code>, an operation that we tried to avoid by using <code>winningCount</code> in the first place; however, since withdrawing from a running lottery <i>should</i> be an uncommon operation, if there is to be inefficiency, this is where to put it.  To limit the damage we recognize the “easy” case where the removed entry was not a winner, and don't do the scan there.<br/>
+
+<br/>
+
+<b>Snippet: withdrawing when the lottery is finished</b><br/>
+
+<pre id='CWNACATTmlB'>    FinishedState{..} -&gt; do<br>      let (wSetM, winners') = takeEntry entrant winners<br>          (nwSetM, nonWinners') = takeEntry entrant nonWinners<br>      case (wSetM, nwSetM) of<br>        (Nothing, Nothing) -&gt; throw NotFound <br>        (Just _, Just _) -&gt; throw BothMaps <br>        (Just returned, _) -&gt; do<br>          let result = WinResult{winnersCount = totalWinners, ..}<br>              newState = lotteryState{winners = winners'}<br>          return (result, newState)<br>        (_, Just returned) -&gt; do<br>          let result = ExitResult{..}<br>              newState = lotteryState{nonWinners = nonWinners'}<br>          return (result, newState)</pre>
+
+Here, we try to get the caller's entries from both maps, and depending on what the results of those attempts are, either throw an error (if found in neither or both), or return a <code>WinResult</code> or <code>ExitResult</code> depending on which single lookup succeeded.  All of this is self-explanatory and simply consists of assigning the appropriate fields of the various values.<br/>
+
+<br/>
+
+<b>Snippet: returning</b><br/>
+
+<pre id='CWNACA0w8z9'>  put newState<br>  return $! result</pre>
+
+Finally, regardless of what happened, we got a <code>newState</code> and a <code>result</code>, the former of which we save and the latter of which we (strictly, again) return.<br/>
+
+<h2 id='CWNACAgpNT7'>Lottery transactions</h2>
+
+The lottery contract being at last complete, we can now provide some transactions that interact with it.  Here are the ones that simply invoke the three possible operations: create a lottery, enter a new nametag, or exit.<br/>
+
+<br/>
+
+<b>Transaction source file:</b> <b>NewLottery.hs</b><br/>
+
+<pre id='CWNACA38SQ6'>import Lottery<br><br>body :: FaeTX ()<br>body = do<br>  owner &lt;- signer "self"<br>  newContract $ Lottery 5 owner</pre>
+
+<b>Transaction message: NewLottery</b><br/>
+
+<pre id='CWNACAZpYaN'>body = NewLottery<br>others<br>  - Nametag<br>  - Lottery<br>keys<br>  self = $self</pre>
+
+The transaction <code>body</code> module imports our <code>Lottery</code> module, which contains all the snippets above (as well as the necessary module imports).  It sets up a lottery for 5 entries, owned by whomever signed the transaction, which is determined by the <code>$self</code> environment variable in the message file.  Observe that the message file must include the <code>Lottery</code> module as an attachment; we also upload <code>Nametag</code> for this example, in case it is not present already.  In “reality”, there should be an origin transaction for the <code>Nametag</code> type that installed this module and to which all other transactions using it can refer.<br/>
+
+<br/>
+
+<b>Transaction source file: EnterLottery.hs</b><br/>
+
+<pre id='CWNACABm7zU'>import Blockchain.Fae.Transactions.TX$lotteryID.Lottery<br><br>body :: LotteryResult -&gt; FaeTX (Natural, String)<br>body EnterResult{..} = return (enterCount, message)</pre>
+
+<b>Transaction message: EnterLottery</b><br/>
+
+<pre id='CWNACA0G5mE'>body = EnterLottery<br>keys<br>  self = $self<br>inputs<br>  $lotteryID/Body/0/Current : Enter<br>    self = self<br>    nametag = $nametagID/Body/0/Current : ()<br>      self = self</pre>
+
+This transaction is easier to read with the message first.  It, too, includes a <code>self</code> signer, who of course is probably different from the one who signed <code>NewLottery</code>.  It has a single input call, to the contract that we know is the index-0 output of the <code>body</code> of <code>NewLottery</code>, which has some transaction ID <code>$lotteryID</code>.  This call gets <code>Enter</code> as an argument, naturally.  It also declares a signer name remapping <code>self = self</code> and a materials call assigning <code>nametag</code>, both described below.<br/>
+
+<h3 id='CWNACAP6OXJ'>Signer remappings</h3>
+
+Input contracts do not inherit the <code>signers</code> map of their enclosing transaction, but have to declare which new names (on the left) need to be assigned from old ones or from literal public keys (both on the right).  In this case, we want to simply pass along <code>self</code> under the same name.  This feature is also present in the <code>useEscrow</code> function inside contract or transaction code: the first argument, which until now, as suggested in Tutorial 2 ("Calling an escrow") has been an empty list <code>[]</code>, actually contains a number of remappings, each of the form:<br/>
+
+<pre id='CWNACAoj3bj'>newSignerRole &lt;-| oldSignerRole  or  newSignerRole ↤ oldSignerRole (↤ = U+21a4)</pre>
+
+This allows us to pass along signers that will be present in the escrow call.  It is this situation that accounts for the restriction that only explicitly remapped names are present in the call: otherwise, it would be possible for a back-door signer or material to alter the behavior of some deeply nested call without the possibility of any intermediate calls preventing this.<br/>
+
+<h3 id='CWNACAU9ovT'>materials calls</h3>
+
+Materials, which we saw could be obtained in a contract using <code>material</code>, are actually supplied via <i>named contract calls</i> alongside the signer remappings (they can also appear in a top-level section <code>materials</code>, with the same syntax, and then they appear as materials in the transaction body).  Here, we call a contract produced in transaction <code>$nametagID</code> that, apparently, caused a <code>Nametag</code> to be stored, such as via <code>deposit</code>.  This value will appear when\<code>material "nametag"</code> is called in the lottery contract.<br/>
+
+<br/>
+
+Materials come with two more remapping syntaxes for <code>useEscrow</code>:<code> </code><br/>
+
+<pre id='CWNACAUIKIS'>newMaterialName &lt;=| oldMaterialName  or  newMaterialName ⤆ oldMaterialName (⤆ = U+2906)<br>newMaterialName *&lt;- materialValue    or  newMaterialName ⤝ materialValue   (⤝ = U+291d)</pre>
+
+The first one is the same as for <code>signers</code>; the second one is present because it is possible that the escrow expects a material to be present and the desired value in the calling code was obtained, not as a material, but inline somehow.<br/>
+
+<h3 id='CWNACAuJxDS'>How it works</h3>
+
+Having understood the transaction message, the <code>body</code> function simply accepts the result of calling the lottery contract and prints (returns) the corresponding fields.  Note that it does not handle either of the <code>Exit</code>-associated results, so technically this <code>body</code> is a partial function, but we are guaranteed by the contract's author that it works this way, so we do not expect a pattern mismatch.  Note the use of <code>import</code> (Tutorial 2, ("Import statements")) to get the <code>Lottery</code> module from the <code>NewLottery</code> transaction.<br/>
+
+<br/>
+
+<b>Transaction source file: ExitLottery.hs</b><br/>
+
+<pre id='CWNACAqgeq1'>import Blockchain.Fae.Transactions.TX$lotteryID.Lottery<br><br>body :: LotteryResult -&gt; FaeTX String<br>body WinResult{..} = return $ "Won with " ++ show others ++ " other" ++ plural where <br>  others = winnersCount - 1<br>  plural | others == 1 = ""<br>         | otherwise = "s"<br>body ExitResult{..} = return $ "Did not win out of " ++ show lotteryLimit ++ " entries"</pre>
+
+<b>Transaction message: ExitLottery</b><br/>
+
+<pre id='CWNACAUGG41'>body = ExitLottery<br>keys<br>  self = $self<br>inputs<br>  $lotteryID/Body/0/Current : Exit<br>    self = self</pre>
+
+The transaction message is simpler than for <code>EnterLottery</code>, because we do not supply any materials, and all the other aspects of it are the same except for the argument to the lottery contract, which is now of course <code>Exit</code>.<br/>
+
+<br/>
+
+The <code>body</code> has two cases, one to handle each kind of exit response, and produces a nicely (in the case of <code>WinResult</code> almost obsessively nicely) formatted message describing what happened.<br/>
+
+</body></html>

@@ -1,6 +1,10 @@
 import Blockchain.Fae.Contracts
 import Blockchain.Fae.Currency
 
-body :: Transaction (Coin, Maybe (Either (Versioned Coin) (Versioned String))) String
-body (_, Nothing) = return ""
-body (_, Just (Right (Versioned s))) = return s
+import Blockchain.Fae.Transactions.TX$aucTX.Auction
+
+body :: AuctionResult Coin String -> FaeTX String
+body BidAccepted = return "Bid accepted"
+body (Prize s) = return s
+body _ = error "unexpected response"
+

@@ -1,0 +1,737 @@
+<!doctype html>
+<html><head><title>Reference manual</title><meta charset="UTF-8"><link href="http://fonts.googleapis.com/css?family=Crimson+Text:400,400italic,700,700italic|Roboto:400,700,700italic,400italic" rel="stylesheet" type="text/css"><style>/*
+ * Copyright 2014 Quip
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may
+ * not use this file except in compliance with the License. You may obtain
+ * a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
+
+body {
+    font-size: 15px;
+    color: #333;
+    background: #fff;
+    padding: 60px 95px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern";
+    font-kerning: normal;
+    -moz-font-feature-settings: "kern";
+    -webkit-font-feature-settings: "kern";
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+th {
+    font-family: Roboto, sans-serif;
+    font-weight: 700;
+    margin: 0;
+    margin-top: 1.25em;
+    margin-bottom: 0.75em;
+}
+
+h1 {
+    font-size: 35px;
+    line-height: 42px;
+}
+
+h1:first-child {
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 18px;
+    line-height: 22px;
+}
+
+h3 {
+    text-transform: uppercase;
+    font-size: 13px;
+    line-height: 16px;
+}
+
+/* Body text */
+body,
+p,
+ul,
+ol,
+td {
+    font-family: "Crimson Text", serif;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+blockquote,
+q {
+    display: block;
+    margin: 1em 0;
+    font-style: italic;
+}
+
+blockquote a,
+q a {
+    text-decoration: underline;
+}
+
+blockquote {
+    padding-left: 10px;
+    border-left: 4px solid #a6a6a6;
+}
+
+q {
+    color: #a6a6a6;
+    line-height: 40px;
+    font-size: 24px;
+    text-align: center;
+    quotes: none;
+}
+
+q a {
+    color: #a6a6a6;
+}
+
+code,
+pre {
+    font-family: Consolas, "Liberation Mono", Menlo, "Courier Prime Web",
+        Courier, monospace;
+    background: #f3f3f3;
+}
+
+code {
+    padding: 1px;
+    margin: 0 -1px;
+    border-radius: 3px;
+}
+
+pre {
+    display: block;
+    line-height: 20px;
+    text-shadow: 0 1px white;
+    padding: 5px 5px 5px 30px;
+    white-space: nowrap;
+    position: relative;
+    margin: 1em 0;
+}
+
+pre:before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 15px;
+    border-left: solid 1px #dadada;
+}
+
+/* Lists */
+div[data-section-style="5"],
+div[data-section-style="6"],
+div[data-section-style="7"] {
+    margin: 12px 0;
+}
+
+ul {
+    padding: 0 0 0 40px;
+}
+
+ul li {
+    margin-bottom: 0.4em;
+}
+
+/* Bulleted list */
+div[data-section-style="5"] ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul {
+    list-style-type: square;
+}
+div[data-section-style="5"] ul ul ul ul {
+    list-style-type: disc;
+}
+div[data-section-style="5"] ul ul ul ul ul {
+    list-style-type: circle;
+}
+div[data-section-style="5"] ul ul ul ul ul ul {
+    list-style-type: square;
+}
+
+/* Numbered list */
+div[data-section-style="6"] ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul {
+    list-style-type: lower-roman;
+}
+div[data-section-style="6"] ul ul ul ul {
+    list-style-type: decimal;
+}
+div[data-section-style="6"] ul ul ul ul ul {
+    list-style-type: lower-alpha;
+}
+div[data-section-style="6"] ul ul ul ul ul ul {
+    list-style-type: lower-roman;
+}
+
+/* Checklist */
+div[data-section-style="7"] ul {
+    list-style-type: none;
+}
+
+div[data-section-style="7"] ul li:before {
+    content: "\2610";
+    position: absolute;
+    display: inline;
+    margin-right: 1.2em;
+    margin-left: -1.2em;
+}
+
+div[data-section-style="7"] ul li.parent:before {
+    content: "";
+}
+
+div[data-section-style="7"] ul li.parent {
+    font-weight: bold;
+}
+
+div[data-section-style="7"] ul li.checked {
+    text-decoration: line-through;
+}
+
+div[data-section-style="7"] ul li.checked:before {
+    content: "\2611";
+    text-decoration: none;
+}
+
+/* Tables */
+div[data-section-style="8"] {
+    margin: 12px 0;
+}
+
+table {
+    border-spacing: 0;
+    border-collapse: separate;
+    border: solid 1px #bbb;
+    table-layout: fixed;
+    position: relative;
+}
+
+table th,
+table td {
+    padding: 2px 2px 0;
+    min-width: 1.5em;
+    word-wrap: break-word;
+}
+
+table th {
+    border-bottom: 1px solid #e1e1e1;
+    background: #f4f4f4;
+    font-weight: bold;
+    vertical-align: bottom;
+    color: #3a4449;
+    text-align: center;
+}
+
+table td {
+    padding-top: 0;
+    border-left: 1px solid #e1e1e1;
+    border-top: 1px solid #e1e1e1;
+    vertical-align: top;
+}
+
+table td.bold {
+    font-weight: bold;
+}
+
+table td.italic {
+    font-style: italic;
+}
+
+table td.underline {
+    text-decoration: underline;
+}
+
+table td.strikethrough {
+    text-decoration: line-through;
+}
+
+table td.underline.strikethrough {
+    text-decoration: underline line-through;
+}
+
+table td:first-child {
+    border-left: hidden;
+}
+
+table tr:first-child td {
+    border-top: hidden;
+}
+
+/* Images */
+div[data-section-style="11"] {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-section-style="11"][data-section-float="0"] {
+    clear: both;
+    text-align: center;
+}
+
+div[data-section-style="11"][data-section-float="1"] {
+    float: left;
+    clear: left;
+    margin-right: 20px;
+}
+
+div[data-section-style="11"][data-section-float="2"] {
+    float: right;
+    clear: right;
+    margin-left: 20px;
+}
+
+div[data-section-style="11"] img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: auto;
+}
+
+hr {
+    width: 70px;
+    margin: 20px auto;
+}
+
+/* Apps */
+div[data-section-style="19"].placeholder {
+    margin: 0.8em auto;
+    padding: 4px 0;
+    display: block;
+    color: #29b6f2;
+    text-align: center;
+    border: 1px solid rgba(41, 182, 242, 0.2);
+    border-radius: 3px;
+    background: #e9f8fe;
+    font-family: Roboto, sans-serif;
+}
+
+div[data-section-style="19"].first-party-element {
+    margin-bottom: 10px;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+div[data-section-style="19"] img {
+    margin: 0.5em;
+}
+
+div[data-section-style="19"] img.masked-image {
+    margin: 0;
+    transform-origin: top left;
+}
+
+div[data-section-style="19"] .image-mask {
+    position: relative;
+    overflow: hidden;
+}
+</style></head><body><h1 id='JUMACALS6bd'>Reference manual</h1>
+
+The other tutorials are better lessons in the use of Fae, but it can be difficult to reference specific features in the narrative, so they are all documented here.  All the user-visible aspects of Fae are described in this manual, but none of the internals.<br/>
+
+<h2 id='JUMACAEQxQI'>Monads</h2>
+
+Fae code is written in one of the Fae monads, which are all the instances of the typeclasses<br/>
+
+<pre id='JUMACABNpIG'>class MonadTX m<br>class MonadContract argType valType m</pre>
+
+where a <code>MonadContract</code> allows the full Fae API, consisting of the functions (described in the appropriate sections below):<br/>
+
+<div data-section-style='5'><ul id='JUMACAxtCIX'><li id='JUMACAtTAEi' class='' value='1'><i>Materials:</i> <code>lookupMaterial</code>, <code>material</code>, <code>materials</code>
+
+<br/></li><li id='JUMACACpfuc' class=''><i>Signers: </i><code>lookupSigner</code>, <code>signer</code>, <code>signers</code>
+
+<br/></li><li id='JUMACAmvQdB' class=''><i>Creation:</i> <code>newContract</code>, <code>newEscrow</code>
+
+<br/></li><li id='JUMACAMDPgo' class=''><i>Calling:</i> <code>useEscrow</code>, which includes the assignment operators <code>↤</code>, <code>⤆</code>, <code>⤝</code> and their ASCII equivalents <code>&lt;-|</code>, <code>&lt;=|</code>, <code>*&lt;-</code>
+
+<br/></li><li id='JUMACAWOmFu' class=''><i>Control flow:</i> <code>spend</code>, <code>release</code>
+
+<br/></li></ul></div>and a <code>MonadTX</code> allows all of those except the final, <i>control flow</i> category.  The basic such monads are <code>FaeTX</code> and <code>Fae argType valType</code> respectively, and any other obtained by applying a monad transformer such as <code>StateT s</code> to any of the Fae monads is also a Fae monad of the same class.<br/>
+
+<h3 id='JUMACA6TS2P'>Exceptions</h3>
+
+Monads in either class are also instances of <code>MonadThrow</code>, but not <code>MonadCatch</code>, meaning that exceptions may be thrown with <code>throw</code> but may not be caught within Fae.  Exceptions must therefore be used to indicate fatal errors.  Due to laziness, a value that would throw an exception when evaluated may or may not actually cause the exception to be raised in code that references it, depending on whether that code actually evaluates it.  It is therefore important to fully evaluate return values that might contain exceptions that should cause the present code to fail; otherwise they will cause a failure elsewhere without adequate explanation.<br/>
+
+<h3 id='JUMACAH1Fqa'>Helper functions</h3>
+
+A few functions are available in <code>Blockchain.Fae</code> that are not part of the Fae API but are nonetheless helpful:<br/>
+
+<pre id='JUMACAM0Low'>usingState ::<br>  (Monad m) =&gt; s -&gt; (a -&gt; StateT s m b) -&gt; (a -&gt; m b)<br>usingReader ::<br>  (Monad m) =&gt; r -&gt; (a -&gt; ReaderT r m b) -&gt; (a -&gt; m b)<br>feedback :: <br>  (ContractVal b, MonadContract a b m) =&gt;<br>  (a -&gt; m b) -&gt; (a -&gt; m (WithEscrows b))<br>halt :: (HasEscrowIDs a, MonadContract b a m) =&gt; a -&gt; m a</pre>
+
+All of these pertain to <a href="#JUMACAt0iYa">contract functions</a> with state.  The first two make it easy to write a contract in a monad stack and supply the initial data for its mutable or immutable state; typical usage might be<br/>
+
+<pre id='JUMACAOdb4Z'>f :: a -&gt; m b<br>f = usingState True $ \x -&gt; ...</pre>
+
+where the lambda expression is of type <code>a -&gt; StateT Bool m b</code>.<br/>
+
+<br/>
+
+The <code>feedback</code> function helps to write contract functions that loop through a single activity repeatedly, once per call.  While normally this would require careful use of recursion, with <code>feedback</code> one can specify the handling of the input argument and the return value, with the boilerplate code that closes the loop inserted behind the scenes.  For instance:<br/>
+
+<pre id='JUMACA9dmD5'>f = feedback $ \case<br>  True -&gt; return 42<br>  False -&gt; halt 57</pre>
+
+is a function that awaits a <code>Bool</code> and returns one of two
+<code>Integer</code>s via <a href="#JUMACAdX3XQ"><code>release</code></a>, resetting to the start upon the next call until <code>False</code> is received.  The <code>halt</code> function is a hack that causes this loop to terminate anyway at that point.<br/>
+
+<h2 id='JUMACAz0O4i'>Transactions</h2>
+
+<h3 id='JUMACAzmjaE'><b>The source file</b> </h3>
+
+<code>TransactionSrc.hs</code> (for example), containing the definition of a function <code>body</code> with a signature like:<br/>
+
+<pre id='JUMACAq1ZGz'>body :: (Show valType) =&gt; argType1 -&gt; argType2 -&gt; ... -&gt; FaeTX valType</pre>
+
+where any number of arguments, including zero, are allowed.  The <code>valType</code> must be an instance of <code>Show</code> and is not used by any other part of Fae.  This file is analogous to that containing <code>main</code> in a Haskell program and should not have a <code>module</code> header; the <code>Blockchain.Fae</code> module is imported implicitly.  When the transaction is run, this function is called with the return values of the <a href="#JUMACAV5xWC">input contracts</a> as its arguments.<br/>
+
+<h3 id='JUMACAcqaci'><b>The message file</b></h3>
+
+<code>TransactionMsg</code>, containing at least a field <code>body = TransactionSrc</code>, identifying the source module, and possibly a block <code>others</code> containing a list of module names to be attached to the transaction:<br/>
+
+<pre id='JUMACAhohjA'>others<br>  - OtherModule1<br>  - OtherModule2<br>  ...</pre>
+
+The other modules are present at the module paths <code>Blockchain.Fae.Transactions.TX&lt;<a href="#JUMACA1vVLa">this transaction ID</a>&gt;.&lt;module name&gt;</code>, where the module name is taken from the module headers.  Any imports of these modules from each other or from the main transaction file in <i>this</i> transaction must be unqualified, and are modified upon receipt to include this transaction path (which cannot be known when the modules are written, as the contents of the source files affects the transaction ID).<br/>
+
+<br/>
+
+Other fields may also be present, as described subsequently.<br/>
+
+<h3 id='JUMACAsUufs'>Signers</h3>
+
+The message file may contain a block of keys to sign the transaction:<br/>
+
+<pre id='JUMACAjPRvu'>keys<br>  role1 = name<br>  role2 = &lt;public key&gt;<br>  ...</pre>
+
+where <code>role1</code> is assigned the public key corresponding to the private key with the (textual) <code>name</code>, as present locally, and <code>role2</code> is “declared” to <a href="#JUMACAEzkS9">require the signature of the given public key</a>, but does not actually perform the signing and does not require the key to be present locally (this is very specific to the <code>postTX</code> utility; other key management policies are possible in a different implementation and only the eventual public keys are important to Fae.  Additionally, <code>postTX</code> signs the transaction with the key and role <code>self</code> if this block is absent.  Finally, in the case of <code>role2</code>, the transaction will be rejected unless sent with the <code>--fake</code> flag).  The roles are exposed in any Fae monad via the APIs<br/>
+
+<pre id='JUMACAZvKwr'>lookupSigner :: (MonadTX m) =&gt; String -&gt; m (Maybe PublicKey)<br>signer :: (MonadTX m) =&gt; String -&gt; m PublicKey<br>signers :: (MonadTX m) =&gt; m (Map String PublicKey)</pre>
+
+The <code>PublicKey</code> type is opaque (essentially a Fae primitive) and can only be constructed via one of these functions.  <code>lookupSigner</code> is a total function to dereference a role name; <code>signer</code> is a partial function that throws an exception where <code>lookupSigner</code> would return <code>Nothing</code>; <code>signers</code> just fetches the entire role-key mapping.<br/>
+
+<h3 id='JUMACAjo3dO'>Rewards</h3>
+
+A special <code>Reward</code> type is provided and may be used as the first argument to <code>body</code>.  If the transaction receives a reward (in <code>faeServer</code>, from <a href="#JUMACAC9t3I">the <code>reward</code> parameter</a>) then an additional value of this type is passed as the first argument when <code>body</code> is called.  This type has a single API:<br/>
+
+<pre id='JUMACAEaNdV'>claimReward :: (MonadTX m) =&gt; Reward -&gt; m ()</pre>
+
+that destroys this value and, in the process, validates it.  A <code>Reward</code> is <a href="#JUMACAmjd6v">escrow-backed</a> and as such can only be obtained via the reward mechanism.<br/>
+
+<h3 id='JUMACAmlrxF'>Fallback functions</h3>
+
+A transaction may exit with an uncaught exception (<a href="#JUMACA6TS2P">catching any exception is impossible in Fae</a>), which may leave any <a href="#JUMACAt6w8Z">valuables</a> returned from the <a href="#JUMACAV5xWC">input</a> or <a href="#JUMACA08FXz">materials</a> calls in a state where they have already been obtained and the calls cannot be reverted, but have not yet been transferred appropriately to their ultimate recipients.  To alleviate this problem, a transaction may include any number of <i>fallback functions</i>, via a block of names in the message file:<br/>
+
+<pre id='JUMACAhiDTw'>fallback<br>  - name<br>  ...</pre>
+
+where each name is a function accepting the same argument types as <code>body</code> and that is visible in the same module.  When an exception occurs in <code>body</code>, the fallback functions are called in order with the same arguments until one succeeds; their return type must be <code>()</code> and is ignored except for being checked for exceptions.  These functions can then re-deposit various values that would otherwise be lost.<br/>
+
+<h2 id='JUMACA6gW7E'>Escrows</h2>
+
+<h3 id='JUMACAt6w8Z'>Escrow IDs</h3>
+
+An escrow is a “portable contract” whose state is tracked by Fae and that can be accessed by its <i>escrow ID</i>, of type <code>EscrowID name</code>, where <code>name</code> is the <a href="#JUMACAbRQwy">contract name</a> of the escrow.  Valid escrow IDs can only be obtained as the return value of a call to <a href="#JUMACAEPh2P"><code>newEscrow</code></a>, or as part of the return value of a <a href="#JUMACAV5xWC">contract</a> or <a href="#JUMACAc1atN">escrow</a> call.  The escrow itself is implicitly present in the “context” of a single contract, escrow, or transaction code and an escrow ID is meaningless in any other context.  Escrows are transferred between contexts whenever their escrow IDs are part of the return value as passed to <code>spend</code> or <code>release</code>.<br/>
+
+<br/>
+
+The presence of escrow IDs in a return value is determined by a class<br/>
+
+<pre id='JUMACAs3ZcG'>class HasEscrowIDs a</pre>
+
+of which every type with an instance of <code>Generic</code>, as well as any of the primitive types or basic Fae types, is an instance.  Types such as <code>Map</code> that are not <code>Generic</code> may have an instance applied to them by wrapping them in the parametrized type<br/>
+
+<pre id='JUMACAYmNZU'>newtype Container a = Container { getContainer :: a }</pre>
+
+ which simply traverses the values inside.  Manual instances of <code>HasEscrowIDs</code> cannot be defined in order to prevent dishonest reporting of escrow IDs.<br/>
+
+<br/>
+
+The escrows found in a given value are said to be <i>backing escrows</i>.<br/>
+
+<h3 id='JUMACATaJSP'>Contract functions</h3>
+
+A Fae contract or escrow is a suspendable function: the <code>spend</code> and <code>release</code> APIs cause the call in the current transaction to terminate, to resume at the same point in a subsequent call.<br/>
+
+<pre id='JUMACAesiXt'>spend :: <br>  (HasEscrowIDs valType, MonadContract argType valType m) =&gt; <br>  valType -&gt; m (WithEscrows valType)<br>release :: <br>  (HasEscrowIDs valType, MonadContract argType valType m) =&gt; <br>  valType -&gt; m argType</pre>
+
+<code>spend</code> causes the contract to be deleted, so that it cannot be called again, and returns its argument as the contract return value.  The return type <code>WithEscrows valType</code> is another opaque type and can only be constructed by this function, cannot be deconstructed, and can only be used to end a contract function.  It indicates that the return value's <a href="#JUMACAmjd6v">backing escrows</a> have been extracted to be transferred alongside it.<br/>
+
+<br/>
+
+<code>release</code> allows resumption of the contract body, returning its argument from the current call and evaluating to the <i>next</i> contract call's argument.  The resumed contract begins execution with this value.<br/>
+
+<br/>
+
+Contracts and escrows are functions with the signature<br/>
+
+<pre id='JUMACAohV2Y'>type Contract argType valType = argType -&gt; Fae argType valType (WithEscrows valType)</pre>
+
+meaning that the type variables have roles corresponding to their names and the function must end with a <code>spend</code> unless it is nonterminating (meaning that it may be repeatedly called indefinitely, not that any single call is nonterminating); an expression like <code>forever (release 0)</code> can have any type, even though there is no <code>spend</code>.<br/>
+
+<h3 id='JUMACAbRQwy'><b>Contract names</b></h3>
+
+Escrows (and contracts) are abstract functions but are declared via concrete data types, their <i>contract names</i>, which are instances of the class<br/>
+
+<pre id='JUMACAqxRVa'>class <br>  (HasEscrowIDs a, Typeable (ArgType a), HasEscrowIDs (ValType a)) =&gt; <br>  ContractName a where<br><br>  type ArgType a<br>  type ValType a<br>  theContract :: a -&gt; Contract (ArgType a) (ValType a)</pre>
+
+<h3 id='JUMACAEPh2P'>escrow creation</h3>
+
+Contract names are used in the escrow creation function:<br/>
+
+<pre id='JUMACAefCSc'>newEscrow :: (ContractName name, MonadTX m) =&gt; name -&gt; m (EscrowID name)</pre>
+
+The <code>name</code> must normally be given a <code>ContractName</code> instance in advance, but as a convenience, a <code>Contract argType valType</code> may be used directly with the obvious instance, so that the contract function (normally <code>theContract name</code>) can be given inline as a lambda expression.  This disables the import/export feature, however, and so is considered a form of unfinished prototyping.<br/>
+
+<h3 id='JUMACAc1atN'>Using escrows</h3>
+
+Escrows, but not contracts, can be called inside the Fae monads using the API<br/>
+
+<pre id='JUMACA3zNEy'>useEscrow :: <br>  (ContractName name, HasEscrowIDs (ArgType name), MonadTX m) =&gt;<br>  [Assignment] -&gt; EscrowID name -&gt; ArgType name -&gt; m (ValType name)</pre>
+
+The <code>Assignment</code> list renames the signer roles and <a href="#JUMACA08FXz">materials</a> names.  An assignment is of one of the following forms:<br/>
+
+<pre id='JUMACAZ0mvF'>newSignerRole &lt;-| oldSignerRole      or  newSignerRole ↤ oldSignerRole     (↤ = U+21a4)<br>newMaterialName &lt;=| oldMaterialName  or  newMaterialName ⤆ oldMaterialName (⤆ = U+2906)<br>newMaterialName *&lt;- materialValue    or  newMaterialName ⤝ materialValue   (⤝ = U+291d)</pre>
+
+(the Unicode variants are cosmetic).  The first two ones extract a value at an existing name and assign it a new name; the third one creates a new name with a new value; this may be necessary to operate escrows that expect certain values to be present as materials and not arguments.  Any names that are not explicitly assigned in this list are not present in the escrow call, in order to prevent escrows from having backdoors that are activated by materials inherited from the current contract code's own caller (and thus are not under the control of the current code's author).<br/>
+
+<br/>
+
+The <code>EscrowID</code> must refer to an escrow in the current context; once these two parameters are passed, <code>useEscrow</code> is an ordinary call to the escrow function.<br/>
+
+<h2 id='JUMACAmuFFw'>Contracts</h2>
+
+<h3 id='JUMACAKVPt4'><b>Contract creation</b></h3>
+
+Contracts, similarly to escrows, are created by a call to the function<br/>
+
+<pre id='JUMACAjYPmw'>newContract ::<br>  (ContractName name, Read (ArgType name), Exportable (ValType name), MonadTX m) =&gt; <br>  name -&gt; m ()</pre>
+
+which may occur in the <code>body</code> of a transaction or in the contract function of one of the input calls.  The <code>Exportable</code> class will be described <a href="#JUMACA1lG5f">below</a>.  The argument is an instance of <code>Read</code> in order to parse the argument literal in <a href="#JUMACAV5xWC">the input call</a>. <a href="#JUMACAEPh2P"> As for escrows</a>, a lambda expression may serve as the contract name at the cost of disabling the export feature.<br/>
+
+<h3 id='JUMACAV5xWC'><b>Input contract calls</b></h3>
+
+In the transaction message, contract calls are declared in a block of the form:<br/>
+
+<pre id='JUMACAEy7jl'>inputs<br>  contractID : argument<br>  ...</pre>
+
+The inputs are implicitly numbered starting at 0 according to their order in this list.  Multiple calls to the same contract ID are permissible and are resolved in numerical order, which can affect the contract's internal state on subsequent calls.  Contracts may only be called in the transaction message, unlike escrows, which may never be called in the transaction message.<br/>
+
+<br/>
+
+A contract ID is a “path” of the form <code>&lt;transaction ID&gt;/&lt;transaction part&gt;/&lt;output #&gt;/&lt;contract version&gt;</code>,  identifying the exact point of origin of this contract (the location of the <code>newContract</code> call that created it), where:<br/>
+
+<div data-section-style='5'><ul id='JUMACAjBWZY'><li id='JUMACAMlT3w' class='' value='1'>The <code>&lt;transaction id&gt;</code> is the <a href="#JUMACA1vVLa">unique identifier</a> of the transaction where the contract was created;
+
+<br/></li><li id='JUMACA8HS4A' class=''>The <code>&lt;transaction part&gt;</code> is either <code>Body</code> or <code>Input n</code>, where the former indicates that the <code>newContract</code> was called in the transaction's <code>body</code>, and the latter indicates that it was called during the <code>n</code>th input contract call.
+
+<br/></li><li id='JUMACAfpEaD' class=''>The <code>&lt;output #&gt;</code> is the index in the 0-based sequence of <code>newContract</code> calls in the <code>&lt;transaction part&gt;</code> where the particular call that created this contract occurs. 
+
+<br/></li><li id='JUMACAx6YUB' class=''>The <code>&lt;contract version&gt;</code> is either <code>Current</code> or <code>Version &lt;hex&gt;</code>, where the former indicates the absence of a constraint on the <a href="#JUMACAZmNio">contract version</a>, and the latter indicates that the version must match the <code>&lt;hex&gt;</code>.
+
+<br/></li></ul></div>Contract calls themselves introduce a block that may contain signer name assignments:<br/>
+
+<pre id='JUMACA90crb'>contractID : argument<br>  newRole1 = oldRole1<br>  newRole2 = oldRole2<br>  ...</pre>
+
+with the same interpretation as the <code>newSignerRole ↤ oldSignerRole</code> <a href="#JUMACAc1atN">assignment syntax</a>.<br/>
+
+<h3 id='JUMACAZmNio'>Contract versions</h3>
+
+Contracts are created with versions that are updated on each call by hashing with the transaction ID, and so reflect the entire call history of the contract.  This version may be referenced in the <code>Version &lt;hex&gt;</code> alternative for the last component of the contract ID; if the given version differs from the internal one then the call fails.  This is useful to ensure that the contract is in the same state as it was when the transaction was tested.<br/>
+
+<h3 id='JUMACA08FXz'>Materials</h3>
+
+Contract calls must have literal arguments but they can receive Fae-internal values from the return values of other calls via <i>materials</i>, analogous to signers' public keys.  Materials are provided alongside signer assignments with a similar syntax:<br/>
+
+<pre id='JUMACAhIEx4'>contractID1 : argument1<br>   materialName = contractID2 : argument2<br>     ...     <br>   ...</pre>
+
+Note the indented <code>...</code> underneath the material: it functions syntactically as a contract call and can have its own indented list of assignments and materials.<br/>
+
+<br/>
+
+The return value of the call to <code>contractID2</code> is supplied to the call to <code>contractID1</code> with the given <code>materialName</code>.  Materials may also be passed directly to the transaction body in a top-level block:<br/>
+
+<pre id='JUMACA0STN7'>materials<br>  materialName = contractID : argument<br>  ...</pre>
+
+Materials can be accessed in the Fae monads via the APIs<br/>
+
+<pre id='JUMACAuHpam'>lookupMaterial :: (MonadTX m, Typeable a) =&gt; String -&gt; m (Maybe a)<br>material :: (MonadTX m, Typeable a) =&gt; String -&gt; m a<br>materials :: (MonadTX m, Typeable a) =&gt; m (Map String a)</pre>
+
+which function similarly to the like-named functions for signers, except for the type variable <code>a</code>, whose purpose is to specify the type of material sought; an <a href="#JUMACA6TS2P">exception</a> is raised in the event of a mismatch in m<code>aterial</code>, and <code>Nothing</code> is returned by <code>lookupMaterial</code> in the same event.  The <code>materials</code> function is intended to be useful in transaction bodies that logically would accept a list of arguments with indeterminate length, which would be generated when the transaction message is written and used with a single generic <code>body</code> (also avoiding the need to have a <code>body</code> with a very large number of function arguments).  It never throws an exception, but may return the empty map.<br/>
+
+<h2 id='JUMACAYKnoe'>Supplied server and client</h2>
+
+The documentation above assumes the <code>faeServer</code> implementation of Fae and its matching <code>postTX</code> utility for submitting transactions (via an HTTP POST, hence the name).<br/>
+
+<h3 id='JUMACAhDcyQ'>faeserver</h3>
+
+The general command-line operation of <code>faeServer</code> is described in its documentation, printed with the <code>--help</code> flag.<br/>
+
+<br/>
+
+Operationally, <code>faeServer</code> is an HTTP server accepting connections by default on port 27182, and 27183 for <a href="#JUMACALTj50">import/export</a> requests.  It handles POST requests with the following structure:<br/>
+
+<div data-section-style='5'><ul id='JUMACAibjSp'><li id='JUMACAzYLGx' class='' value='1'>A <code>parent</code> parameter, indicating the transaction ID of the parent for the current transaction (any may be specified).  If this field is absent it selects the one at the end of the “best chain”: the chain that became the current longest one at the earliest time.
+
+<br/></li><li id='JUMACAbAnL6' class=''>A <code>view</code> parameter, indicating the ID of an existing transaction in order to view its results, rather than submitting a new transaction.
+
+<br/></li><li id='JUMACAmmYK1' class=''>A <code>lazy</code> parameter, which is boolean (default <code>False</code>), indicating that the new transaction should be processed but the results not evaluated.  The response when this parameter is set is a simple message <code>Transaction &lt;transaction ID&gt;</code>.
+
+<br/></li><li id='JUMACAaRgnw' class=''>A <code>fake</code> parameter, also boolean (default <code>False</code>, except in <a href="#JUMACApIQe7">Faeth</a> mode, when it is always <code>True</code> no matter how specified), indicating that the transaction should be run one-shot and then dropped.  In this mode, <a href="#JUMACAsUufs">public-key signer declarations</a> are allowed and the corresponding roles are given those keys without verification.
+
+<br/></li><li id='JUMACAC9t3I' class=''>A <code>reward</code> parameter, also boolean (default <code>False</code>), indicating whether the transaction is passed <a href="#JUMACAjo3dO">a <code>Reward</code> parameter</a>.  This simulates such a feature that might be present in a blockchain-based Fae.
+
+<br/></li><li id='JUMACAlcTt2' class=''>An attached file with parameter <code>body</code>; the filename is ignored.  This is the source code defining <a href="#JUMACAq1ZGz">the <code>body</code> function</a>.
+
+<br/></li><li id='JUMACAUy420' class=''>Any number of attached files with parameter <code>other</code>; the filenames should match the module names.  These are the source code for any <a href="#JUMACAcqaci">modules intended for import</a> by this or other transactions.
+
+<br/></li><li id='JUMACAPdafc' class=''>An attached file with parameter <code>message</code>, whose filename is ignored, containing the <a href="#JUMACAl3Eoe">formal transaction message structure</a>.
+
+<br/></li></ul></div>Except when <code>lazy</code> is specified, the response is a JSON structure describing the results of the transaction and all its contract calls, which is displayed as described in the <code>postTX</code> help message.<br/>
+
+<br/>
+
+<a href="#JUMACA1lG5f">Import/export</a> requests have the following simpler structure:<br/>
+
+<div data-section-style='5'><ul id='JUMACAwpZWP'><li id='JUMACADuKR7' class='' value='1'>A <code>parent</code> parameter, with the meaning that the value being exported should be taken from the Fae state immediately following execution of the parent transaction, and the value being imported should be inserted into that state.
+
+<br/></li><li id='JUMACA2dpNS' class=''>An <code>import</code> parameter, containing a 4-tuple
+
+<br/></li><li id='JUMACAKNoF3' class=''>(<br> &lt;exported contract ID&gt;,<br> &lt;Updated|Failed|Deleted status of call&gt;,<br> &lt;list of required module names to interpret the <a href="#JUMACAbRQwy">contract name</a>'s value type&gt;,<br> &lt;the contract name's value type&gt;<br>) 
+
+<br/></li><li id='JUMACAkPDJT' class=''>An attached file <code>valuePackage</code>, associated with <code>import</code>, containing the binary encoding of the value to be imported.  The response for an <code>import</code> is the same as that for a <code>lazy</code> transaction.
+
+<br/></li><li id='JUMACAxPboo' class=''>An <code>export</code> parameter, mutually exclusive with <code>import</code>, containing a pair <code>(&lt;calling transaction ID&gt;, &lt;input number of contract call&gt;)</code> indicating a particular contract call whose return value is to be exported.  The response to this request is a 5-tuple containing the values for <code>import</code> and <code>valuePackage</code>.
+
+<br/></li></ul></div><br/>
+
+Finally, <code>faeServer</code> may be run in “Faeth mode”, in which it receives all its transactions from an Ethereum client running in parallel, but can also receive <code>fake</code> transactions via HTTP for testing, which can set <code>parent</code>s from the history of Fae transactions carried by Ethereum.<br/>
+
+<h3 id='JUMACAMx1EZ'>posttx</h3>
+
+This tool constructs the requests that are sent to <code>faeServer</code> as described above, and operates as described by its <code>--help</code> text.<br/>
+
+<h3 id='JUMACAl3Eoe'>Transaction Message structure</h3>
+
+Formally, a Fae transaction is the following data type:<br/>
+
+<pre id='JUMACAtafa1'>data TXMessage a =<br>  TXMessage<br>  {<br>    salt :: a,<br>    mainModulePreview :: ModulePreview,<br>    otherModulePreviews :: Map String ModulePreview,<br>    materialsCalls :: InputMaterials,<br>    inputCalls :: [Input],<br>    fallbackFunctions :: [String],<br>    signatures :: Map String (PublicKey, Maybe Signature)<br>  }<br><br>data ModulePreview =<br>  ModulePreview<br>  {<br>    moduleDigest :: Digest,<br>    moduleSize :: Integer<br>  }<br><br>data Input =<br>  InputArgs<br>  {<br>    inputCID :: ContractID,<br>    inputArg :: String,<br>    inputRenames :: Renames,<br>    inputInputs :: InputMaterials<br>  } |<br>  InputReward<br><br>type Module = ByteString<br>type ModuleMap = Map String Module</pre>
+
+This has four principal aspects:<br/>
+
+<div data-section-style='5'><ul id='JUMACAYrEKF'><li id='JUMACA58bHd' class='' value='1'>The calling data: <code><a href="#JUMACA08FXz">materialsCalls</a></code>, <a href="#JUMACAV5xWC"><code>inputCalls</code></a>, and <a href="#JUMACAmlrxF"><code>fallbackFunctions</code></a>.  The <code>Input</code> should always be <code>InputArgs</code>, as the <code>InputReward</code> variant is only generated by <a href="#JUMACAjo3dO">the reward mechanism</a>.
+
+<br/></li><li id='JUMACA75RGp' class=''>The module data: <code>mainModulePreview</code> and <code>otherModulePreviews</code>. These are defined in terms of the <code>ModulePreview</code> type, which records not the contents of the module but data usefully identifying it: its unique digest and its size in bytes.  This data can be used by a Fae instance to decide whether to accept a transaction (due to resource constraints) and to validate the source files it does accept.  The source files themselves should be transmitted in parallel with the message.
+
+<br/></li><li id='JUMACAEzkS9' class=''>The signature data: <code>signatures</code>, possibly containing the signatures of each of the <a href="#JUMACAsUufs">named roles</a>, but definitely containing the public key that these roles are required to use.  In “production”, a transaction message is invalid if these signatures do not validate against the given public keys, but <a href="#JUMACAaRgnw">in testing </a>it is permissible for signatures to be absent, as the public key is still known.
+
+<br/></li><li id='JUMACA3ZBuA' class=''>The “salt”: <code>salt</code>, whose type is polymorphic.  For <a href="#JUMACAhDcyQ"><code>faeServer</code> in normal mode</a>, this is just a <code>String</code> containing a timestamp, while in <a href="#JUMACApIQe7">Faeth mode</a>, it contains other data that is described there.  The timestamp helps ensure that transaction messages that might otherwise contain identical data (but operate differently due to the effects of evolving historical state) will have distinct transaction IDs.
+
+<br/></li></ul></div><h3 id='JUMACA1vVLa'>Transaction ID</h3>
+
+The <i>normalized</i> version of a transaction message is obtained from it by setting all signatures to <code>Nothing</code>.  The transaction ID is the digest of this normalized message, and the signatures are all derived against this digest: thus, the ID depends on the identities of the signers (as well as everything else), and not on the exact signatures, which in many digital signing schemes can involve a nondeterministic element; likewise, the signatures may be added in any order, as they do not affect the data that must be signed.<br/>
+
+<h2 id='JUMACA1lG5f'>Import and export</h2>
+
+In its normal mode of operation, Fae requires the presence of the full transaction history, so that contract creations and calls are queued up for lazy evaluation.  An instance may elide part of this history by receiving just the <i>return value</i> of a contract call out-of-band with the ordinary transactions.  No Fae side effects are performed by importing this value, so contract creations that occur in the actual call are not performed by an imported return value.  However, the value's backing escrows are passed with it, so that it is usable in the normal way.  This feature is completely invisible to Fae transactions, which are the same messages regardless of imported values, but import and export hooks (not described here) are provided for use in <a href="#JUMACAhDcyQ"><code>faeServer</code></a> (or any other implementation of Fae) to handle these values.<br/>
+
+<br/>
+
+Export is enabled by the class<br/>
+
+<pre id='JUMACA6EYRf'>class (Typeable a) =&gt; Exportable a</pre>
+
+that, like <a href="#JUMACAs3ZcG"><code>HasEscrowIDs</code></a>, is opaque and cannot be explicitly instantiated, but has default instances for <code>Generic</code>, primitive, and <a href="#JUMACAYmNZU"><code>Container</code></a>-wrapped types.  The functionality of this class is to convert values of its instance types to and from a binary encoding, including their backing escrows; as a special case, function types are <code>Exportable</code> but any attempt to use the exported value throws an exception. This class appears as a constraint on <code>newContract</code> (but not <code>newEscrow</code>), so valid contracts may be higher-order functions that return values containing other functions, though this defeats the export mechanism.<br/>
+
+<br/>
+
+The class is <i>not</i> a constraint on the <code>ContractName</code> class, but backing escrows are exported via their contract names, so any escrows that represent transmissible valuables must have <code>Exportable</code> contract names.  Currently, there is an additional restriction that an escrow may only be exported if it is in its <i>initial state</i>, never having been called, because the contract name represents initial data that does not describe the escrow's state after being used.  (Removing this restriction is a high priority.)<br/>
+
+<h3 id='JUMACAp5vGr'>FaeServer import/export operation</h3>
+
+There is only one parameter to <code>faeServer</code> that affects imports and exports, the <code>--import-export-port=</code>, which defaults to 27183.  <code>faeServer</code> is always listening on this port even if the option is missing.<br/>
+
+<h3 id='JUMACABPmyG'>PostTX Import/export operation</h3>
+
+To perform complete export/import from one <code>faeServer</code> to another, run <code>postTX</code> with the two arguments <code>--import-host=</code> and <code>--export-host=</code>, which set the hostname and possibly port of the two <code>faeServer</code> instances.  The main argument to <code>postTX</code> is then of the form <code>&lt;transaction ID&gt;:&lt;input #&gt;</code>, indicating which input call in which transaction is to be exported.  This value is then available for this, and only this call in the target instance.<br/>
+
+<br/>
+
+It is often necessary for certain source files to be present in the target to interpret the imported value (specifically, any module defining a type appearing in the full type of this value).  These files, which occur in various previous transactions, can be transferred using a separate mode <code>--resend</code>, which causes <code>postTX</code> to find in its history the exact transaction whose ID is the main argument, and send it to the desired host.  This can be combined with <code>--lazy</code> so that the target instance can get the source files it contains without running the transaction itself (which is the point of importing a return value).<br/>
+
+<h2 id='JUMACApIQe7'>Faeth</h2>
+
+Fae has a limited ability, dubbed <i>Faeth</i>, to exist on the Ethereum blockchain and to interact with Ethereum transactions.  Like <a href="#JUMACAf9tvI">import/export</a>, this feature is invisible to Fae code, but it does have consequences for the meta-coding that gives transactions practical meaning.<br/>
+
+<h3 id='JUMACANTc3u'>Faeth blockchain</h3>
+
+Fae alone is not a blockchain, but a smart contract engine, like a standalone EVM.  Faeth embeds it within the Ethereum blockchain: Faeth transactions are a <a href="#JUMACABETD9">particular type</a> of Ethereum transaction, and so synchronize Fae with Ethereum, taking the Fae transaction ordering from the one obtained by consensus via the Ethereum blockchain.<br/>
+
+<h3 id='JUMACABETD9'>Faeth transaction structure</h3>
+
+Faeth transactions are Ethereum transactions with a Fae transaction message embedded within their <code>data</code> field.  The Fae transaction has a <a href="#JUMACAtafa1"><code>salt</code></a> that includes data relevant to Ethereum:<br/>
+
+<pre id='JUMACA7qtiv'>data Salt =<br>  Salt<br>  {<br>    ethArgument :: ByteString,<br>    ethFee :: Maybe HexInteger,<br>    ethRecipient :: Maybe EthAddress,<br>    faeSalt :: String<br>  }</pre>
+
+The <code>ethArgument</code> is of course the sequence of bytes that would otherwise go in the Ethereum <code>data</code> field and be interpreted by the contract it calls.  Because of its position as the first field in the first field of the Fae message that is actually put in <code>data</code>, it appears verbatim as the initial portion of <code>data</code>, and that contract can still process it obliviously to Fae, so long as it expects an argument that is self-delimiting (i.e. is not just a stream of bytes without a declared length).  This applies to any Solidity contract, for instance.<br/>
+
+<br/>
+
+(The length of the <code>ethArgument</code> is stored as a single machine word shifted to the end of <code>data</code>, so that the <code>Salt</code> value can be parsed but the <code>data</code> seen by the Ethereum contract is still the expected byte string, which may not be length-prefixed in the same way.)<br/>
+
+<br/>
+
+The other two Ethereum fields represent constraints on the <code>value</code> and <code>to</code> fields of the Ethereum transaction; these constraints are optional.  If present, the Fae transaction is invalid unless they match the values in the Ethereum transaction; because Faeth does not modify Ethereum's operation at all, the reverse cannot be true.  Their presence establishes an economic exchange: the Ethereum transaction, to run with the required argument and making the required payment to the required contract or address; the Fae transaction, to do whatever it is to do in return.  A failure due to a mismatch in these fields will still allow the Ethereum portion to run, so it is strictly detrimental to the Ethereum-based party.<br/>
+
+<br/>
+
+The <code>faeSalt</code> field is the same one that appears as the entire <code>salt</code> in a <a href="#JUMACAhDcyQ"><code>faeServer</code></a> transaction: a timestamp for uniqueness.<br/>
+
+<h3 id='JUMACAisK1f'>Faeserver Faeth operation</h3>
+
+The <code>faeServer</code> daemon operates in Faeth mode if started with the <code>--faeth-mode</code> command-line argument.  In this mode, it communicates with a Parity client (whose location is controlled by the <code>--faeth-hostname=</code> and <code>--faeth-port=</code> arguments), subscribing to new blocks via JSON-RPC and scanning their transactions for those containing a Faeth-formatted <code>data</code> field.  This operation builds the Fae transaction sequence, but does not submit transactions; this is the job of <code>postTX</code>.<br/>
+
+<br/>
+
+In Faeth mode, <code>faeServer</code> continues to accept transactions submitted directly by <code>postTX</code>, but considers them all to have been sent with the <code>--fake</code> flag, and so never enters them into its transaction sequence.  This is purely for testing purposes, or to use the other features of <code>postTX</code> such as <code>--view</code> or <a href="#JUMACA1lG5f">import/export</a>.<br/>
+
+<h3 id='JUMACAu82Y1'>Posttx Faeth operation</h3>
+
+The <a href="#JUMACAMx1EZ"><code>postTX</code></a> tool has several arguments for interacting with Faeth; it expects to do so by interacting with a Parity client as well, which may or may not be the same as the one that <code>faeServer</code> is listening to. Transactions submitted via Faeth are propagated via Ethereum, so any Ethereum client may receive a new one.  This allows multiple parties to interact:<br/>
+
+<div data-section-style='5'><ul id='JUMACAWDs2f'><li id='JUMACAmixzc' class='' value='1'>Party A creates a dummy Faeth transaction with the correct Fae transaction inside, including its <code>Salt</code>, but with Party B's signature missing from it and with incorrect <code>to</code> and <code>value</code> fields (likely ones that have no effect, such as Party A's own address and 0, respectively).  The Fae transaction is therefore invalid and not run, but can be received by Party B via Ethereum's networking.
+
+<br/></li><li id='JUMACAIpc6f' class=''>Party B then signs the Fae transaction with their private key, corresponding to the required public key it already contains, and adds the correct Ethereum parameters.  The transaction then goes through as intended in both Fae and Ethereum.
+
+<br/></li></ul></div>The <code>postTX</code> parameters that implement this flow are:<br/>
+
+<div data-section-style='5'><ul id='JUMACA8bUG9'><li id='JUMACAjgJK3' class='' value='1'><code>--faeth-fee=</code> and <code>--faeth-recipient=</code>, and <code>--faeth-eth-argument=</code>, which Party A can use to set the corresponding fields of the <code>Salt</code>;
+
+<br/></li><li id='JUMACAF1ca4' class=''><code>--faeth-eth-value=</code> and <code>--faeth-eth-to=</code>, which set the corresponding fields of the Ethereum transaction and can be used in the “Party B” scenario above.  Syntactically, <code>--faeth-eth-argument</code> belongs with these, but since it affects the <code>Salt</code>, it is unchangeable after the Fae transaction is first created (and signed by the author).
+
+<br/></li><li id='JUMACANRDUO' class=''><code>--faeth-add-signature=</code>, which Party B can use to add a signature to the embedded Fae transaction.  This affects the Ethereum transaction ID but not the Fae one.
+
+<br/></li></ul></div></body></html>

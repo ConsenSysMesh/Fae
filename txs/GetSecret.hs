@@ -1,4 +1,4 @@
-import Blockchain.Fae.Transactions.TX$txID.Secret
+import Blockchain.Fae.Transactions.TX$txID
 
-body :: Transaction Secret Secret
+body :: Secret -> FaeTX Secret
 body = return

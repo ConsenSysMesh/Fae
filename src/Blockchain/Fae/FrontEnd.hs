@@ -7,7 +7,11 @@ License: MIT
 Maintainer: ryan.reich@gmail.com
 Stability: experimental
 
-If you are writing a Fae client, this module is for you.  It exposes the functions for running blocks and transactions, and for showing the storage.
+If you are writing a Fae client, this module is for you.  It exposes the
+functions for running blocks and transactions, and for showing the storage.
+Most of the re-exported modules were imported with restricted lists, but
+due to a deficiency in Haddock this is not reflected in the generated
+document.
 -}
 module Blockchain.Fae.FrontEnd
   (
@@ -17,11 +21,12 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.TX,
     -- * Running transactions without interpreting
     module Blockchain.Fae.Internal.Transaction,
-    -- * Running a block of transactions
-    module Blockchain.Fae.Internal.Block,
     -- * Fae storage types and storage access
     module Blockchain.Fae.Internal.Storage,
-    showTransaction,
+    exportValue, importValue,
+    -- * Transaction evaluation
+    module Blockchain.Fae.Internal.TXSummary,
+    module Blockchain.Fae.Internal.Monitors,
     -- * Cryptography types and functions
     module Blockchain.Fae.Internal.Crypto,
     -- * Fae exceptions
@@ -30,14 +35,16 @@ module Blockchain.Fae.FrontEnd
     module Blockchain.Fae.Internal.IDs.Types
   ) where
 
-import Blockchain.Fae.Internal.Block
+import Blockchain.Fae.Internal.Contract (exportValue, importValue)
 import Blockchain.Fae.Internal.Crypto hiding
   (
     Serialize, PassFail, PartialSerialize,
     compareSerialize, putPartialSerialize, 
-    getPartialSerialize, readsPrecSer
+    getPartialSerialize, readsPrecSer,
+    EdPublicKey
   )
 import Blockchain.Fae.Internal.Exceptions hiding (unsafeIsDefined)
+import Blockchain.Fae.Internal.GenericInstances
 import Blockchain.Fae.Internal.IDs hiding
   (
     GHasEscrowIDs,
@@ -48,16 +55,20 @@ import Blockchain.Fae.Internal.Messages hiding
   (
     unsignedTXMessage, unsignTXMessage
   )
-import Blockchain.Fae.Internal.PrettyFae (showTransaction)
+import Blockchain.Fae.Internal.TXSummary
+  (
+    TXSummary(..), TXInputSummary(..), 
+    InputSummary, MaterialsSummaries,
+    collectTransaction
+  )
+import Blockchain.Fae.Internal.Monitors
 import Blockchain.Fae.Internal.Storage hiding 
   (
-    hoistFaeStorage, nonceAt, checkNonce, nonceSetter,
-    listToOutputs, emptyOutputs, combineIOV, combineO
+    txPartLens, txInputLens, vectorAt, joinUncertainty, uncertain, onlyJust
   )
-import Blockchain.Fae.Internal.Transaction hiding
+import Blockchain.Fae.Internal.Transaction
   (
-    TXStorageM, doTX, doFallback, runInputContracts, 
-    runInputContract, runContract, hoistFaeContractNaught
+    Input(..), InputMaterials, TXStorageM, TransactionBody(..), runTransaction
   )
 import Blockchain.Fae.Internal.TX
 

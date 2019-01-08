@@ -1,0 +1,5 @@
+body = Timeout2
+inputs
+  $txID/Body/0/Current : ()
+  $txID/Body/1/Current : ()
+    material = $txID/Body/0/Current : ()

@@ -1,0 +1,3 @@
+body = ReturnEscrowID2
+inputs
+  $txID/Body/0/Current = ()

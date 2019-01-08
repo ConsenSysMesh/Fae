@@ -1,7 +1,6 @@
-module Secret (Secret, SecretID) where
-
-import Blockchain.Fae
+import Blockchain.Fae.Contracts
 
 data Secret = Secret deriving (Generic, Show)
 
-type SecretID = EscrowID () Secret
+body :: FaeTX ()
+body = deposit Secret "self"

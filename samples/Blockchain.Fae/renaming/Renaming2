@@ -1,0 +1,9 @@
+body = Renaming2
+keys
+  ryan = $ryan
+  tom = $tom
+inputs
+  -- Should return (0, $ryan, eID)
+  $txID/Body/0/$ver : ()
+    cRole = ryan
+

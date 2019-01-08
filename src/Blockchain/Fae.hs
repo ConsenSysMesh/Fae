@@ -61,21 +61,19 @@ module Blockchain.Fae
     -- the literal arguments passed to the contracts with the given IDs.
     -- These are then 'read' into Haskell types, to prevent malicious
     -- authors from inserting nonterminating code into the contract calls.
-    Transaction, TransactionM, TransactionID, PublicKey, FaeTX, MonadTX,
+    TransactionBody, 
+    PublicKey, FaeTX, MonadTX,
     -- * Contracts and escrows
-    Contract, ContractM, ContractID(..), Fae, MonadContract,
-    WithEscrows, EscrowID, BearsValue, RewardEscrowID, Reward,
+    Contract, ContractM, ContractName(..), 
+    Fae, MonadContract, WithEscrows, EscrowID, Reward,
+    -- ** Contract API
     spend, release, useEscrow, newEscrow, 
-    newContract, usingState, usingReader,
-    lookupSigner, signer, signers, claimReward, bearer, 
-    -- * Versioning
-    -- | In order to ensure that transaction authors can rely on getting
-    -- the escrow-backed values they expect, contract outputs are
-    -- "versioned" and any change to any escrow ID alters the version.
-    -- Contract literal arguments can refer to these values by version.
-    Versioned(Versioned, getVersioned),
-    -- * Opaque classes
-    GetInputValues, HasEscrowIDs, Versionable, 
+    newContract, usingState, usingReader, feedback,
+    lookupSigner, signer, signers, 
+    lookupMaterial, material, materials,
+    Assignment, (<-|), (<=|), (*<-), (↤), (⤆ ), (⤝), claimReward, 
+    -- * Opaque types and classes
+    HasEscrowIDs, Exportable, EGeneric, Container(..), ContractArg, ContractVal, 
     -- * Re-exports
     Natural, Typeable, Exception, throw, evaluate, 
     Generic, Identity(..), Void
@@ -83,31 +81,17 @@ module Blockchain.Fae
 
 import Blockchain.Fae.Internal.Contract
 import Blockchain.Fae.Internal.Crypto
-import Blockchain.Fae.Internal.Exceptions
 import Blockchain.Fae.Internal.GenericInstances
-import Blockchain.Fae.Internal.GetInputValues
 import Blockchain.Fae.Internal.IDs
 import Blockchain.Fae.Internal.Reward
-import Blockchain.Fae.Internal.Storage
+import Blockchain.Fae.Internal.Serialization
 import Blockchain.Fae.Internal.Transaction
-import Blockchain.Fae.Internal.Versions
 
 import Common.Lens
 
-import qualified Control.DeepSeq as DS
-
+import Control.Monad.Fix
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Trans.Class
-import Control.Monad.Writer.Class
-
-import Data.Dynamic
-import Data.Functor.Identity
-import Data.Maybe
-import Data.Sequence (Seq)
-
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 import Control.Exception (Exception, throw, evaluate)
 import Data.Typeable (Typeable)
@@ -117,14 +101,37 @@ import Numeric.Natural (Natural)
 
 -- * Types
 
--- | A contract transformer to apply effects to 'Fae'
+-- | Constraint collection synonym
+type ContractVal a = (HasEscrowIDs a, EGeneric a, ESerialize a, Exportable a)
+-- | Constraint collection synonym
+type ContractArg a = (HasEscrowIDs a, Read a)
+
+-- | A contract transformer to apply effects to 'Fae'.  Concretely, it is
+--
+-- >>> type ContractM t name = ArgType name -> t (Fae (ArgType name) (ValType name)) (ValType name)
+--
+-- To demystify the kind signature, it is used like
+--
+-- >>> type StateContract s argType valType = ContractM (StateT s) argType valType
+--
+-- with the first component being a monad /transformer/.  This can then be
+-- evaluated back down to a @Contract argType valType@ via 'usingState'.
 type ContractM (t :: (* -> *) -> (* -> *)) argType valType =
   ContractT (t (Fae argType valType)) argType valType
--- | A transaction transformer like 'ContractM'
+
+-- | A transaction transformer to apply effects to 'FaeTX'.  To demystify the
+-- kind signature, it is used like
+--
+-- >>> type StateTransaction s a b = TransactionM (StateT s) a b
+--
+-- with the first component being a monad /transformer/.  This can then be
+-- evaluated back down to a @Transaction a b@ via 'usingState'.
 type TransactionM (t :: (* -> *) -> (* -> *)) a b = a -> t FaeTX b
 
 -- | A simple utility for adding mutable state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
+-- The second argument should be a @ContractM StateT@ or @TransactionM
+-- StateT@.
 usingState ::
   (Monad m) =>
   s ->
@@ -134,10 +141,33 @@ usingState s f = flip evalStateT s . f
 
 -- | A simple utility for adding constant state to a contract or
 -- transaction, since the manual way of doing this is a little awkward.
+-- The second argument should be a @ContractM StateT@ or @TransactionM
+-- ReaderT@.
 usingReader ::
   (Monad m) =>
   r ->
   (a -> ReaderT r m b) ->
   (a -> m b)
 usingReader r f = flip runReaderT r . f
+
+-- | A shorthand for defining a contract that is, essentially, a state
+-- machine: each evaluation is passed to 'release' and the return value
+-- (the next argument) is fed back into the same contract function.  Used
+-- like this:
+--
+-- >>> c :: Contract Bool Int
+-- >>> c = feedback $ \case
+-- >>>   True -> 42
+-- >>>   False -> 57
+--
+-- it defines a contract that forever accepts a 'Bool' and returns one of
+-- the two numbers.
+feedback :: 
+  (ContractVal b, MonadContract a b m) => (a -> m b) -> (a -> m (WithEscrows b))
+feedback f = (>=> spend) . fix . (>=>) $ f >=> release 
+
+-- | This little hack allows you to write a state machine that /doesn't/
+-- loop endlessly, but has halting states that return a value.
+halt :: (HasEscrowIDs a, MonadContract b a m) => a -> m a
+halt x = spend x >> return x
 
