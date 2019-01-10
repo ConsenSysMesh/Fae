@@ -49,8 +49,8 @@ instance (ContractVal a, Currency coin) => ContractName (Auction coin a) where
     aState <- get
     case (aState, act) of
       (CollectState{}, Bid) -> throw Can'tBid
-      (BidState{}, Bid) -> bidStage x >>= release
-      (_, Collect) -> collectStage >>= release
+      (BidState{}, Bid) -> bidStage x
+      (_, Collect) -> collectStage
 
 bidStage :: 
   (ContractVal a, Currency coin, MonadTX m) => 
